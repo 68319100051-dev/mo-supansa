@@ -209,7 +209,12 @@
     });
     // หมากฮอสกับโม: เล่นบนกระดาน จบแล้วโมคุยต่อในแชท (จำสถิติชนะ/แพ้)
     let checkers = null;
-    const startCheckers = () => {
+    function ensureCheckers() {
+        if (!checkers) startCheckers(false);
+        checkers.level = Number(document.getElementById('ck-level').value);
+        return checkers;
+    }
+    function startCheckers(play = true) {
         checkers = checkers || new MoCheckersGame({
             userName: memory.getUserName(),
             onEnd: (result, st) => {
@@ -225,8 +230,8 @@
             },
         });
         checkers.level = Number(document.getElementById('ck-level').value);
-        checkers.start();
-    };
+        if (play) checkers.start();
+    }
     document.getElementById('ck-level').addEventListener('change', (e) => { if (checkers) checkers.level = Number(e.target.value); });
     gamesMenu.addEventListener('click', (e) => {
         if (e.target.closest('[data-board="checkers"]')) {
@@ -1194,6 +1199,19 @@
                     <span>มือถือ: ${phoneText}</span>
                 </div>
             </div>
+            ${(() => {
+                const g = life.gameSession();
+                if (!g) return '';
+                const isCheckers = /หมากฮอส/.test(g.name);
+                return `<div class="house-card house-game">
+                <h3>🎮 โมกำลังเล่น${esc(g.name)} <small>ชนะ ${g.wins} • แพ้ ${g.losses}</small></h3>
+                ${g.log.length ? `<div class="house-log">${g.log.slice().reverse().slice(0, 3).map(l => `<div class="house-log-item"><time>${fmt(l.at)}</time><span>${l.win ? '🏆' : '💥'}</span><span>${esc(l.note)}</span></div>`).join('')}</div>` : '<p class="setting-hint">เพิ่งเริ่มเล่น...</p>'}
+                <div class="settings-actions">
+                    ${isCheckers ? '<button class="btn-secondary" id="house-watch-game">👀 ดูโมเล่น</button>' : ''}
+                    <button class="btn-primary" id="house-join-game">🙋 ชวนเล่นด้วย</button>
+                </div>
+            </div>`;
+            })()}
             <div class="house-card house-urgent">
                 <div>
                     <strong>มีเรื่องด่วน?</strong>
@@ -1234,6 +1252,22 @@
                     `<div class="house-log-item"><time>${fmt(l.at)}</time><span>${l.emoji}</span><span>${esc(l.text)}</span></div>`).join('')}</div>
             </div>`;
         document.getElementById('house-transfer').addEventListener('click', openTransfer);
+        const watchBtn = document.getElementById('house-watch-game');
+        if (watchBtn) watchBtn.addEventListener('click', () => {
+            houseScreen.classList.add('hidden');
+            ensureCheckers().spectate();
+        });
+        const joinBtn = document.getElementById('house-join-game');
+        if (joinBtn) joinBtn.addEventListener('click', () => {
+            const g = life.gameSession();
+            houseScreen.classList.add('hidden');
+            if (g && /หมากฮอส/.test(g.name)) {
+                ensureCheckers().start();
+                return;
+            }
+            chat.addMessage('sent', `เล่น${g ? g.name : 'เกม'}ด้วยกันมั้ย`);
+            chat.queueReply(note => chat.moRespond(`${note}[ข้อความระบบ: เองชวนเล่น${g ? g.name : 'เกม'}ด้วยกัน ตอนนี้โมกำลังเล่นอยู่ (ชนะ ${g ? g.wins : 0} แพ้ ${g ? g.losses : 0}) — ตอบตามจริงแบบดีใจที่ชวน ถ้าเกมนี้เล่นด้วยกันในแอปไม่ได้ ชวนเล่นหมากฮอสหรือเกมในแชทแทน (บอกให้กด 🎮) หรือขอจบตานี้ก่อนแล้วค่อยเล่น]`));
+        });
         document.querySelectorAll('[data-gift]').forEach(btn => btn.addEventListener('click', () => {
             const gift = MO_GIFTS.find(g => g.id === btn.dataset.gift);
             if (!confirm(`ซื้อ${gift.name} ให้โม ฿${gift.price}?`)) return;

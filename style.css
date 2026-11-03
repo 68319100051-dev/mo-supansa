@@ -3731,3 +3731,20 @@ button.mind-region-chip {
     font-weight: 600;
     color: var(--pink-600);
 }
+
+/* 🎮 โมเล่นเกมอยู่ */
+.house-game {
+    border: 1px solid rgba(169, 122, 255, 0.35);
+}
+
+.checkers .ck-join {
+    display: none;
+}
+
+.checkers.watching .ck-join {
+    display: inline-flex;
+}
+
+.checkers.watching .ck-new {
+    display: none;
+}

@@ -169,10 +169,41 @@ class MoCheckersGame {
         this.statusEl = this.el.querySelector('.ck-status');
         this.el.querySelector('.ck-close').onclick = () => this.close('quit');
         this.el.querySelector('.ck-new').onclick = () => this.start();
+        this.el.querySelector('.ck-join').onclick = () => {
+            this.start();
+            this.say(this.pick(['ได้เลยย มาเล่นด้วยกัน! เค้าเอาจริงนะ 😤', 'ทิ้งบอทแล้ว มาเจอกันเลย 😏']));
+        };
         this.boardEl.onclick = (e) => this.tap(e);
     }
 
-    start() {
+    /**
+     * ดูโมเล่นกับบอท (เดินอัตโนมัติทั้งสองฝั่ง) — กด "ขอเล่นด้วย" เพื่อเปลี่ยนเป็นเล่นกับโม
+     */
+    spectate() {
+        this.start(true);
+        this.say(this.pick(['อ้าว มาดูเค้าเล่นเหรอ 👀 เงียบๆ นะ', 'ดูได้ แต่ห้ามบอกบทบอทนะ 555', 'เค้ากำลังจะชนะบอทอยู่พอดีเลย']));
+        this.statusEl.textContent = '👀 กำลังดูโมเล่นกับบอท';
+        this.autoStep();
+    }
+
+    autoStep() {
+        clearTimeout(this._auto);
+        this._auto = setTimeout(() => {
+            if (!this.watching || this.over || this.el.classList.contains('hidden')) return;
+            const side = this.turn;
+            // บอทฝั่งขาว = เดินแบบมือใหม่, โม = ระดับที่ตั้งไว้
+            const ms = MoCheckers.moves(this.board, side);
+            if (!ms.length) return this.checkEnd();
+            const m = side === 2 ? MoCheckers.bestMove(this.board, this.level) : (ms.find(x => x.caps.length) || ms[Math.floor(Math.random() * ms.length)]);
+            this.play(m, side);
+            if (!this.over) this.autoStep();
+        }, 1100 + Math.random() * 700);
+    }
+
+    start(watching = false) {
+        clearTimeout(this._auto);
+        this.watching = watching;
+        this.el.classList.toggle('watching', watching);
         this.board = MoCheckers.newBoard();
         this.turn = 1;
         this.sel = null;
@@ -185,8 +216,9 @@ class MoCheckersGame {
     }
 
     close(result) {
+        clearTimeout(this._auto);
         this.el.classList.add('hidden');
-        if (!this.over && result === 'quit' && this.moves > 0) this.onEnd('quit', this.stats());
+        if (!this.watching && !this.over && result === 'quit' && this.moves > 0) this.onEnd('quit', this.stats());
     }
 
     stats() {
@@ -210,7 +242,7 @@ class MoCheckersGame {
 
     tap(e) {
         const cell = e.target.closest('[data-r]');
-        if (!cell || this.turn !== 1 || this.over) return;
+        if (!cell || this.turn !== 1 || this.over || this.watching) return;
         const r = +cell.dataset.r, c = +cell.dataset.c;
         if (MoCheckers.owner(this.board[r][c]) === 1) {
             const opts = this.legalFrom(r, c);
@@ -241,7 +273,7 @@ class MoCheckersGame {
         this.react(side, m, crowned);
         this.render();
         if (this.checkEnd()) return;
-        if (this.turn === 2) {
+        if (this.turn === 2 && !this.watching) {
             this.statusEl.textContent = 'โมกำลังคิด... 🤔';
             setTimeout(() => {
                 const mm = MoCheckers.bestMove(this.board, this.level);
@@ -253,6 +285,13 @@ class MoCheckersGame {
 
     react(side, m, crowned) {
         const n = m.caps.length;
+        if (this.watching) {
+            // ดูโมเล่นกับบอท: โมพูดกับเองระหว่างเล่น
+            if (side === 2 && n) return this.say(this.pick(['เห็นมั้ยย กินบอทไปอีกตัว 😎', 'บอทกากจริง 555', 'โชว์ให้ดูเลยนะ']));
+            if (side === 1 && n) return this.say(this.pick(['เฮ้ยบอทกินเค้า 😤 เพราะเองมาดูเลยเนี่ย', 'ไม่ได้ตั้งใจให้กินนะ!']));
+            if (crowned && side === 2) return this.say('ฮอสมาแล้ว 👑 บอทจบแน่');
+            return;
+        }
         if (side === 1) {
             if (crowned) return this.say(this.pick(['เฮ้ยย ได้ฮอสแล้วเหรอ 😱', 'ไม่นะ ฮอสมาแล้ว ไม่ยุติธรรม 😭']));
             if (n >= 2) return this.say(this.pick([`กินทีเดียว ${n} ตัวเลยหรอ 😭😭`, 'โหดเกินนน เค้าจะร้องไห้']));
@@ -269,10 +308,17 @@ class MoCheckersGame {
     checkEnd() {
         const side = this.turn;
         if (MoCheckers.moves(this.board, side).length) {
-            this.statusEl.textContent = side === 1 ? `ตาเอง • กินโมไป ${this.caps[1]} ตัว` : 'โมกำลังคิด... 🤔';
+            this.statusEl.textContent = this.watching ? '👀 กำลังดูโมเล่นกับบอท' : side === 1 ? `ตาเอง • กินโมไป ${this.caps[1]} ตัว` : 'โมกำลังคิด... 🤔';
             return false;
         }
         this.over = true;
+        if (this.watching) {
+            const moWin = side === 1;
+            this.statusEl.textContent = moWin ? '😎 โมชนะบอท' : '😭 โมแพ้บอท';
+            this.say(moWin ? 'ชนะแล้วว เห็นมั้ยเค้าเก่ง 😎 มาเล่นกับเค้ามั้ย' : 'แพ้บอทอ่ะ 😭 ห้ามขำ! มาเล่นกับเค้าแทนดีกว่า');
+            if (this.onWatchEnd) this.onWatchEnd(moWin);
+            return true;
+        }
         const userWin = side === 2;
         this.statusEl.textContent = userWin ? '🎉 เองชนะ!' : '😏 โมชนะ!';
         this.say(userWin ? this.pick(['ไม่จริงงง แพ้ได้ไง 😭 ขอแก้มือ!', 'ยอมก็ได้ เองเก่งแหละ... รอบหน้าไม่ยอมแล้วนะ']) : this.pick(['เย้ ชนะแล้ว! 😎 ใครเก่งกว่า', 'ง่ายไป 555 เอาใหม่มั้ย']));
@@ -296,7 +342,7 @@ class MoCheckersGame {
         }
         this.boardEl.innerHTML = html;
         const me = MoCheckers.count(this.board, 1), mo = MoCheckers.count(this.board, 2);
-        this.el.querySelector('.ck-score').textContent = `เอง ${me.total} ตัว • โม ${mo.total} ตัว`;
+        this.el.querySelector('.ck-score').textContent = `${this.watching ? 'บอท' : 'เอง'} ${me.total} ตัว • โม ${mo.total} ตัว`;
     }
 }
 

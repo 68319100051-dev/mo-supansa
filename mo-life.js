@@ -41,7 +41,7 @@ const MO_VARIANTS = {
     song: ['เพลง Tilly Birds', 'เพลงอนิเมะ', 'เพลงเกาหลี', 'เพลงเศร้าๆ', 'เพลงลูกทุ่งที่แม่ชอบ', 'เพลงเก่ายุค 2000', 'เพลย์ลิสต์ตอนฝนตก'],
     place: ['เซเว่นหน้าปากซอย', 'ตลาดนัด', 'ห้าง', 'ร้านกาแฟใกล้บ้าน', 'ร้านหนังสือ', 'ร้านเครื่องเขียน', 'สวนสาธารณะ', 'ร้านขายของจุกจิก'],
     friend: ['เพื่อนสมัยมัธยม', 'เพื่อนสนิท', 'พี่สาว', 'แม่', 'เพื่อนที่ชอบเม้าท์'],
-    game: ['เกมมือถือ', 'อาวี', 'เกมปลูกผัก', 'เกมจับคู่', 'เกมแต่งตัว'],
+    game: ['เกมมือถือ', 'อาวี', 'เกมปลูกผัก', 'เกมจับคู่', 'เกมแต่งตัว', 'หมากฮอสกับบอท', 'หมากฮอสกับบอท'],
     chore: ['ซักผ้า', 'กวาดห้อง', 'ล้างจาน', 'จัดตู้เสื้อผ้า', 'รดน้ำต้นไม้', 'พับผ้า'],
 };
 
@@ -269,6 +269,35 @@ class MoLife {
         };
     }
 
+    // =============================================
+    //  เล่นเกมตอนว่าง: มีผลแพ้ชนะเกิดขึ้นเรื่อยๆ ให้เองมาดู/ชวนเล่นได้
+    // =============================================
+
+    gameSession() {
+        const c = this.state.current;
+        if (!c || c.id !== 'game') return null;
+        if (!c.game) c.game = { name: c.label.replace(/^เล่น/, ''), wins: 0, losses: 0, log: [], next: c.startedAt + this.rand(3, 7) * 60000 };
+        return c.game;
+    }
+
+    /** ทุก tick: ถึงเวลาจบตา → สุ่มผล (อารมณ์ดีชนะง่ายขึ้นนิดหน่อย) */
+    tickGame(now = Date.now()) {
+        const g = this.gameSession();
+        if (!g || now < g.next) return null;
+        const win = Math.random() < 0.42 + this.state.mood / 500;
+        const name = g.name;
+        const lines = win
+            ? ['ชนะแบบเฉียดฉิว', 'ชนะสบายๆ', 'แบกทีมชนะ', 'คัมแบ็กได้!']
+            : ['แพ้เพราะเน็ตกาก', 'แพ้แบบน่าเจ็บใจ', 'เพื่อนร่วมทีมป่วน', 'โดนบอทหลอก'];
+        const note = /ปลูกผัก|แต่งตัว/.test(name) ? (win ? 'ปลดล็อกของใหม่' : 'ทำภารกิจไม่ทัน') : this.pick(lines);
+        win ? g.wins++ : g.losses++;
+        g.log = [...g.log, { at: now, win, note }].slice(-6);
+        g.next = now + this.rand(3, 7) * 60000;
+        this.state.mood = Math.max(0, Math.min(100, this.state.mood + (win ? 2 : -2)));
+        this.save();
+        return { win, note };
+    }
+
     /**
      * จบกิจกรรมปัจจุบัน → เริ่มกิจกรรมถัดไป (ใช้ทั้งตอน tick และตอนย้อนเวลาที่ไม่ได้เปิดแอป)
      */
@@ -395,6 +424,7 @@ class MoLife {
      * เรียกทุก 20 วิ: ถึงเวลาเปลี่ยนกิจกรรมหรือยัง
      */
     tick() {
+        this.tickGame();
         const c = this.state.current;
         if (c && Date.now() < c.endsAt) return;
         // กำลังคุยกันอยู่ → ยังไม่ไปไหน ขอคุยต่ออีกแป๊บ (ไม่เกิน 3 รอบ ~30 นาที, ยกเว้นถึงเวลานอนจริง)
@@ -466,7 +496,9 @@ class MoLife {
             s.mood < 40 ? 'อารมณ์ไม่ค่อยดี' : s.mood > 80 ? 'อารมณ์ดีมาก' : '',
         ].filter(Boolean).join(' ');
         const recent = s.log.slice(-4, -1).map(l => l.text.split(' — ')[0]).join(', ');
-        return `ตอนนี้โมกำลัง${c.label} ${where} (มา ${mins} นาทีแล้ว) รู้สึก: ${feel}`
+        const g = this.gameSession();
+        const gameText = g ? `\nเล่น${g.name}ไป ชนะ ${g.wins} แพ้ ${g.losses}${g.log.length ? ` ตาล่าสุด: ${g.log[g.log.length - 1].win ? 'ชนะ' : 'แพ้'} (${g.log[g.log.length - 1].note})` : ''} — เล่าได้ อารมณ์ตามผลเกม ถ้าเองชวนเล่นด้วย ตอบตามจริง (กำลังเล่นตานี้อยู่ก็ขอจบตานี้ก่อน)` : '';
+        return `ตอนนี้โมกำลัง${c.label} ${where} (มา ${mins} นาทีแล้ว) รู้สึก: ${feel}${gameText}`
             + (recent ? `\nก่อนหน้านี้วันนี้: ${recent}` : '')
             + `\nเงินโม: ฿${s.wallet}` + (s.wish ? ` อยากได้${s.wish.item} (฿${s.wish.cost})` : '');
     }
