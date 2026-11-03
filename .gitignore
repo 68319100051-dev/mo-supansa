@@ -6,3 +6,11 @@ mo-keys.local.js
 
 # Cloudflare
 .wrangler/
+
+# Node / แอป Android
+node_modules/
+# ไฟล์ตั้งค่า Firebase และกุญแจ ห้ามขึ้น git
+google-services.json
+*-firebase-adminsdk-*.json
+*.keystore
+*.jks

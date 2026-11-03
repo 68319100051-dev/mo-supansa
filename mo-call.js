@@ -173,6 +173,8 @@ class MoCall {
         clearInterval(this._ringTimer);
         this._ringTimer = null;
         try { if (navigator.vibrate) navigator.vibrate(0); } catch (e) {}
+        // แอป Android: เลิกดังสายเรียกเข้าของระบบด้วย (หน้าเว็บดังแทนแล้ว / รับหรือวางแล้ว)
+        try { window.Capacitor?.Plugins?.MoNative?.stopRinging(); } catch (e) {}
     }
 
     acceptIncomingCall() {

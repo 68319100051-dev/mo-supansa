@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">โม</string>
+    <string name="title_activity_main">โม</string>
+    <string name="package_name">com.mosupansa.app</string>
+    <string name="custom_url_scheme">com.mosupansa.app</string>
+</resources>

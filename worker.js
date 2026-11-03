@@ -5,7 +5,9 @@
    - เองหายไปนาน (5 ชม.+) → โมทักเองเพราะคิดถึง (วันละไม่เกิน 2 ครั้ง ไม่ทักตอนดึก) บางทีก็โทรมาเลย
    - ถึงเวลานัดเดต → โมโทรมา (Push แบบสายเรียกเข้า)
    - Push แบบไม่มี payload: มือถือรับแล้วถาม /api/push/inbox ว่าโมพูดว่าอะไร
+   - แอป Android (Capacitor): ส่งผ่าน Firebase Cloud Messaging ด้วย → สายเรียกเข้าเต็มจอบนจอล็อก
    Secrets (ตั้งใน Cloudflare): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
+   + แอป Android: FCM_PROJECT_ID, FCM_CLIENT_EMAIL, FCM_PRIVATE_KEY (จากไฟล์ service account ของ Firebase)
    ============================================ */
 
 const LATE_MIN = 2 * 60000;          // ให้แอป (ถ้าเปิดอยู่) ทักเองก่อน 2 นาที
@@ -29,7 +31,7 @@ export default {
     },
 
     async scheduled(event, env, ctx) {
-        if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY || !env.VAPID_PRIVATE_KEY) return;
+        if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY || !(env.VAPID_PRIVATE_KEY || env.FCM_PRIVATE_KEY)) return;
         ctx.waitUntil(runChecks(env));
     },
 };
@@ -70,7 +72,8 @@ function upsert(env, rows) {
 // =============================================
 
 async function runChecks(env) {
-    const subs = await db(env, 'mo_state?select=user_id,key,value&key=like.push_sub:*');
+    // push_sub:* = เบราว์เซอร์ (Web Push) / fcm_token:* = แอป Android (FCM)
+    const subs = await db(env, 'mo_state?select=user_id,key,value&or=(key.like.push_sub:*,key.like.fcm_token:*)');
     const users = [...new Set(subs.map(s => s.user_id))];
     for (const userId of users) {
         try {
@@ -172,6 +175,13 @@ async function checkUser(env, userId, subs) {
     const isCall = due.slice(0, 3).some(d => d.call);
     const inbox = { title: isCall ? '📞 โมกำลังโทรมา...' : 'โม 💕', body: fresh.map(m => m.text).join('\n').slice(0, 180), at: now, type: isCall ? 'call' : 'chat' };
     for (const sub of subs) {
+        if (sub.key.startsWith('fcm_token:')) {
+            if (!env.FCM_PRIVATE_KEY) continue;
+            const status = await sendFcm(env, sub.value.token, inbox).catch(e => (console.error('fcm failed', e.message), 0));
+            if (status === 404) await db(env, `mo_state?user_id=eq.${userId}&key=eq.${encodeURIComponent(sub.key)}`, { method: 'DELETE' });
+            continue;
+        }
+        if (!env.VAPID_PRIVATE_KEY) continue;
         const status = await sendPush(env, sub.value.endpoint);
         if (status === 404 || status === 410) {
             await db(env, `mo_state?user_id=eq.${userId}&key=eq.${encodeURIComponent(sub.key)}`, { method: 'DELETE' });
@@ -232,5 +242,52 @@ async function sendPush(env, endpoint) {
         method: 'POST',
         headers: { TTL: '86400', Urgency: 'high', Authorization: `vapid t=${unsigned}.${b64u.encode(sig)}, k=${env.VAPID_PUBLIC_KEY}` },
     });
+    return res.status;
+}
+
+// =============================================
+//  Firebase Cloud Messaging (HTTP v1) — แอป Android
+//  ส่ง data ล้วน ให้แอปวาดแจ้งเตือนเอง (สายเรียกเข้า = เต็มจอ + ริงโทน)
+// =============================================
+
+let fcmAuth = null;   // { token, exp }
+async function fcmAccessToken(env) {
+    if (fcmAuth && fcmAuth.exp > Date.now() + 60000) return fcmAuth.token;
+    // รับได้ทั้งแบบวางทั้งก้อน (ขึ้นบรรทัดจริง) และแบบที่มี \n เป็นตัวอักษรเหมือนในไฟล์ JSON
+    const pem = env.FCM_PRIVATE_KEY.replace(/\\n/g, '').replace(/-----[^-]+-----/g, '').replace(/\s+/g, '');
+    const key = await crypto.subtle.importKey('pkcs8', b64u.decode(pem.replace(/\+/g, '-').replace(/\//g, '_')),
+        { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+    const enc = obj => b64u.encode(new TextEncoder().encode(JSON.stringify(obj)));
+    const iat = Math.floor(Date.now() / 1000);
+    const unsigned = `${enc({ alg: 'RS256', typ: 'JWT' })}.${enc({
+        iss: env.FCM_CLIENT_EMAIL, scope: 'https://www.googleapis.com/auth/firebase.messaging',
+        aud: 'https://oauth2.googleapis.com/token', iat, exp: iat + 3600,
+    })}`;
+    const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(unsigned));
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${unsigned}.${b64u.encode(sig)}`,
+    });
+    if (!res.ok) throw new Error(`google oauth ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    fcmAuth = { token: data.access_token, exp: Date.now() + data.expires_in * 1000 };
+    return fcmAuth.token;
+}
+
+async function sendFcm(env, token, inbox) {
+    const isCall = inbox.type === 'call';
+    const res = await fetch(`https://fcm.googleapis.com/v1/projects/${env.FCM_PROJECT_ID}/messages:send`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${await fcmAccessToken(env)}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+            message: {
+                token,
+                data: { type: inbox.type, title: inbox.title, body: inbox.body, at: String(inbox.at) },
+                android: { priority: 'HIGH', ttl: isCall ? '60s' : '86400s' },   // สายที่ไม่ได้รับเกิน 1 นาที ไม่ต้องดังแล้ว
+            },
+        }),
+    });
+    if (!res.ok) console.error('fcm send', res.status, (await res.text()).slice(0, 200));
     return res.status;
 }

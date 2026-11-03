@@ -1,0 +1,12 @@
+{
+  "appId": "com.mosupansa.app",
+  "appName": "โม",
+  "webDir": "native-www",
+  "server": {
+    "url": "https://mo-supansa.68319100051.workers.dev",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "mo-supansa",
+  "private": true,
+  "description": "Mo Supansa — แอปเว็บ + ตัวห่อ Android (Capacitor) ให้โมโทรเข้าเต็มจอ",
+  "scripts": {
+    "android:sync": "cap sync android",
+    "android:open": "cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.4.0",
+    "@capacitor/cli": "^7.4.0",
+    "@capacitor/core": "^7.4.0"
+  }
+}

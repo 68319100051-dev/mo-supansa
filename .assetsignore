@@ -10,3 +10,11 @@ node_modules
 scripts
 mo-keys.local.js
 mo_avatar_old.jpg
+
+# แอป Android (Capacitor)
+android
+native-www
+docs
+package.json
+package-lock.json
+capacitor.config.json

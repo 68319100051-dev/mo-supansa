@@ -583,6 +583,7 @@
     const pushStatus = document.getElementById('push-status');
     const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
     async function renderPush() {
+        if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return;   // แอป Android ใช้ FCM แทน
         if (!pushSupported) {
             pushBtn.disabled = true;
             pushStatus.textContent = 'เครื่องนี้ยังไม่รองรับ (iPhone ต้องติดตั้งลงหน้าจอโฮมก่อน)';
@@ -626,6 +627,38 @@
         }
         renderPush();
     });
+
+    // ======= แอป Android: ลงทะเบียนเครื่อง (FCM) ให้โมโทรเข้าเต็มจอได้ =======
+    const moNative = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()
+        && window.Capacitor.Plugins && window.Capacitor.Plugins.MoNative;
+    let nativeRegistered = false;
+    async function registerNative() {
+        if (!moNative || nativeRegistered || !sync.user) return;
+        nativeRegistered = true;
+        try {
+            const res = await moNative.setup();
+            const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(res.token));
+            const { error } = await sync.client.from('mo_state').upsert({
+                user_id: sync.user.id,
+                key: 'fcm_token:' + [...new Uint8Array(hash)].slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join(''),
+                value: { token: res.token, tz: new Date().getTimezoneOffset(), ua: navigator.userAgent.slice(0, 80) },
+                updated_at: new Date().toISOString(),
+            });
+            if (error) throw new Error(error.message);
+            if (!res.fullScreen && confirm('ให้โมโทรเข้าเต็มจอตอนล็อกจอได้ ต้องเปิดสิทธิ์ "แสดงแบบเต็มหน้าจอ" ก่อน ไปเปิดเลยไหม?')) {
+                moNative.openFullScreenSettings();
+            }
+        } catch (e) {
+            nativeRegistered = false;
+            console.warn('native push setup failed:', e.message);
+        }
+    }
+    if (moNative) {
+        pushBtn.disabled = true;
+        pushStatus.textContent = 'แอป Android: แจ้งเตือน + สายเรียกเข้าเต็มจอ เปิดให้อัตโนมัติหลังเข้าสู่ระบบซิงก์';
+        sync.onStatus(registerNative);
+        registerNative();
+    }
 
     const syncModal = document.getElementById('sync-modal');
     const syncStatus = document.getElementById('sync-status');
@@ -1235,4 +1268,6 @@
             if (e.data && e.data.type === 'mo-call') callFromPush(e.data.answer);
         });
     }
+    // แอป Android (Capacitor): แตะแจ้งเตือนสายเข้าตอนแอปเปิดอยู่
+    window.addEventListener('mo-native-call', (e) => callFromPush(e.detail && e.detail.answer));
 })();
