@@ -91,6 +91,10 @@
     window.MoSelfInstance = self;
     chat.self = self;
     window.MoLLMInstance = llm;
+    // โมห่วงเอง: สังเกตจากแชท แล้วถามไถ่ตามจังหวะ
+    const care = new MoCare();
+    window.MoCareInstance = care;
+    chat.care = care;
     // คนรอบตัวโม & เรื่องราวที่ดำเนินต่อหลายวัน
     const social = new MoSocial(llm);
     window.MoSocialInstance = social;
@@ -395,6 +399,13 @@
             return;
         }
         if (!canReachOut() || chat.awaitingReply) return;
+        // ห่วงเอง (กินข้าวยัง หายป่วยยัง ฝนตก ถึงบ้านยัง) → ทักถามก่อน
+        const worry = care.takeProactive();
+        if (worry) {
+            mind.decide(worry.reason);
+            chat.sendProactiveMessage(worry.reason, worry.style);
+            return;
+        }
         // เรื่องของคนรอบตัวเพิ่งเกิดตอนใหม่ → โมอยากเล่า
         const fresh = social.takeFresh();
         if (fresh && Math.random() < 0.7) {
@@ -530,6 +541,7 @@
         if (has('mo_stories_v1')) { stories.data = stories.load(); renderStoryRing(); }
         if (has('mo_games_v1')) games.data = games.load();
         if (has('mo_social_v1')) social.data = social.load();
+        if (has('mo_care_v1')) care.data = care.load();
         // คีย์ AI จากเครื่องอื่นในบัญชีเดียวกัน → มือถือไม่ต้องกรอกเอง
         if (has('mo_device_keys_v1')) {
             // เครื่องที่มีไฟล์คีย์: อย่าให้ของจากเครื่องอื่นทับ → ส่งของที่ครบกลับขึ้นไป

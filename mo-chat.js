@@ -185,6 +185,8 @@ class MoChat {
 
         // Memory: extract facts, update stats
         this.memory.extractFacts(text);
+        // โมสังเกตเรื่องที่ควรห่วง (ป่วย กินข้าว นอนดึก เครียด ออกไปข้างนอก)
+        if (this.care) this.care.observe(text);
         // กิจวัตรประจำ (เช่น เข้างาน 8 โมงทุกวัน) → โมจำและวางแผนทักเองเบื้องหลัง
         if (this.routines) this.routines.learn(text).then(added => {
             if (added && added.length && this.mind) this.mind.decide(`จำกิจวัตรของเอง: ${added.map(r => r.what).join(', ')}`);
@@ -1237,6 +1239,7 @@ class MoChat {
         }
 
         const parts = this.splitBubbles(response);
+        if (this.care) this.care.noticeReply(response);
         this.mind && this.mind.act(`พิมพ์ตอบ ${parts.length} ข้อความ`);
         return new Promise(resolve => {
             const finish = () => {
