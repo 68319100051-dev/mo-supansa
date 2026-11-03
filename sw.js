@@ -5,7 +5,7 @@
    - Push จากหลังบ้าน (ไม่มี payload) → ถาม /api/push/inbox ว่าโมพูดอะไร แล้วเด้งแจ้งเตือน
    ============================================ */
 
-const CACHE = 'mo-app-v13';
+const CACHE = 'mo-app-v14';
 const SHELL = [
     './', 'index.html', 'style.css', 'manifest.json', 'mo_avatar.jpg', 'icons/icon-192.png', 'icons/icon-512.png',
     'mo-config.js', 'mo-sync.js', 'mo-llm.js', 'mo-brain.js', 'mo-brain3d.js', 'mo-memory.js', 'mo-chat.js',
@@ -69,6 +69,17 @@ self.addEventListener('push', (event) => {
                 actions: [{ action: 'answer', title: '📞 รับสาย' }, { action: 'decline', title: '❌ ปฏิเสธ' }],
                 data: { type: 'call' },
             });
+            return;
+        }
+        // ทักรัวๆ → เด้งทีละข้อความ (แยกแจ้งเตือน ไม่ทับกัน)
+        if (msg.type === 'burst' && Array.isArray(msg.lines) && msg.lines.length) {
+            for (let i = 0; i < msg.lines.length; i++) {
+                await self.registration.showNotification('โม 💕', {
+                    body: msg.lines[i], icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
+                    tag: `mo-burst-${msg.at}-${i}`, vibrate: [200, 80, 200], renotify: true,
+                });
+                await new Promise(r => setTimeout(r, 1200));
+            }
             return;
         }
         await self.registration.showNotification(msg.title || 'โม 💕', {

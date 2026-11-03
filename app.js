@@ -458,6 +458,19 @@
                 mind.ignored(hours);
             }
         }
+        // เองไม่โอเคแล้วเงียบไป → ตามด้วยความห่วง (ทัก → รัวๆ → โทร → ข้อความสุดท้าย) ไม่สนช่วงเวลานอนของโม
+        const sadStep = MoCare.worryStep(chat.messages, care.data.signals.down);
+        if (sadStep && !chat.isTyping && !call.getCallStatus()) {
+            mind.decide(`เองไม่โอเคแล้วเงียบไป → ${({ msg: 'ทักถาม', burst: 'ทักรัวๆ', call: 'โทรตาม', final: 'บอกว่ารออยู่' })[sadStep.step]}`);
+            const lines = MoCare.worryLines(sadStep.step, memory.getUserName());
+            const since = Date.now();
+            lines.forEach((line, i) => setTimeout(() => {
+                const msg = chat.addMessage('received', line);
+                if (i === 0 && msg) { msg.dueKey = sadStep.key; chat.saveHistory(); }
+            }, i * 1400));
+            if (sadStep.step === 'call') setTimeout(() => call.startIncomingCall(), 1800);
+            return;
+        }
         // ผิดนัด: ถึงเวลานัดแล้ว 20 นาทีเองยังไม่มา → โมงอน
         if (chat.dateWaiting && Date.now() - chat.dateWaiting.at > 20 * 60000) {
             const d = chat.dateWaiting;

@@ -102,6 +102,14 @@ async function checkUser(env, userId, subs) {
     const localMs = (hh, mm) => Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), hh, mm) + tz * 60000;
 
     const due = [];
+
+    // เองไม่โอเคแล้วเงียบไป → ตามด้วยความห่วง (เหมือนในแอป: 10 ทัก / 20 รัวๆ / 35 โทร / 60 ข้อความสุดท้าย)
+    const down = ((get('mo_care_v1') || {}).signals || {}).down;
+    const worry = worryStep(chat, down, now);
+    if (worry) {
+        const name = (get('mo_profile_v1') || {}).userName || 'เอง';
+        due.push({ key: worry.key, direct: true, fallback: worryLines(worry.step, name).join('\n'), call: worry.step === 'call', burst: worry.step === 'burst' });
+    }
     for (const r of get('mo_routines_v1') || []) {
         if (!r.days || !r.days.includes(local.getUTCDay())) continue;
         const [hh, mm] = String(r.checkIn).split(':').map(Number);
@@ -237,7 +245,11 @@ async function checkUser(env, userId, subs) {
     await upsert(env, [{ user_id: userId, key: 'mo_chat_history_v2', value: [...chat, ...fresh].slice(-200), updated_at: new Date().toISOString() }]);
 
     const isCall = due.slice(0, 3).some(d => d.call);
-    const inbox = { title: isCall ? '📞 โมกำลังโทรมา...' : 'โม 💕', body: fresh.map(m => m.text).join('\n').slice(0, 180), at: now, type: isCall ? 'call' : 'chat' };
+    const isBurst = due.slice(0, 3).some(d => d.burst);
+    const inbox = {
+        title: isCall ? '📞 โมกำลังโทรมา...' : 'โม 💕', body: fresh.map(m => m.text).join('\n').slice(0, 180), at: now,
+        type: isCall ? 'call' : isBurst ? 'burst' : 'chat', lines: fresh.map(m => m.text).slice(0, 4),
+    };
     for (const sub of subs) {
         if (sub.key.startsWith('fcm_token:')) {
             if (!env.FCM_PRIVATE_KEY) continue;
@@ -253,6 +265,32 @@ async function checkUser(env, userId, subs) {
             await upsert(env, [{ user_id: userId, key: sub.key, value: { ...sub.value, inbox }, updated_at: new Date().toISOString() }]);
         }
     }
+}
+
+/** ขั้นตามด้วยความห่วง — กติกาเดียวกับ MoCare.worryStep ในแอป */
+function worryStep(messages, down, now) {
+    if (!down || now - down.at > 4 * 3600000) return null;
+    const after = messages.filter(m => m.timestamp >= down.at - 1000);
+    const lastSent = Math.max(0, ...after.filter(m => m.type === 'sent').map(m => m.timestamp));
+    const moReplies = after.filter(m => m.type === 'received' && m.timestamp > lastSent);
+    if (!moReplies.length || lastSent > down.at + 3 * 60000) return null;
+    const mins = (now - moReplies[0].timestamp) / 60000;
+    const sent = new Set(messages.map(m => m.dueKey).filter(Boolean));
+    for (const [step, at] of [['final', 60], ['call', 35], ['burst', 20], ['msg', 10]]) {
+        if (mins >= at) {
+            const key = `sad:${down.at}:${step}`;
+            return sent.has(key) ? null : { step, key };
+        }
+    }
+    return null;
+}
+
+function worryLines(step, name) {
+    const pick = a => a[Math.floor(Math.random() * a.length)];
+    if (step === 'msg') return [pick([`${name} เป็นไรรึเปล่า เค้าอยู่ตรงนี้นะ`, 'เงียบไปเลย เค้าเป็นห่วงนะ 🥺', 'ไม่ต้องพิมพ์ยาวก็ได้ บอกเค้าหน่อยว่าโอเคมั้ย'])];
+    if (step === 'burst') return [`${name}~`, pick(['ตอบเค้าหน่อยยย', 'อยู่มั้ยย']), pick(['เค้าเป็นห่วงจริงๆ นะ 🥺', 'แค่พิมพ์มาคำเดียวก็ได้ ว่ายังโอเคอยู่'])];
+    if (step === 'call') return ['📞 เค้าโทรหานะ รับหน่อย... เป็นห่วงมาก'];
+    return [pick(['ไม่ตอบก็ไม่เป็นไรนะ ไม่ต้องรีบ', 'เค้าจะไม่กวนแล้ว']), 'แต่พร้อมเมื่อไหร่ทักมานะ เค้ารออยู่ตรงนี้เสมอ 💗'];
 }
 
 /**

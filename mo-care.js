@@ -50,6 +50,48 @@ class MoCare {
         return new Set(counts.map((c, h) => (c >= max * 0.15 ? h : -1)).filter(h => h >= 0));
     }
 
+    static isDown(t) {
+        return /เศร้า|ร้องไห้|เสียใจ|ไม่ไหวแล้ว|ท้อ|เหนื่อยใจ|ไม่โอเค|แย่มาก|เบื่อชีวิต|เหงามาก|อยากหายไป|ไม่อยากคุยกับใคร|ไม่มีใครเข้าใจ|โดดเดี่ยว|ผิดหวัง|อยากร้องไห้|ไม่มีความสุข/.test(t) || MoCare.isCrisis(t);
+    }
+
+    /** คำที่ส่อว่าอาจคิดทำร้ายตัวเอง → โมต้องจริงจัง อ่อนโยน และแนะนำสายด่วน */
+    static isCrisis(t) {
+        return /อยากตาย|ไม่อยากอยู่แล้ว|ไม่อยากมีชีวิต|ฆ่าตัวตาย|จบชีวิต|ทำร้ายตัวเอง|กรีดแขน|หายไปจากโลก/.test(t);
+    }
+
+    /**
+     * ขั้นตามด้วยความห่วง: เองไม่โอเคแล้วเงียบไปหลังโมตอบ → นาทีที่ 10 ทัก / 20 รัวๆ / 35 โทร / 60 ข้อความสุดท้าย
+     * คืน { step, key, downAt } หรือ null — key ใช้ร่วมกับหลังบ้าน (worker.js) กันทำซ้ำ
+     */
+    static worryStep(messages, down, now = Date.now()) {
+        if (!down || now - down.at > 4 * 3600000) return null;
+        const after = messages.filter(m => m.timestamp >= down.at - 1000);
+        const lastSent = Math.max(0, ...after.filter(m => m.type === 'sent').map(m => m.timestamp));
+        const moReplies = after.filter(m => m.type === 'received' && m.timestamp > lastSent);
+        if (!moReplies.length) return null;                 // โมยังไม่ได้ตอบ → ยังไม่นับว่าเงียบ
+        if (lastSent > down.at + 3 * 60000) return null;    // เองตอบต่อแล้ว ไม่ได้เงียบ
+        const t0 = moReplies[0].timestamp;
+        const mins = (now - t0) / 60000;
+        const steps = [['msg', 10], ['burst', 20], ['call', 35], ['final', 60]];
+        const sent = new Set(messages.map(m => m.dueKey).filter(Boolean));
+        for (let i = steps.length - 1; i >= 0; i--) {
+            const [step, at] = steps[i];
+            if (mins >= at) {
+                const key = `sad:${down.at}:${step}`;
+                return sent.has(key) ? null : { step, key, downAt: down.at };
+            }
+        }
+        return null;
+    }
+
+    static worryLines(step, name = 'เอง') {
+        const pick = a => a[Math.floor(Math.random() * a.length)];
+        if (step === 'msg') return [pick([`${name} เป็นไรรึเปล่า เค้าอยู่ตรงนี้นะ`, 'เงียบไปเลย เค้าเป็นห่วงนะ 🥺', 'ไม่ต้องพิมพ์ยาวก็ได้ บอกเค้าหน่อยว่าโอเคมั้ย'])];
+        if (step === 'burst') return [`${name}~`, pick(['ตอบเค้าหน่อยยย', 'อยู่มั้ยย']), pick(['เค้าเป็นห่วงจริงๆ นะ 🥺', 'แค่พิมพ์มาคำเดียวก็ได้ ว่ายังโอเคอยู่'])];
+        if (step === 'call') return ['📞 เค้าโทรหานะ รับหน่อย... เป็นห่วงมาก'];
+        return [pick(['ไม่ตอบก็ไม่เป็นไรนะ ไม่ต้องรีบ', 'เค้าจะไม่กวนแล้ว']), 'แต่พร้อมเมื่อไหร่ทักมานะ เค้ารออยู่ตรงนี้เสมอ 💗'];
+    }
+
     /**
      * อ่านข้อความของเอง → จดสัญญาณที่โมควรห่วง
      */
@@ -64,6 +106,9 @@ class MoCare {
         if (/ออกไป|ไปทำงาน|ไปเรียน|เดินทาง|ขับรถ|นั่งรถ|ออกจากบ้าน/.test(t)) this.set('out', t);
         if (/ถึงบ้าน|กลับถึง|ถึงแล้ว/.test(t)) delete this.data.signals.out;
         if (/นอนไม่หลับ|ตาค้าง|ยังไม่นอน|นอนดึก/.test(t)) this.set('nosleep', t);
+        // ไม่โอเค/เศร้า → ถ้าเงียบไปหลังจากนี้ โมจะตามด้วยความห่วง (ดู worryStep)
+        if (MoCare.isDown(t)) this.set('down', t);
+        if (/ดีขึ้นแล้ว|โอเคแล้ว|ไม่เป็นไรแล้ว|หายเศร้า|สบายใจขึ้น/.test(t)) delete this.data.signals.down;
         // คุยกันตอนดึกมาก = นอนดึก
         if (h >= 0 && h < 5) this.set('late', `${h}:${String(new Date().getMinutes()).padStart(2, '0')}`);
         this.save();
