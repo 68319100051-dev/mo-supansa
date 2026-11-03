@@ -90,29 +90,53 @@ class MoLLMService {
         const now = new Date();
         const h = now.getHours();
         const period = h < 5 ? 'ดึกมาก' : h < 11 ? 'ช่วงเช้า' : h < 13 ? 'ช่วงเที่ยง' : h < 17 ? 'ช่วงบ่าย' : h < 20 ? 'ช่วงเย็น' : 'ช่วงค่ำ/ดึก';
-        const day = now.toLocaleDateString('th-TH', { weekday: 'long' });
-        return `${day} ${String(h).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} ${period}`;
+        const date = now.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        return `${date} เวลา ${String(h).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} น. (${period})`;
+    }
+
+    /**
+     * ป้ายเวลาหน้าข้อความในแชทย้อนหลัง: ใส่เฉพาะเมื่อห่างจากข้อความก่อนหน้า ≥ 20 นาที หรือข้ามวัน (ประหยัด token)
+     */
+    timeTag(ts, prevTs) {
+        if (!ts || (prevTs && ts - prevTs < 20 * 60000 && new Date(ts).toDateString() === new Date(prevTs).toDateString())) return '';
+        const d = new Date(ts);
+        const hm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(ts).setHours(0, 0, 0, 0)) / 86400000);
+        const when = days === 0 ? 'วันนี้' : days === 1 ? 'เมื่อวาน' : `${days} วันก่อน`;
+        return `[${when} ${hm}] `;
     }
 
     /**
      * แชทย้อนหลังสำหรับส่งให้ AI: รูป/คลิป/สติกเกอร์แปลงเป็นข้อความสั้นๆ ให้ AI รู้ว่าเกิดอะไรขึ้น
      */
     historyForLLM(chatHistory, limit = 6) {
-        return (chatHistory || [])
-            .map(m => {
-                if (!m) return null;
-                if (m.format === 'image') return { type: m.type, text: m.desc ? `[ส่งรูป: ${m.desc}]` : '[ส่งรูป]' };
-                if (m.format === 'reel') return { type: m.type, text: `[ส่งคลิป: ${m.extra && m.extra.title ? m.extra.title : 'คลิป'}]` };
-                if (m.format === 'sticker') return { type: m.type, text: `[สติกเกอร์ ${m.text}]` };
-                if (m.format === 'transfer') return { type: m.type, text: `[โอนเงินให้ ฿${m.extra ? m.extra.amount : ''}]` };
-                if (m.format === 'voice') return { type: m.type, text: `[ข้อความเสียง: ${m.extra ? m.extra.text : ''}]` };
-                if (!m.text || !m.text.trim()) return null;
-                // เองกดรีแอคข้อความโม → ให้โมรู้
-                const note = m.type === 'received' && m.reaction ? ` [เองกดรีแอค ${m.reaction}]` : '';
-                return { type: m.type, text: m.text.trim() + note };
+        const list = (chatHistory || []).slice(-limit * 2);
+        return list
+            .map((m, i) => {
+                const item = this.historyItem(m);
+                if (!item) return null;
+                // ป้ายเวลา: ให้โมรู้ว่าข้อความไหนเพิ่งพิมพ์ ไหนเป็นของเมื่อวาน
+                const prev = list[i - 1];
+                return { ...item, text: this.timeTag(m.timestamp, prev && prev.timestamp) + item.text };
             })
             .filter(Boolean)
             .slice(-limit);
+    }
+
+    /**
+     * ข้อความ 1 อัน → ข้อความสั้นๆ ให้ AI (รูป/คลิป/สติกเกอร์แปลงเป็นคำอธิบาย)
+     */
+    historyItem(m) {
+        if (!m) return null;
+        if (m.format === 'image') return { type: m.type, text: m.desc ? `[ส่งรูป: ${m.desc}]` : '[ส่งรูป]' };
+        if (m.format === 'reel') return { type: m.type, text: `[ส่งคลิป: ${m.extra && m.extra.title ? m.extra.title : 'คลิป'}]` };
+        if (m.format === 'sticker') return { type: m.type, text: `[สติกเกอร์ ${m.text}]` };
+        if (m.format === 'transfer') return { type: m.type, text: `[โอนเงินให้ ฿${m.extra ? m.extra.amount : ''}]` };
+        if (m.format === 'voice') return { type: m.type, text: `[ข้อความเสียง: ${m.extra ? m.extra.text : ''}]` };
+        if (!m.text || !m.text.trim()) return null;
+        // เองกดรีแอคข้อความโม → ให้โมรู้
+        const note = m.type === 'received' && m.reaction ? ` [เองกดรีแอค ${m.reaction}]` : '';
+        return { type: m.type, text: m.text.trim() + note };
     }
 
     contextText(userMessage, chatHistory) {
@@ -137,7 +161,10 @@ class MoLLMService {
             ? `เรียก "${knownName}" เป็นหลัก "ไอ้ดื้อ" ไว้แซว`
             : 'ยังไม่รู้ชื่อ ถ้าจังหวะดีถามชื่อเล่น';
 
-        return `คุณคือ "โม" สาวไทยวัยรุ่นที่แชท LINE กับคนสนิท (${userName}) ไม่ใช่ผู้ช่วย แค่คุยเล่นตามอารมณ์จริง
+        return `# เวลาตอนนี้: ${this.timeContext()}
+(ถ้าเองถามเวลา/วันที่ ตอบตามนี้ให้ตรง ข้อความในแชทที่มี [เมื่อวาน 22:10] คือเวลาที่พิมพ์ ใช้รู้ว่าอะไรเพิ่งเกิด อะไรผ่านไปนานแล้ว ห้ามพิมพ์ป้ายเวลาแบบนี้ในคำตอบ)
+
+คุณคือ "โม" สาวไทยวัยรุ่นที่แชท LINE กับคนสนิท (${userName}) ไม่ใช่ผู้ช่วย แค่คุยเล่นตามอารมณ์จริง
 เรื่องข้างล่างที่เป็นของ "เอง" คือของอีกฝ่าย ไม่ใช่ของโม (โมไม่ได้เขียนโค้ด ไม่ได้ทำเกม)
 เรียกตัวเอง "เค้า" เรียกอีกฝ่าย "เอง" (${nameRule}) ร่าเริง ขี้เล่น ขี้อ้อน ชอบแซว ขี้สงสัย มีความเห็นตัวเอง รักและห่วงเองจริงๆ
 
@@ -489,7 +516,8 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
                 this.cooldowns[provider.name] = { until: 0, fails: 0 };
                 this.lastProvider = provider.name;
                 // บางที model เลียนแบบตัวอย่างจนใส่ "โม:" มาด้วย
-                return reply.replace(/^\s*โม\s*:\s*/gm, '').trim();
+                // บางที model เลียนแบบป้ายเวลา [วันนี้ 10:40] ในประวัติ → ตัดทิ้ง
+                return reply.replace(/^\s*โม\s*:\s*/gm, '').replace(/\[(?:วันนี้|เมื่อวาน|\d+ วันก่อน) \d{1,2}:\d{2}\]\s*/g, '').trim();
             } catch (err) {
                 // พักเจ้านี้ 30 วิ, 1 นาที, 2 นาที... (สูงสุด 5 นาที)
                 const fails = state.fails + 1;
