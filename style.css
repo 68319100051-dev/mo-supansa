@@ -3863,3 +3863,15 @@ button.mind-region-chip {
     padding-top: 2px;
     margin-top: 2px;
 }
+
+.house-urgent-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.house-urgent-actions .btn-secondary {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+}

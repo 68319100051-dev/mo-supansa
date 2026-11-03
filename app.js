@@ -1217,7 +1217,10 @@
                     <strong>มีเรื่องด่วน?</strong>
                     <span>${life.canSeePhone() ? 'โมถือมือถืออยู่ โทรปกติก็รับ' : asleep ? 'โมหลับอยู่ โทรด่วนจะปลุกโมขึ้นมา' : 'โมไม่ได้ถือมือถือ โทรปกติอาจไม่รับ'}</span>
                 </div>
-                <button class="btn-primary" id="house-urgent">🚨 โทรด่วน</button>
+                <div class="house-urgent-actions">
+                    ${c.id !== 'talk' && !asleep ? '<button class="btn-secondary" id="house-talk">💬 เรียกมาคุย</button>' : ''}
+                    <button class="btn-primary" id="house-urgent">🚨 โทรด่วน</button>
+                </div>
             </div>
             <div class="house-card">
                 <h3>แผนผังบ้าน ${night ? '🌙 กลางคืน' : '☀️ กลางวัน'}${window.MoWeather && window.MoWeather.describe() ? ` • ${esc(window.MoWeather.describe())}` : ''}</h3>
@@ -1279,6 +1282,12 @@
             chat.addSystemMessage(`🎁 ส่ง${gift.name}ให้โมแล้ว`);
             chat.queueReply(note => chat.moRespond(`${note}[ข้อความระบบ: เองเพิ่งซื้อ "${gift.name}" ${gift.emoji} ให้โม (฿${gift.price}) — ดีใจมาก ขอบคุณแบบอ้อนๆ บอกว่าจะเอาไป${gift.note}]`));
         }));
+        const talkBtn = document.getElementById('house-talk');
+        if (talkBtn) talkBtn.addEventListener('click', () => {
+            houseScreen.classList.add('hidden');
+            chat.input.value = 'หยุดก่อน มาคุยกันก่อน';
+            chat.sendMessage();
+        });
         document.getElementById('house-urgent').addEventListener('click', () => {
             const reason = prompt('เรื่องด่วนอะไร? (ไม่ใส่ก็ได้ โมจะถามเอง)', '');
             if (reason === null) return;

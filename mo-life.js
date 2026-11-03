@@ -30,7 +30,7 @@ const MO_SPOTS = {
     series: '📺', delivery: '🛋️', snack: '🛋️', bored: '🛋️', chore: '🛋️',
     breakfast: '🍽️', cook: '🍳',
     shower_am: '🛁', shower_pm: '🛁', skincare: '🪞',
-    water_plants: '🪴', balcony_chill: '🪑', laundry: '👕', urgent: '📱',
+    water_plants: '🪴', talk: '🛋️', balcony_chill: '🪑', laundry: '👕', urgent: '📱',
 };
 
 // รายละเอียดสุ่มที่ใส่ในสถานการณ์ ({food} {show} ...)
@@ -86,6 +86,7 @@ const MO_ACTIVITIES = [
 // กิจกรรมพิเศษ (ไม่สุ่ม เลือกโดยระบบ)
 const MO_SPECIAL = {
     sleep: { id: 'sleep', label: 'นอนหลับ', status: 'หลับอยู่ 😴', emoji: '😴', room: 'bedroom', phone: 'asleep' },
+    talk: { id: 'talk', label: 'นั่งคุยแชทกับเอง', status: 'คุยกับเองอยู่ 💬', emoji: '💬', phone: 'with', dur: [20, 40], mood: 5 },
     commute: { id: 'commute', label: 'นั่งรถกลับบ้าน', status: 'กำลังกลับบ้าน 🚕', emoji: '🚕', room: 'out', place: 'บนรถกลับบ้าน', dur: [15, 30], phone: 'with', energy: -3 },
     urgent: { id: 'urgent', label: 'รับสายด่วนจากเอง', status: 'คุยเรื่องด่วน 📞', emoji: '📞', phone: 'with', dur: [15, 30], energy: -5 },
     wish: { id: 'wish', label: 'ออกไปกิน{wish}', status: 'ไปกิน{wish} 🤤', emoji: '🤤', room: 'out', place: 'ร้าน{wish}', dur: [60, 100], phone: 'with', hunger: -70, mood: 15 },
@@ -322,6 +323,14 @@ class MoLife {
         if (!s.wish && Math.random() < 0.12) {
             s.wish = { ...this.pick(MO_WISHES), since: ts };
         }
+        // ขอรอแป๊บไว้แล้ว → ถึงเวลามาคุยกับเอง
+        if (s.pendingTalk) {
+            s.current = { ...s.pendingTalk, startedAt: ts, endsAt: ts + (s.pendingTalk.endsAt - s.pendingTalk.startedAt) };
+            s.pendingTalk = null;
+            const where = s.current.room === 'out' ? (s.current.place || 'ข้างนอก') : MO_ROOMS[s.current.room] ? MO_ROOMS[s.current.room].name : '';
+            this.addLog(ts, '💬', `มาคุยกับเองตามที่ขอ — ${where}`);
+            return prev;
+        }
         // ออกไปข้างนอกแล้ว → ต้องเดินทางกลับบ้านก่อน (ไม่วาร์ป) ยกเว้นจะไปต่อที่อื่น
         if (prev && prev.room === 'out' && prev.id !== 'commute' && prev.id !== 'urgent' && Math.random() < 0.85) {
             s.current = this.makeActivity(MO_SPECIAL.commute, ts);
@@ -405,6 +414,38 @@ class MoLife {
         this.save();
         this.emit(c);
         return { ok: true, from, eta: Math.round((ride.endsAt - Date.now()) / 60000) };
+    }
+
+    /**
+     * เองขอให้หยุดสิ่งที่ทำอยู่แล้วมาคุยกันก่อน
+     * - หลับอยู่ → ไม่เห็น (ต้องโทรด่วนปลุก) / ข้างนอก → หยุดเดินดูของ ถือมือถือคุย (ยังอยู่ที่เดิม)
+     * - ระดับเป็นตัวของตัวเองสูง + กำลังสนุก (ซีรีส์/เกม) → บางทีขออีกแป๊บก่อน
+     * คืน { ok, from, wait } (wait = นาทีที่ขอรอ)
+     */
+    callToChat(autonomy = 2) {
+        const s = this.state;
+        const c = s.current;
+        if (!c || c.id === 'sleep') return { ok: false, asleep: true };
+        if (c.id === 'talk' || c.id === 'urgent') return { ok: true, already: true, from: c.label };
+        const enjoying = ['series', 'game', 'music', 'draw', 'cafe', 'friend_out'].includes(c.id);
+        const wait = enjoying && Math.random() < (autonomy >= 3 ? 0.45 : autonomy === 2 ? 0.2 : 0) ? Math.round(this.rand(3, 8)) : 0;
+        const from = c.label;
+        const startAt = Date.now() + wait * 60000;
+        c.endsAt = startAt;
+        const talk = this.makeActivity(MO_SPECIAL.talk, startAt);
+        talk.room = c.room;
+        talk.place = c.place;
+        // ขอรอแป๊บ → ให้ tick เปลี่ยนเมื่อถึงเวลา (ใช้ nextWish), ไม่รอ → เปลี่ยนทันที
+        if (wait) {
+            s.pendingTalk = talk;
+        } else {
+            s.current = talk;
+            s.lastSeen = Date.now();
+            this.addLog(Date.now(), '💬', `หยุด${from}มาคุยกับเอง`);
+            this.emit(c);
+        }
+        this.save();
+        return { ok: true, from, wait };
     }
 
     /**
