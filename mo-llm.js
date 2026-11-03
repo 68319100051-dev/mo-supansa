@@ -54,6 +54,29 @@ class MoLLMService {
         } catch (e) {}
     }
 
+    /**
+     * นับการใช้ AI วันนี้ (เครื่องนี้): ครั้ง + token ต่อเจ้า — ดูได้ในรายงานสถานะ/หน้าตั้งค่า
+     */
+    track(provider, tokens = 0) {
+        const key = 'mo_usage_v1';
+        const today = new Date().toDateString();
+        let u = {};
+        try { u = JSON.parse(localStorage.getItem(key) || '{}'); } catch (e) {}
+        if (u.date !== today) u = { date: today, by: {} };
+        const p = u.by[provider] || { calls: 0, tokens: 0 };
+        u.by[provider] = { calls: p.calls + 1, tokens: p.tokens + (tokens || 0) };
+        try { localStorage.setItem(key, JSON.stringify(u)); } catch (e) {}
+    }
+
+    usageToday() {
+        try {
+            const u = JSON.parse(localStorage.getItem('mo_usage_v1') || '{}');
+            return u.date === new Date().toDateString() ? u.by : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
     isReady() {
         return this.getProviders(false).length > 0;
     }
@@ -208,6 +231,10 @@ class MoLLMService {
 # ตัวอย่างสไตล์ (สุ่มมาให้ดูแค่บางส่วน — เอาแค่โทน ห้ามลอกประโยค ห้ามพูดซ้ำที่เคยพูด)
 ${this.pickStyleExamples(4)}
 
+# ตอนอยู่ข้างนอก (ดูจาก "ชีวิตโมตอนนี้")
+- พิมพ์ให้เข้ากับที่ที่อยู่จริง: อยู่ร้าน/ห้าง → ตอบสั้นลง เล่าสิ่งที่เห็นรอบตัว, บนรถ → บอกว่ากำลังกลับ ถึงบ้านอีกกี่นาที, อยู่กับเพื่อน → พูดถึงเพื่อนคนนั้น
+- ห้ามบอกว่าอยู่บ้าน/นอนอยู่บนเตียง ถ้าตอนนี้อยู่ข้างนอก และห้ามวาร์ปกลับบ้านทันที (ต้องเดินทาง)
+
 # โมเป็นคนจริง ไม่ใช่คนตามใจ
 - มีความเห็นของตัวเอง ไม่เห็นด้วยก็บอกตรงๆ แบบน่ารัก เถียงเบาๆ ได้ ไม่ต้องคล้อยตามทุกเรื่อง
 - ไม่อยากทำอะไรก็ปฏิเสธได้ (เช่น ขี้เกียจ ง่วง ไม่ชอบ) มีเหตุผลของตัวเอง
@@ -324,6 +351,7 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
         }
 
         const data = await res.json();
+        this.track('Gemini แชท', data.usageMetadata && data.usageMetadata.totalTokenCount);
         const candidate = data.candidates?.[0]?.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('');
         if (!candidate) throw new Error('No reply from Gemini');
         return candidate.trim();
@@ -376,6 +404,7 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
         }
 
         const data = await res.json();
+        this.track(label, data.usage && data.usage.total_tokens);
         const reply = data.choices?.[0]?.message?.content?.replace(/<think>[\s\S]*?<\/think>/g, '');
         if (!reply || !reply.trim()) throw new Error(`No reply from ${label}`);
         return reply.trim();
@@ -449,7 +478,9 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
             signal: AbortSignal.timeout(25000)
         });
         if (!res.ok) throw new Error(`TTS ${res.status}`);
-        const part = (await res.json()).candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+        const ttsData = await res.json();
+        this.track('Gemini เสียง', ttsData.usageMetadata && ttsData.usageMetadata.totalTokenCount);
+        const part = ttsData.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
         if (!part) throw new Error('TTS: no audio');
         const bytes = Uint8Array.from(atob(part.inlineData.data), c => c.charCodeAt(0));
         const mime = part.inlineData.mimeType || '';
@@ -485,6 +516,7 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
                 });
                 if (!res.ok) throw new Error(`Gemini ${res.status}`);
                 const data = await res.json();
+                this.track('Gemini เบื้องหลัง', data.usageMetadata && data.usageMetadata.totalTokenCount);
                 return data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('');
             });
         }
@@ -505,6 +537,7 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
                 });
                 if (!res.ok) throw new Error(`Groq ${res.status}`);
                 const data = await res.json();
+                this.track('Groq เบื้องหลัง', data.usage && data.usage.total_tokens);
                 return data.choices?.[0]?.message?.content;
             });
         }

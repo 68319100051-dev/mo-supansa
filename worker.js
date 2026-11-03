@@ -2,6 +2,8 @@
    Mo Worker ☁️ - หลังบ้านบน Cloudflare (ทำงานแม้ปิดแอป)
    - เสิร์ฟไฟล์แอปตามปกติ (ASSETS)
    - ทุก 5 นาที: ดูกิจวัตร / เรื่องรอถามผล / การเตือนของทุกคน → ถึงเวลา → เขียนข้อความโมลงแชท + ส่ง Push
+   - เองหายไปนาน (5 ชม.+) → โมทักเองเพราะคิดถึง (วันละไม่เกิน 2 ครั้ง ไม่ทักตอนดึก) บางทีก็โทรมาเลย
+   - ถึงเวลานัดเดต → โมโทรมา (Push แบบสายเรียกเข้า)
    - Push แบบไม่มี payload: มือถือรับแล้วถาม /api/push/inbox ว่าโมพูดว่าอะไร
    Secrets (ตั้งใน Cloudflare): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
    ============================================ */
@@ -80,7 +82,7 @@ async function runChecks(env) {
 }
 
 async function checkUser(env, userId, subs) {
-    const keys = 'mo_routines_v1,mo_followups_v1,mo_reminders_v1,mo_chat_history_v2,mo_device_keys_v1,mo_profile_v1';
+    const keys = 'mo_routines_v1,mo_followups_v1,mo_reminders_v1,mo_chat_history_v2,mo_device_keys_v1,mo_profile_v1,mo_social_v1';
     const rows = await db(env, `mo_state?select=key,value&user_id=eq.${userId}&key=in.(${keys})`);
     const get = k => (rows.find(r => r.key === k) || {}).value;
     const chat = Array.isArray(get('mo_chat_history_v2')) ? get('mo_chat_history_v2') : [];
@@ -118,7 +120,34 @@ async function checkUser(env, userId, subs) {
         const late = now - r.dueAt;
         const key = `rm:${r.id}`;
         if (!r.done && late >= LATE_MIN && late <= REMINDER_WINDOW && !sentKeys.has(key)) {
-            due.push({ key, intent: `เตือนเรื่อง${r.text} ที่เองขอให้เตือน`, fallback: `⏰ ถึงเวลา${r.text}แล้วนะ!` });
+            if (r.kind === 'date') {
+                due.push({ key, call: true, intent: `ถึงเวลานัด${r.text}กับเองแล้ว โมโทรมาชวน ตื่นเต้น`, fallback: `📞 ถึงเวลานัด${r.text}แล้วนะ! รับสายเค้าหน่อย` });
+            } else if (r.kind === 'date-pre') {
+                due.push({ key, intent: `อีก 15 นาทีจะถึงนัด${r.text} เตือนให้เตรียมตัว`, fallback: `อีก 15 นาทีนัด${r.text}นะ เตรียมตัวยัง 💕` });
+            } else {
+                due.push({ key, intent: `เตือนเรื่อง${r.text} ที่เองขอให้เตือน`, fallback: `⏰ ถึงเวลา${r.text}แล้วนะ!` });
+            }
+        }
+    }
+
+    // เองหายไปนาน → โมทักเอง/โทรมาเพราะคิดถึง
+    if (!due.length && !quiet && minutes >= 9 * 60 && minutes < 22 * 60) {
+        const lastSent = Math.max(0, ...chat.filter(m => m.type === 'sent').map(m => m.timestamp || 0));
+        const lastMo = Math.max(0, ...chat.filter(m => m.type === 'received').map(m => m.timestamp || 0));
+        const todayPk = chat.filter(m => m.dueKey && m.dueKey.startsWith(`pk:${localDate}`)).length;
+        if (now - lastSent > 5 * 3600000 && now - lastMo > 3 * 3600000 && todayPk < 2 && Math.random() < 0.3) {
+            const social = get('mo_social_v1') || {};
+            const arc = (social.arcs || []).find(a => a.step < a.beats.length);
+            const recent = chat.filter(m => m.text && (!m.format || m.format === 'text')).slice(-6)
+                .map(m => `${m.type === 'sent' ? 'เอง' : 'โม'}: ${m.text}`).join(' / ');
+            const call = minutes >= 10 * 60 && minutes < 21 * 60 && Math.random() < 0.25;
+            const hours = Math.round((now - lastSent) / 3600000);
+            due.push({
+                key: `pk:${localDate}:${todayPk + 1}`,
+                call,
+                intent: `เองหายไป ${hours} ชม. ไม่ได้คุยกันเลย โมคิดถึง${call ? ' เลยโทรหา' : ''}${arc ? ` (มีเรื่อง${arc.who}อยากเล่า: ${arc.beats[arc.step]})` : ''} แชทล่าสุดที่คุยกัน: ${recent || '-'}`,
+                fallback: call ? '📞 โมโทรมา... รับหน่อยดิ คิดถึง' : 'หายไปไหนมาาา คิดถึงนะ 🥺',
+            });
         }
     }
     if (!due.length) return;
@@ -140,7 +169,8 @@ async function checkUser(env, userId, subs) {
     // เขียนลงแชท (แอปรวมแชทตาม id → ไม่ทับของเดิม)
     await upsert(env, [{ user_id: userId, key: 'mo_chat_history_v2', value: [...chat, ...fresh].slice(-200), updated_at: new Date().toISOString() }]);
 
-    const inbox = { title: 'โม 💕', body: fresh.map(m => m.text).join('\n').slice(0, 180), at: now };
+    const isCall = due.slice(0, 3).some(d => d.call);
+    const inbox = { title: isCall ? '📞 โมกำลังโทรมา...' : 'โม 💕', body: fresh.map(m => m.text).join('\n').slice(0, 180), at: now, type: isCall ? 'call' : 'chat' };
     for (const sub of subs) {
         const status = await sendPush(env, sub.value.endpoint);
         if (status === 404 || status === 410) {

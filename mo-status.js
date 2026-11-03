@@ -100,6 +100,11 @@ const MoStatus = {
         const kb = this.storageKB();
         lines.push(`💾 ความจำ: ${facts} เรื่องเกี่ยวกับเอง · ${self ? self.data.opinions.length : 0} เรื่องของเค้า · ${self ? self.data.jokes.length : 0} มุกของเรา\nพื้นที่ในเครื่อง ${kb} KB${kb > 4000 ? ' ⚠️ ใกล้เต็มแล้ว (ประมาณ 5MB)' : ''}`);
 
+        const usage = Object.entries(llm.usageToday ? llm.usageToday() : {});
+        if (usage.length) {
+            const total = usage.reduce((n, [, u]) => n + u.calls, 0);
+            lines.push(`📊 ใช้ AI วันนี้ (เครื่องนี้) ${total} ครั้ง\n${usage.map(([name, u]) => `• ${name}: ${u.calls} ครั้ง${u.tokens ? ` · ~${Math.round(u.tokens / 1000)}k token` : ''}`).join('\n')}`);
+        }
         lines.push(`⏰ งานที่รออยู่: เตือน ${reminders.getPending().length} · กิจวัตร ${routines.routines.length} · รอถามผล ${routines.followUps.length}`);
 
         const bad = [gemini, groq, supa].filter(r => r && r.ok === false).length;

@@ -129,6 +129,7 @@ class MoCall {
     startIncomingCall() {
         if (this.isInCall) return;
         this.incomingCall.classList.remove('hidden');
+        this.startRingtone();
 
         // Auto-decline after 30 seconds
         this._incomingTimeout = setTimeout(() => {
@@ -139,7 +140,43 @@ class MoCall {
     /**
      * Accept incoming call
      */
+    /**
+     * เสียงเรียกเข้า (สร้างเอง) + สั่นเป็นจังหวะ จนกว่าจะรับ/ปฏิเสธ
+     */
+    startRingtone() {
+        this.stopRingtone();
+        const ring = () => {
+            try {
+                const Ctx = window.AudioContext || window.webkitAudioContext;
+                this._ringCtx = this._ringCtx || new Ctx();
+                const ctx = this._ringCtx;
+                if (ctx.state === 'suspended') ctx.resume();
+                [0, 0.18, 0.5, 0.68].forEach((at, i) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.frequency.value = i % 2 ? 784 : 988;
+                    gain.gain.setValueAtTime(0, ctx.currentTime + at);
+                    gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + at + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + 0.16);
+                    osc.connect(gain).connect(ctx.destination);
+                    osc.start(ctx.currentTime + at);
+                    osc.stop(ctx.currentTime + at + 0.18);
+                });
+            } catch (e) {}
+            try { if (navigator.vibrate) navigator.vibrate([500, 250, 500]); } catch (e) {}
+        };
+        ring();
+        this._ringTimer = setInterval(ring, 2000);
+    }
+
+    stopRingtone() {
+        clearInterval(this._ringTimer);
+        this._ringTimer = null;
+        try { if (navigator.vibrate) navigator.vibrate(0); } catch (e) {}
+    }
+
     acceptIncomingCall() {
+        this.stopRingtone();
         clearTimeout(this._incomingTimeout);
         this.incomingCall.classList.add('hidden');
         this.callScreen.classList.remove('hidden');
@@ -156,6 +193,7 @@ class MoCall {
      * Decline incoming call
      */
     declineIncomingCall() {
+        this.stopRingtone();
         clearTimeout(this._incomingTimeout);
         this.incomingCall.classList.add('hidden');
     }

@@ -193,6 +193,18 @@ class MoChat {
         this.memory.updateLastChat();
         this.memory.increaseAffection(1);
 
+        // เร่งให้กลับบ้าน (โมอยู่ข้างนอก) → โมยอมรีบกลับจริงในชีวิตโม แล้วตอบตามนั้น
+        let homeNote = '';
+        if (this.life && /กลับบ้าน|รีบกลับ|กลับมาได้แล้ว|กลับได้แล้ว|มาหาหน่อย|อย่าเพิ่งเที่ยว/.test(text)) {
+            const r = this.life.hurryHome();
+            if (r.ok) {
+                this.mind && this.mind.decide(`เองเร่งให้กลับบ้าน → รีบกลับจาก${r.from}`);
+                homeNote = `[ข้อความระบบ: เองเร่งให้โมกลับบ้าน — โมยอมกลับแล้ว ตอนนี้${r.already ? 'อยู่บนรถอยู่แล้ว' : `เพิ่งออกจาก${r.from}`} อีกประมาณ ${r.eta} นาทีถึงบ้าน ตอบตามนี้ (อาจบ่นนิดๆ หรือถามว่ามีอะไรรึเปล่า)]\n`;
+            }
+        }
+        // นัดกันแล้ว: ส่งข้อความหลังเวลานัด = มาตามนัด
+        if (this.dateWaiting) this.dateWaiting = null;
+
         // ถามสถานะหลังบ้าน → โมไล่เช็คระบบจริงแล้วรายงาน (ไม่ใช้ AI ตอบ)
         if (window.MoStatus && this.statusContext && MoStatus.isAsking(text)) {
             this.queueReply(() => this.reportStatus());
@@ -232,7 +244,7 @@ class MoChat {
         const forMo = sulkNote + (replyTo
             ? `(ตอบกลับข้อความของ${replyTo.type === 'received' ? 'โม' : 'ตัวเอง'}ที่ว่า "${replyTo.text}")\n${text}`
             : text);
-        const gameNote = this.games ? this.games.noteFor(text) : '';
+        const gameNote = (this.games ? this.games.noteFor(text) : '') + homeNote;
         this.queueReply(async note => {
             // นึกเรื่องเก่าที่ความหมายใกล้กัน (ไม่เกิน ~2 วิ)
             const recall = window.MoRecall

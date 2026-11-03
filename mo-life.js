@@ -86,6 +86,7 @@ const MO_ACTIVITIES = [
 // กิจกรรมพิเศษ (ไม่สุ่ม เลือกโดยระบบ)
 const MO_SPECIAL = {
     sleep: { id: 'sleep', label: 'นอนหลับ', status: 'หลับอยู่ 😴', emoji: '😴', room: 'bedroom', phone: 'asleep' },
+    commute: { id: 'commute', label: 'นั่งรถกลับบ้าน', status: 'กำลังกลับบ้าน 🚕', emoji: '🚕', room: 'out', place: 'บนรถกลับบ้าน', dur: [15, 30], phone: 'with', energy: -3 },
     urgent: { id: 'urgent', label: 'รับสายด่วนจากเอง', status: 'คุยเรื่องด่วน 📞', emoji: '📞', phone: 'with', dur: [15, 30], energy: -5 },
     wish: { id: 'wish', label: 'ออกไปกิน{wish}', status: 'ไปกิน{wish} 🤤', emoji: '🤤', room: 'out', place: 'ร้าน{wish}', dur: [60, 100], phone: 'with', hunger: -70, mood: 15 },
 };
@@ -286,7 +287,14 @@ class MoLife {
         if (!s.wish && Math.random() < 0.12) {
             s.wish = { ...this.pick(MO_WISHES), since: ts };
         }
-        s.current = this.chooseNext(ts, prev && prev.id);
+        // ออกไปข้างนอกแล้ว → ต้องเดินทางกลับบ้านก่อน (ไม่วาร์ป) ยกเว้นจะไปต่อที่อื่น
+        if (prev && prev.room === 'out' && prev.id !== 'commute' && prev.id !== 'urgent' && Math.random() < 0.85) {
+            s.current = this.makeActivity(MO_SPECIAL.commute, ts);
+            if (prev.phone === 'home') s.current.phone = 'home';
+            s.current.place = `บนรถกลับจาก${prev.place || 'ข้างนอก'}`;
+        } else {
+            s.current = this.chooseNext(ts, prev && prev.id);
+        }
         const where = s.current.room === 'out' ? (s.current.place || 'ข้างนอก') : MO_ROOMS[s.current.room].name;
         const phoneNote = s.current.phone === 'home' ? ' (ลืมมือถือไว้บ้าน)' : '';
         this.addLog(ts, s.current.emoji, `${s.current.label} — ${where}${phoneNote}`);
@@ -337,6 +345,31 @@ class MoLife {
         this.save();
         this.emit(prev);
         return { wasAsleep, prevLabel: prev ? prev.label : '' };
+    }
+
+    /**
+     * เองเร่งให้กลับบ้าน (โมอยู่ข้างนอก) → โมยอมกลับ: ตัดกิจกรรมข้างนอกให้จบเร็ว แล้วนั่งรถกลับ
+     * คืน { ok, from, eta } หรือ { ok: false } ถ้าอยู่บ้านอยู่แล้ว
+     */
+    hurryHome() {
+        const s = this.state;
+        const c = s.current;
+        if (!c || c.room !== 'out') return { ok: false };
+        if (c.id === 'commute') {
+            c.endsAt = Math.min(c.endsAt, Date.now() + 10 * 60000);
+            this.save();
+            return { ok: true, from: c.place, eta: Math.round((c.endsAt - Date.now()) / 60000), already: true };
+        }
+        const from = c.place || 'ข้างนอก';
+        c.endsAt = Date.now();
+        const ride = this.makeActivity(MO_SPECIAL.commute, Date.now(), Date.now() + this.rand(10, 20) * 60000);
+        ride.place = `บนรถกลับจาก${from}`;
+        ride.phone = c.phone === 'home' ? 'home' : 'with';
+        s.current = ride;
+        this.addLog(Date.now(), '🚕', `เองเร่งให้กลับ เลยรีบออกจาก${from}`);
+        this.save();
+        this.emit(c);
+        return { ok: true, from, eta: Math.round((ride.endsAt - Date.now()) / 60000) };
     }
 
     /**

@@ -51,12 +51,12 @@ class MoReminders {
      * คืนค่า reminder ถ้าข้อความเป็นการขอให้เตือน, ไม่ใช่ → null
      */
     parse(message) {
-        if (!/เตือน/.test(message)) return null;
+        if (!/เตือน|นัด|เดท|เดต|ด้วยกัน|คอลกัน|โทรคุยกัน/.test(message)) return null;
         const units = { 'วิ': 1000, 'วินาที': 1000, 'นาที': 60000, 'ชม': 3600000, 'ชั่วโมง': 3600000 };
         const clean = s => s.replace(/^(?:เรา|ผม|ฉัน|หนู|หน่อย|ด้วย|ให้)+/, '').replace(/(?:หน่อย|ด้วย|นะ|ที|ครับ|ค่ะ|จ้า|\s)+$/, '').trim();
 
         // "เตือน X อีก 10 นาที" / "อีก 10 นาที เตือน X"
-        let m = message.match(/เตือน\s*(.+?)\s*(?:ใน)?อีก\s*(\d+)\s*(วินาที|วิ|นาที|ชั่วโมง|ชม)\.?/)
+        let m = !/เตือน/.test(message) ? null : message.match(/เตือน\s*(.+?)\s*(?:ใน)?อีก\s*(\d+)\s*(วินาที|วิ|นาที|ชั่วโมง|ชม)\.?/)
             || message.match(/(?:ใน)?อีก\s*(\d+)\s*(วินาที|วิ|นาที|ชั่วโมง|ชม)\.?\s*เตือน\s*(.+)/);
         if (m) {
             const [text, n, unit] = m[0].startsWith('เตือน') ? [m[1], m[2], m[3]] : [m[3], m[1], m[2]];
@@ -74,7 +74,17 @@ class MoReminders {
             return this.add(clean(text.replace('พรุ่งนี้', '')) || 'เรื่องที่ให้เตือน', due.getTime());
         }
 
+        // นัดเดต: "คืนนี้สองทุ่มดูหนังด้วยกันนะ" "นัดคอลกันตอนสี่ทุ่ม" → นัด + เตือนก่อน 15 นาที (ถึงเวลาโมโทรมา)
+        const dt = /นัด|เดท|เดต|คอลกัน|โทรคุยกัน|(?:ดู|เล่น|คุย|กิน|ฟัง).{0,15}ด้วยกัน/.test(message) && !/เตือน|เมื่อวาน|เมื่อกี้|เมื่อคืน/.test(message) ? this.parseThaiTime(message) : null;
+        if (dt) {
+            const at = this.resolveTime(dt, message);
+            const what = this.reminderText(message, dt.match).replace(/นัด|เดท|เดต|กัน|ด้วยกัน|คืนนี้|เย็นนี้/g, ' ').replace(/\s+/g, ' ').trim() || 'คุยกัน';
+            if (at - Date.now() > 20 * 60000) this.add(what, at - 15 * 60000, false, 'date-pre');
+            return this.add(what, at, false, 'date');
+        }
+
         // ภาษาพูด: "ตอนเที่ยงเตือนกินข้าว" "เตือนประชุมบ่ายสอง" "พรุ่งนี้แปดโมงเช้า" "ทุกวันสองทุ่ม"
+        if (!/เตือน/.test(message)) return null;
         const t = this.parseThaiTime(message);
         if (t) {
             const what = this.reminderText(message, t.match) || 'เรื่องที่ให้เตือน';
@@ -162,8 +172,8 @@ daily=true ถ้าขอให้เตือนทุกวัน / ถ้า
         }
     }
 
-    add(text, dueAt, daily = false) {
-        const reminder = { id: 'rm_' + Date.now(), text, dueAt, done: false, ...(daily ? { daily: true } : {}) };
+    add(text, dueAt, daily = false, kind = null) {
+        const reminder = { id: 'rm_' + Date.now() + Math.random().toString(36).slice(2, 5), text, dueAt, done: false, ...(daily ? { daily: true } : {}), ...(kind ? { kind } : {}) };
         this.reminders.push(reminder);
         this.save();
         return reminder;
@@ -182,6 +192,12 @@ daily=true ถ้าขอให้เตือนทุกวัน / ถ้า
      * ข้อความยืนยันตอนรับเรื่องเตือน
      */
     confirmMessage(reminder) {
+        if (reminder.kind === 'date') {
+            return this.pick([
+                `ได้เลยย นัดแล้วนะ ${this.formatTime(reminder.dueAt)} ${reminder.text} ห้ามเทเค้านะ 💕`,
+                `โอเคค ${this.formatTime(reminder.dueAt)} เจอกันนะ ถึงเวลาเค้าโทรหาเลย 📞`,
+            ]);
+        }
         const diff = reminder.dueAt - Date.now();
         const mins = Math.round(diff / 60000);
         let when;
@@ -227,6 +243,8 @@ daily=true ถ้าขอให้เตือนทุกวัน / ถ้า
 
     dueMessage(reminder) {
         const name = this.memory.getUserName();
+        if (reminder.kind === 'date-pre') return `อีก 15 นาทีนัด${reminder.text}นะ เตรียมตัวยังง 💕`;
+        if (reminder.kind === 'date') return `ถึงเวลานัด${reminder.text}แล้วนะ! มาๆ 💕`;
         const late = Date.now() - reminder.dueAt > 5 * 60000;
         if (late) return `${name}~ เมื่อกี้ถึงเวลา${reminder.text}แล้วนะ ทำยัง 👀`;
         return this.pick([

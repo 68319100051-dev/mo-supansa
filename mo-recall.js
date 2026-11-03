@@ -63,6 +63,7 @@ const MoRecall = {
         });
         if (!res.ok) throw new Error(`embed ${res.status}`);
         const data = await res.json();
+        if (window.MoLLMInstance) window.MoLLMInstance.track('Gemini ความจำ');
         return (data.embeddings || []).map(e => this.normalize(e.values));
     },
 

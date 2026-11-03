@@ -39,6 +39,14 @@
 
     reminders.onDue = (r) => {
         if (alreadySent(`rm:${r.id}`)) return;
+        // ถึงเวลานัด → โมโทรมา แล้วรอดูว่ามาตามนัดไหม
+        if (r.kind === 'date') {
+            chat.dateWaiting = { at: Date.now(), text: r.text };
+            chat.addMessage('received', reminders.dueMessage(r));
+            tagDue(`rm:${r.id}`, Date.now() - 1000);
+            if (!call.getCallStatus()) setTimeout(() => call.startIncomingCall(), 1500);
+            return;
+        }
         const msg = reminders.dueMessage(r);
         const since = Date.now();
         chat.addMessage('received', msg);
@@ -361,6 +369,18 @@
                 chat._ignoredHoursNoted = hours;
                 mind.ignored(hours);
             }
+        }
+        // ผิดนัด: ถึงเวลานัดแล้ว 20 นาทีเองยังไม่มา → โมงอน
+        if (chat.dateWaiting && Date.now() - chat.dateWaiting.at > 20 * 60000) {
+            const d = chat.dateWaiting;
+            chat.dateWaiting = null;
+            if (self.data) {
+                self.data.grudge = { level: 2, reason: `เองผิดนัด${d.text}`, since: Date.now() };
+                self.save();
+            }
+            mind.decide(`เองผิดนัด${d.text} → งอน`);
+            chat.sendProactiveMessage(`เองผิดนัด${d.text}ที่นัดกันไว้ โมรอแล้วเองไม่มา`, 'บ่นแบบงอนจริงๆ ว่ารอแล้วไม่มา น้อยใจ แต่ยังห่วงว่าเป็นอะไรรึเปล่า สั้นๆ 2 บรรทัด');
+            return;
         }
         // ทักไปแล้วเองเปิดแอปอยู่แต่ไม่ตอบ → ทักตามสั้นๆ ครั้งเดียว (แบบคนจริง)
         if (chat.awaitingReply && chat.awaitingSince && !chat.nudged && canReachOut()
@@ -1186,4 +1206,21 @@
         document.removeEventListener('pointerdown', askOnce);
         if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
     });
+
+    // ======= โมโทรมาจากแจ้งเตือน (Push แบบสายเรียกเข้า) =======
+    const callFromPush = (answer) => {
+        if (call.getCallStatus()) return;
+        call.startIncomingCall();
+        if (answer) setTimeout(() => call.acceptIncomingCall(), 600);
+    };
+    const callParam = new URLSearchParams(location.search).get('call');
+    if (callParam) {
+        history.replaceState(null, '', location.pathname);
+        setTimeout(() => callFromPush(callParam === 'answer'), 3600);   // หลัง splash
+    }
+    if (navigator.serviceWorker) {
+        navigator.serviceWorker.addEventListener('message', (e) => {
+            if (e.data && e.data.type === 'mo-call') callFromPush(e.data.answer);
+        });
+    }
 })();

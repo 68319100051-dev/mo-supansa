@@ -5,7 +5,7 @@
    - Push จากหลังบ้าน (ไม่มี payload) → ถาม /api/push/inbox ว่าโมพูดอะไร แล้วเด้งแจ้งเตือน
    ============================================ */
 
-const CACHE = 'mo-app-v8';
+const CACHE = 'mo-app-v9';
 const SHELL = [
     './', 'index.html', 'style.css', 'manifest.json', 'mo_avatar.jpg', 'icons/icon-192.png', 'icons/icon-512.png',
     'mo-config.js', 'mo-sync.js', 'mo-llm.js', 'mo-brain.js', 'mo-brain3d.js', 'mo-memory.js', 'mo-chat.js',
@@ -56,21 +56,43 @@ self.addEventListener('push', (event) => {
             });
             msg = await res.json();
         } catch (e) {}
+        // โมโทรมา → แจ้งเตือนแบบสายเรียกเข้า: ค้างไว้ สั่นยาว มีปุ่มรับ/ปฏิเสธ
+        if (msg.type === 'call') {
+            await self.registration.showNotification('📞 โมกำลังโทรมา...', {
+                body: msg.body || 'แตะเพื่อรับสาย',
+                icon: 'icons/icon-192.png',
+                badge: 'icons/icon-192.png',
+                tag: 'mo-call',
+                renotify: true,
+                requireInteraction: true,
+                vibrate: [600, 300, 600, 300, 600, 300, 600, 300, 600],
+                actions: [{ action: 'answer', title: '📞 รับสาย' }, { action: 'decline', title: '❌ ปฏิเสธ' }],
+                data: { type: 'call' },
+            });
+            return;
+        }
         await self.registration.showNotification(msg.title || 'โม 💕', {
             body: msg.body || 'โมทักมา~ เปิดดูหน่อยสิ',
             icon: 'icons/icon-192.png',
             badge: 'icons/icon-192.png',
             tag: 'mo-chat',
             renotify: true,
+            vibrate: [120, 60, 120],
         });
     })());
 });
 
 self.addEventListener('notificationclick', (event) => {
     event.notification.close();
+    const isCall = event.notification.data && event.notification.data.type === 'call';
+    if (isCall && event.action === 'decline') return;
     event.waitUntil((async () => {
         const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-        if (wins.length) return wins[0].focus();
-        return self.clients.openWindow('./');
+        // สายจากโม → เปิดแอปเข้าหน้าสายเรียกเข้า (กดรับสาย = รับเลย)
+        if (wins.length) {
+            if (isCall) wins[0].postMessage({ type: 'mo-call', answer: event.action === 'answer' });
+            return wins[0].focus();
+        }
+        return self.clients.openWindow(isCall ? `./?call=${event.action === 'answer' ? 'answer' : 'ring'}` : './');
     })());
 });
