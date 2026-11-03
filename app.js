@@ -37,6 +37,18 @@
         chat.showNotification(msg);
     };
 
+    // กิจวัตรของเอง: โมจำเอง & เลือกเวลาทักเอง
+    const routines = new MoRoutines(llm);
+    chat.routines = routines;
+    routines.onDue = (r) => {
+        if (call.getCallStatus() || chat.isTyping) return false;
+        mind.decide(`ถึงเวลาที่ตั้งใจไว้: ${r.intent}`);
+        chat.sendProactiveMessage(
+            `โมตั้งใจไว้เองว่าจะทักตอนนี้ เพราะจำได้ว่าเอง${r.what}ตอน ${r.time} — ${r.intent}`,
+            `ทักเรื่องนี้ตรงๆ แบบคนที่จำกิจวัตรของอีกฝ่ายได้และใส่ใจจริง: ${r.intent} (อย่าเล่าเรื่องอื่นของโมแทรก)`);
+        return true;
+    };
+
     // ไดอารี่ของโม
     const diary = new MoDiary(memory, brain, llm);
     window.MoDiaryInstance = diary;
@@ -86,6 +98,7 @@
         // Start proactive system
         startProactiveSystem();
         reminders.start();
+        routines.start();
 
     }, 3200);
 
@@ -312,6 +325,7 @@
         if (has('mo_mind_v1')) mind.state = mind.load();
         if (has('mo_diary_v1')) diary.entries = diary.load();
         if (has('mo_reminders_v1')) reminders.reminders = reminders.load();
+        if (has('mo_routines_v1')) routines.routines = routines.load();
         if (has('mo_clips_v1')) {
             reels.reels = [...reels.reels.filter(r => r.from === 'mo'), ...reels.loadUserClips()];
             reels.renderReels();
@@ -458,11 +472,22 @@
                 <button class="close-btn" data-reminder="${r.id}" title="ยกเลิก" style="width:24px; height:24px; font-size:1rem;">&times;</button>
             </div>`;
         });
+        const learned = routines.routines.map(r =>
+            `<div class="memory-item" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                <div>🗓️ ${esc(routines.describe(r))}</div>
+                <button class="close-btn" data-routine="${esc(r.id)}" title="ให้โมลืมเรื่องนี้" style="width:24px; height:24px; font-size:1rem;">&times;</button>
+            </div>`);
         const upcoming = reminders.getUpcoming().map(u =>
             `<div class="memory-item">${esc(u.title)} <span style="opacity:0.6; font-size:0.8rem;">• ${u.daysLeft === 0 ? 'วันนี้!' : `อีก ${u.daysLeft} วัน`}</span></div>`
         );
-        remindersEl.innerHTML = [...pending, ...upcoming].join('') ||
+        remindersEl.innerHTML = [...pending, ...learned, ...upcoming].join('') ||
             '<div class="memory-item" style="opacity:0.5">ยังไม่มี ลองพิมพ์ "เตือนกินยาอีก 30 นาที" หรือบอกวันเกิดดูสิ</div>';
+        remindersEl.querySelectorAll('[data-routine]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                routines.remove(btn.dataset.routine);
+                updateMemoryDisplay();
+            });
+        });
         remindersEl.querySelectorAll('[data-reminder]').forEach(btn => {
             btn.addEventListener('click', () => {
                 reminders.remove(btn.dataset.reminder);

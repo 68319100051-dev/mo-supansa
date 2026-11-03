@@ -207,6 +207,8 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex: 1;
+    min-width: 0;
 }
 
 .avatar-wrapper {
@@ -244,6 +246,7 @@ body {
 .user-info {
     display: flex;
     flex-direction: column;
+    min-width: 0;
 }
 
 .user-name {
@@ -258,12 +261,46 @@ body {
     font-size: 0.75rem;
     color: #4ade80;
     font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .top-bar-right {
     display: flex;
     align-items: center;
     gap: 4px;
+    flex-shrink: 0;
+}
+
+/* มือถือจอแคบ: ย่อปุ่มและระยะห่างไม่ให้เบียดชื่อโม */
+@media (max-width: 420px) {
+    .top-bar {
+        padding: 10px 10px;
+    }
+
+    .top-bar-left {
+        gap: 8px;
+    }
+
+    .avatar-wrapper {
+        width: 38px;
+        height: 38px;
+    }
+
+    .top-bar-right {
+        gap: 0;
+    }
+
+    .top-bar-right .icon-btn {
+        width: 34px;
+        height: 34px;
+    }
+
+    .top-bar-right .icon-btn svg {
+        width: 20px;
+        height: 20px;
+    }
 }
 
 .icon-btn {
@@ -503,6 +540,95 @@ body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* 🔍 ค้นหาแชทเก่า */
+.search-bar {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px 8px 16px;
+    background: rgba(255, 255, 255, 0.95);
+    border-bottom: 1px solid rgba(240, 77, 133, 0.08);
+}
+
+.search-bar.hidden,
+.search-results.hidden {
+    display: none;
+}
+
+#search-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1px solid var(--pink-200);
+    border-radius: 18px;
+    font: inherit;
+    font-size: 0.9rem;
+    outline: none;
+}
+
+#search-input:focus {
+    border-color: var(--pink-400);
+}
+
+.search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 50vh;
+    overflow-y: auto;
+    background: var(--bg-secondary);
+    box-shadow: 0 8px 20px rgba(240, 77, 133, 0.12);
+    z-index: 20;
+}
+
+.search-hit {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: 10px 16px;
+    border: none;
+    border-bottom: 1px solid rgba(240, 77, 133, 0.06);
+    background: none;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+}
+
+.search-hit:hover {
+    background: var(--pink-50);
+}
+
+.search-hit-meta {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+}
+
+.search-hit-meta strong {
+    color: var(--text-pink);
+}
+
+.search-hit-text {
+    font-size: 0.85rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.search-hit-text mark {
+    background: var(--pink-200);
+    color: inherit;
+    border-radius: 3px;
+}
+
+.search-empty {
+    padding: 14px 16px;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
 }
 
 .reply-bar-cancel {
@@ -2560,4 +2686,47 @@ button.mind-region-chip {
 /* === Utility === */
 .hidden {
     display: none !important;
+}
+
+/* 💬 เมนูกดค้างที่ข้อความ: รีแอคโม / แก้ไขข้อความของเอง */
+.message-menu {
+    position: fixed;
+    z-index: 300;
+    display: flex;
+    gap: 2px;
+    padding: 4px;
+    background: var(--bg-secondary);
+    border-radius: var(--radius-full);
+    box-shadow: 0 6px 20px rgba(240, 77, 133, 0.2);
+}
+
+.message-menu.hidden {
+    display: none;
+}
+
+.message-menu button {
+    min-width: 38px;
+    height: 38px;
+    border: none;
+    border-radius: var(--radius-full);
+    background: none;
+    font-size: 1.3rem;
+    cursor: pointer;
+}
+
+.message-menu button:hover,
+.message-menu button.active {
+    background: var(--pink-100);
+}
+
+.message-menu button.menu-text {
+    padding: 0 14px;
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--text-pink);
+}
+
+.message.received .message-reaction {
+    float: left;
+    margin-left: 8px;
 }

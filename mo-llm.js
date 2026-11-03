@@ -106,7 +106,10 @@ class MoLLMService {
                 if (m.format === 'sticker') return { type: m.type, text: `[สติกเกอร์ ${m.text}]` };
                 if (m.format === 'transfer') return { type: m.type, text: `[โอนเงินให้ ฿${m.extra ? m.extra.amount : ''}]` };
                 if (m.format === 'voice') return { type: m.type, text: `[ข้อความเสียง: ${m.extra ? m.extra.text : ''}]` };
-                return m.text && m.text.trim() ? { type: m.type, text: m.text.trim() } : null;
+                if (!m.text || !m.text.trim()) return null;
+                // เองกดรีแอคข้อความโม → ให้โมรู้
+                const note = m.type === 'received' && m.reaction ? ` [เองกดรีแอค ${m.reaction}]` : '';
+                return { type: m.type, text: m.text.trim() + note };
             })
             .filter(Boolean)
             .slice(-limit);

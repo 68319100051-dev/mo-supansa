@@ -49,6 +49,12 @@
                 </div>
             </div>
             <div class="top-bar-right">
+                <button class="icon-btn" id="btn-search" title="ค้นหาแชทเก่า">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="7"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                </button>
                 <button class="icon-btn" id="btn-call" title="โทรหาโม">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
@@ -91,7 +97,7 @@
                     <div id="memory-events" class="memory-list"></div>
                 </div>
                 <div class="memory-section">
-                    <h3>⏰ การเตือน & วันสำคัญ</h3>
+                    <h3>⏰ การเตือน, กิจวัตร & วันสำคัญ</h3>
                     <div id="memory-reminders" class="memory-list"></div>
                 </div>
                 <div class="memory-section">
@@ -110,6 +116,13 @@
                     <button class="memory-btn danger" id="btn-clear-memory">🗑️ ล้างความทรงจำทั้งหมด</button>
                 </div>
             </div>
+        </div>
+
+        <!-- Search Bar (ค้นหาแชทเก่า) -->
+        <div class="search-bar hidden" id="search-bar">
+            <input type="search" id="search-input" placeholder="ค้นหาข้อความ..." autocomplete="off">
+            <button class="reply-bar-cancel" id="search-close" title="ปิดการค้นหา">&times;</button>
+            <div class="search-results hidden" id="search-results"></div>
         </div>
 
         <!-- Chat Area -->
@@ -447,6 +460,7 @@
     <script src="mo-mind.js"></script>
     <script src="mo-mind-ui.js"></script>
     <script src="mo-reminders.js"></script>
+    <script src="mo-routines.js"></script>
     <script src="mo-diary.js"></script>
     <script src="app.js"></script>
 </body>

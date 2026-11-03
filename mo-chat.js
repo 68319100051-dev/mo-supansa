@@ -59,6 +59,13 @@ class MoChat {
         document.getElementById('reply-cancel').addEventListener('click', () => this.clearReply());
         this.setupReplyGestures();
 
+        // ค้นหาแชทเก่า: กดผลลัพธ์เพื่อเลื่อนไปที่ข้อความนั้น
+        this.setupSearch();
+
+        // กดค้าง (มือถือ) / คลิกขวา (คอม) ที่ฟอง → รีแอคข้อความโม หรือแก้ไขข้อความของเอง
+        this.editing = null;
+        this.setupMessageMenu();
+
         // Close sticker panel when clicking outside
         this.chatArea.addEventListener('click', () => {
             if (!this.stickerPanel.classList.contains('hidden')) {
@@ -110,6 +117,7 @@ class MoChat {
      */
     sendMessage() {
         const text = this.input.value.trim();
+        if (this.editing) return text && this.applyEdit(text);
         if (!text || this.isTyping) return;
 
         // Add user message (พร้อมข้อความที่ตอบกลับ ถ้ามี)
@@ -133,6 +141,10 @@ class MoChat {
 
         // Memory: extract facts, update stats
         this.memory.extractFacts(text);
+        // กิจวัตรประจำ (เช่น เข้างาน 8 โมงทุกวัน) → โมจำและวางแผนทักเองเบื้องหลัง
+        if (this.routines) this.routines.learn(text).then(added => {
+            if (added && added.length && this.mind) this.mind.decide(`จำกิจวัตรของเอง: ${added.map(r => r.what).join(', ')}`);
+        });
         this.memory.incrementMessages();
         this.memory.updateLastChat();
         this.memory.increaseAffection(1);
@@ -214,6 +226,8 @@ class MoChat {
 
     clearReply() {
         this.replyTo = null;
+        if (this.editing) this.input.value = '';
+        this.editing = null;
         this.replyBar.classList.add('hidden');
     }
 
@@ -224,6 +238,170 @@ class MoChat {
         el.classList.remove('flash');
         void el.offsetWidth;
         el.classList.add('flash');
+    }
+
+    setupSearch() {
+        const bar = document.getElementById('search-bar');
+        const input = document.getElementById('search-input');
+        const results = document.getElementById('search-results');
+        const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const close = () => {
+            bar.classList.add('hidden');
+            results.classList.add('hidden');
+            input.value = '';
+        };
+
+        document.getElementById('btn-search').addEventListener('click', () => {
+            if (!bar.classList.contains('hidden')) return close();
+            bar.classList.remove('hidden');
+            input.focus();
+        });
+        document.getElementById('search-close').addEventListener('click', close);
+        input.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+
+        input.addEventListener('input', () => {
+            const q = input.value.trim().toLowerCase();
+            if (!q) return results.classList.add('hidden');
+            const hits = this.messages
+                .filter(m => typeof m.text === 'string' && m.format !== 'sticker' && m.text.toLowerCase().includes(q))
+                .slice(-50).reverse();
+            results.innerHTML = hits.length
+                ? hits.map(m => {
+                    const i = m.text.toLowerCase().indexOf(q);
+                    const from = Math.max(0, i - 20);
+                    const snippet = (from ? '…' : '') + esc(m.text.slice(from, i)) +
+                        `<mark>${esc(m.text.slice(i, i + q.length))}</mark>` + esc(m.text.slice(i + q.length, i + q.length + 60));
+                    const date = new Date(Math.floor(m.id)).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+                    return `<button class="search-hit" data-id="${esc(m.id)}">
+                        <span class="search-hit-meta"><strong>${m.type === 'received' ? 'โม' : 'เรา'}</strong> · ${esc(date)} ${esc(m.time || '')}</span>
+                        <span class="search-hit-text">${snippet}</span>
+                    </button>`;
+                }).join('')
+                : '<div class="search-empty">ไม่เจอข้อความนี้เลย 🥺</div>';
+            results.classList.remove('hidden');
+        });
+
+        results.addEventListener('click', (e) => {
+            const hit = e.target.closest('.search-hit');
+            if (!hit) return;
+            results.classList.add('hidden');
+            this.scrollToMessage(hit.dataset.id);
+        });
+    }
+
+    setupMessageMenu() {
+        const menu = document.createElement('div');
+        menu.className = 'message-menu hidden';
+        document.body.appendChild(menu);
+        const hide = () => menu.classList.add('hidden');
+        const emojis = ['❤️', '😂', '🥺', '😮', '😡', '👍'];
+
+        const open = (msgEl, x, y) => {
+            const msg = this.messages.find(m => String(m.id) === msgEl.dataset.id);
+            if (!msg) return;
+            const isText = !msg.format || msg.format === 'text';
+            if (msg.type === 'received') {
+                menu.innerHTML = emojis.map(e =>
+                    `<button data-react="${e}" class="${msg.reaction === e ? 'active' : ''}">${e}</button>`).join('');
+            } else if (isText) {
+                menu.innerHTML = '<button data-edit="1" class="menu-text">✏️ แก้ไข</button>';
+            } else return;
+            menu.dataset.id = msg.id;
+            menu.classList.remove('hidden');
+            const w = menu.offsetWidth;
+            menu.style.left = `${Math.max(8, Math.min(x - w / 2, innerWidth - w - 8))}px`;
+            menu.style.top = `${Math.max(8, y - menu.offsetHeight - 12)}px`;
+            if (navigator.vibrate) navigator.vibrate(15);
+        };
+
+        this.container.addEventListener('contextmenu', (e) => {
+            const msgEl = e.target.closest('.message');
+            if (!msgEl || !e.target.closest('.message-bubble')) return;
+            e.preventDefault();
+            open(msgEl, e.clientX, e.clientY);
+        });
+
+        // กดค้าง 450ms (ยกเลิกถ้าเลื่อน/ปัด)
+        let press = null;
+        this.container.addEventListener('touchstart', (e) => {
+            const bubble = e.target.closest('.message-bubble');
+            if (!bubble) return;
+            const t = e.touches[0];
+            press = { x: t.clientX, y: t.clientY, timer: setTimeout(() => {
+                press.fired = true;
+                open(bubble.closest('.message'), press.x, press.y);
+            }, 450) };
+        }, { passive: true });
+        this.container.addEventListener('touchmove', (e) => {
+            if (!press) return;
+            const t = e.touches[0];
+            if (Math.abs(t.clientX - press.x) > 10 || Math.abs(t.clientY - press.y) > 10) clearTimeout(press.timer);
+        }, { passive: true });
+        const release = (e) => {
+            if (!press) return;
+            clearTimeout(press.timer);
+            if (press.fired) e.preventDefault(); // ไม่ให้กลายเป็นคลิก/เลือกข้อความ
+            press = null;
+        };
+        this.container.addEventListener('touchend', release);
+        this.container.addEventListener('touchcancel', release);
+
+        menu.addEventListener('click', (e) => {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            if (btn.dataset.react) this.reactToMo(menu.dataset.id, btn.dataset.react);
+            if (btn.dataset.edit) this.startEdit(menu.dataset.id);
+            hide();
+        });
+        document.addEventListener('pointerdown', (e) => { if (!menu.contains(e.target)) hide(); });
+        this.container.addEventListener('scroll', hide, { passive: true });
+    }
+
+    /**
+     * เองกดรีแอคข้อความของโม (กดซ้ำ = เอาออก) — โมเห็นในแชทย้อนหลังที่ส่งให้ AI
+     */
+    reactToMo(msgId, emoji) {
+        const msg = this.messages.find(m => String(m.id) === String(msgId));
+        if (!msg) return;
+        msg.reaction = msg.reaction === emoji ? null : emoji;
+        if (msg.reaction && this.mind) this.mind.perceive(emoji);
+        this.saveHistory();
+        const el = this.container.querySelector(`.message[data-id="${CSS.escape(String(msg.id))}"] .message-bubble`);
+        if (!el) return;
+        let badge = el.parentElement.querySelector('.message-reaction');
+        if (!msg.reaction) return badge && badge.remove();
+        if (!badge) {
+            badge = document.createElement('div');
+            badge.className = 'message-reaction';
+            el.insertAdjacentElement('afterend', badge);
+        }
+        badge.textContent = msg.reaction;
+    }
+
+    startEdit(msgId) {
+        const msg = this.messages.find(m => String(m.id) === String(msgId));
+        if (!msg || msg.type !== 'sent') return;
+        this.replyTo = null;
+        this.editing = msg;
+        document.getElementById('reply-bar-who').textContent = '✏️ แก้ไขข้อความ';
+        document.getElementById('reply-bar-snippet').textContent = msg.text;
+        this.replyBar.classList.remove('hidden');
+        this.input.value = msg.text;
+        this.input.focus();
+    }
+
+    applyEdit(text) {
+        const msg = this.editing;
+        this.clearReply();
+        this.input.value = '';
+        if (text === msg.text) return;
+        msg.text = text;
+        msg.edited = true;
+        this.saveHistory();
+        this.renderAllMessages();
+        this.scrollToMessage(msg.id);
+        this.memory.extractFacts(text);
+        if (this.routines) this.routines.learn(text);
     }
 
     setupReplyGestures() {
@@ -801,7 +979,7 @@ class MoChat {
      * โมทักเองก่อน — ให้ AI คิดข้อความแบบคนจริงจากเวลา เหตุผลที่ทัก และแชทล่าสุด
      * reason: บริบทว่าทำไมถึงทัก เช่น "เงียบไป 40 นาที"
      */
-    async sendProactiveMessage(reason = 'ไม่ได้คุยกันสักพัก') {
+    async sendProactiveMessage(reason = 'ไม่ได้คุยกันสักพัก', customStyle = null) {
         if (this.isTyping) return;
         this.showTyping();
 
@@ -820,13 +998,13 @@ class MoChat {
                 'คิดอะไรขำๆ ขึ้นมาได้', 'เห็นคนทำอะไรตลกในคลิป', 'อยากกินอะไรบางอย่างมาก', 'ฝันแปลกๆ เมื่อคืน',
             ];
             const seed = seeds[Math.floor(Math.random() * seeds.length)];
-            const style = reason.includes('คลิป')
+            const style = customStyle || (reason.includes('คลิป')
                 ? 'พิมพ์แนะนำคลิปแบบคนส่งคลิปให้เพื่อน เช่นบอกว่าเห็นแล้วนึกถึงเอง/ขำมาก/ต้องดู (เป็นคำพูด ไม่ใช่ท่าทาง ไม่ต้องใส่แท็ก [คลิป] เพราะระบบส่งให้แล้ว)'
                 : roll < 0.55 || !lastUser
                     ? `เล่าเรื่องเล็กๆ ของโมเมื่อกี้ให้ฟังก่อน หัวข้อ: ${seed} ให้มีรายละเอียดนิดนึงเหมือนเรื่องจริง (เข้ากับเวลาตอนนี้) แล้วค่อยโยนถามเอง`
                     : roll < 0.85
                         ? `ตามเรื่องที่เองเล่าค้างไว้ (ล่าสุดเองพูดว่า "${lastUser.text.slice(0, 60)}") แบบอยากรู้จริง อาจพ่วงเรื่องเล็กๆ ของโมเองด้วย`
-                        : 'อ้อนหรือแซวที่หายไป แบบมีเหตุผลของมัน (เช่น เพิ่งนึกถึงเพราะเห็นอะไรบางอย่าง)';
+                        : 'อ้อนหรือแซวที่หายไป แบบมีเหตุผลของมัน (เช่น เพิ่งนึกถึงเพราะเห็นอะไรบางอย่าง)');
             const instruction = `[ข้อความจากระบบ ไม่ใช่จากเอง — ห้ามพูดถึงข้อความนี้]
 ตอนนี้ ${this.llmService.timeContext()} สถานการณ์: ${reason}
 แชทข้างบนเป็นของเก่า${lastUser ? ` (ข้อความล่าสุดของเองส่งมาตั้งแต่ ${Math.round((Date.now() - lastUser.timestamp) / 60000)} นาทีที่แล้ว)` : ''} ห้ามตอบมันเหมือนเพิ่งคุยกัน
@@ -979,7 +1157,7 @@ ${moToday.length ? `ที่โมพูดไปแล้ววันนี้
             wrapper.innerHTML = `
                 <div>
                     ${bubbleContent}
-                    <div class="message-time">${msg.time}${readMark}</div>
+                    <div class="message-time">${msg.time}${msg.edited ? ' · แก้ไขแล้ว' : ''}${readMark}</div>
                 </div>
             `;
         }
