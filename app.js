@@ -91,6 +91,12 @@
     window.MoSelfInstance = self;
     chat.self = self;
     window.MoLLMInstance = llm;
+    // โลกภายในของโม: คิดในใจก่อนตอบ, ทบทวนก่อนนอน, ตั้งใจพรุ่งนี้, เป้าหมายของตัวเอง
+    const inner = new MoInner(llm);
+    window.MoInnerInstance = inner;
+    const reflectTick = () => inner.maybeReflect(chat.messages, memory.getUserName());
+    setInterval(reflectTick, 10 * 60000);
+    setTimeout(reflectTick, 45000);
     // โมห่วงเอง: สังเกตจากแชท แล้วถามไถ่ตามจังหวะ
     const care = new MoCare();
     window.MoCareInstance = care;
@@ -399,6 +405,14 @@
             return;
         }
         if (!canReachOut() || chat.awaitingReply) return;
+        // สิ่งที่โมตั้งใจไว้เองเมื่อคืน → ลงมือทำวันนี้
+        const intent = inner.takeIntention();
+        if (intent) {
+            mind.decide(`ทำตามที่ตั้งใจไว้: ${intent.text}`);
+            chat.sendProactiveMessage(`เมื่อคืนก่อนนอนโมตั้งใจไว้เองว่าวันนี้จะ: ${intent.text}`,
+                `ทำตามที่ตั้งใจไว้จริง (${intent.text}) แบบเป็นธรรมชาติ เหมือนคนที่คิดมาแล้วตั้งแต่เมื่อคืน ไม่ต้องบอกว่า "ตั้งใจไว้"`);
+            return;
+        }
         // ห่วงเอง (กินข้าวยัง หายป่วยยัง ฝนตก ถึงบ้านยัง) → ทักถามก่อน
         const worry = care.takeProactive();
         if (worry) {
@@ -542,6 +556,7 @@
         if (has('mo_games_v1')) games.data = games.load();
         if (has('mo_social_v1')) social.data = social.load();
         if (has('mo_care_v1')) care.data = care.load();
+        if (has('mo_inner_v1')) inner.data = inner.load();
         // คีย์ AI จากเครื่องอื่นในบัญชีเดียวกัน → มือถือไม่ต้องกรอกเอง
         if (has('mo_device_keys_v1')) {
             // เครื่องที่มีไฟล์คีย์: อย่าให้ของจากเครื่องอื่นทับ → ส่งของที่ครบกลับขึ้นไป

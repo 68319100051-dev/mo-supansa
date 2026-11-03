@@ -388,7 +388,17 @@ class MoMindUI {
             next ? `⏰ รอเตือน${this.esc(next.text)} ${this.src.reminders.formatTime(next.dueAt)}` : '',
             self && self.badDayToday() ? `🥺 วันนี้โม${this.esc(self.badDayToday())}` : '',
         ].filter(Boolean);
+        const inner = window.MoInnerInstance && window.MoInnerInstance.data;
+        const innerHTML = inner ? [
+            inner.thoughts.length ? this.section('💭 ความคิดในใจล่าสุด (เองไม่เห็นในแชท)', this.list(inner.thoughts.slice(-6).reverse().map(t => `<time>${this.fmt(t.at)}</time> ${this.esc(t.text)}`), '')) : '',
+            inner.view ? this.section('💞 มุมมองต่อความสัมพันธ์ช่วงนี้', `<p class="mind-text">${this.esc(inner.view.text)}</p>`) : '',
+            inner.intentions.length ? this.section('📝 สิ่งที่โมตั้งใจจะทำ', this.list(inner.intentions.slice().reverse().map(x => `${x.done ? '✅' : '⏳'} ${this.esc(x.text)} <small>${x.day === new Date().toDateString() ? 'วันนี้' : this.esc(x.day)}</small>`), '')) : '',
+            inner.goals.length ? this.section('🎯 เป้าหมายของโมเอง', inner.goals.map(gl => `<div class="mind-chem-row"><span class="mind-chem-name">${this.esc(gl.title)}<small>${this.esc(gl.note || gl.why || '')}</small></span>
+                <div class="mind-chem-track"><div class="mind-chem-fill" style="width:${gl.progress}%;background:#ffd166"></div></div><span class="mind-chem-val">${gl.progress}%</span></div>`).join('')) : '',
+            inner.reflections.length ? this.section('🌙 ทบทวนก่อนนอน', this.list(inner.reflections.slice(-5).reverse().map(r => `<b>${this.esc(r.day)}</b><span>${this.esc(r.text)}</span>`), '')) : '',
+        ].join('') : '';
         return this.section('ตอนนี้โมคิดอะไรอยู่', `<div class="mind-now">${now.map(t => `<div>${t}</div>`).join('')}</div>`)
+            + innerHTML
             + this.section('ความคิดล่าสุด', thoughts.length
             ? `<div class="mind-thoughts">${thoughts.map(th => `<div class="mind-thought"><time>${this.fmt(th.t)}</time><span class="mind-thought-region">${MO_REGIONS[th.region] ? MO_REGIONS[th.region].name : th.region}</span><span>${this.esc(th.text)}</span></div>`).join('')}</div>`
             : '<p class="mind-note">ยังไม่มีความคิดที่บันทึกไว้ ลองคุยกับโมดู</p>');

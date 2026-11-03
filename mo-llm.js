@@ -274,7 +274,7 @@ ${window.MoLifeInstance.describeNow()}${window.MoWeather && window.MoWeather.des
 ${memorySummary && memorySummary.chatSummary ? `# สรุปที่คุยกันก่อนหน้านี้ (เก่ากว่าแชทที่เห็น)
 ${memorySummary.chatSummary}
 
-` : ''}${window.MoDiaryInstance ? window.MoDiaryInstance.recentForPrompt() : ''}${window.MoCareInstance ? window.MoCareInstance.promptSection() : ''}${window.MoSocialInstance ? window.MoSocialInstance.promptSection() : ''}${window.MoFestivals ? window.MoFestivals.promptSection() : ''}${window.MoGifts && window.MoLifeInstance ? window.MoGifts.promptSection(window.MoLifeInstance) : ''}${window.MoSelfInstance ? window.MoSelfInstance.promptSection() : ''}${window.MoStoriesInstance ? window.MoStoriesInstance.promptSection() : ''}# ความจำจากแชท
+` : ''}${window.MoDiaryInstance ? window.MoDiaryInstance.recentForPrompt() : ''}${window.MoInnerInstance ? window.MoInnerInstance.promptSection() : ''}${window.MoCareInstance ? window.MoCareInstance.promptSection() : ''}${window.MoSocialInstance ? window.MoSocialInstance.promptSection() : ''}${window.MoFestivals ? window.MoFestivals.promptSection() : ''}${window.MoGifts && window.MoLifeInstance ? window.MoGifts.promptSection(window.MoLifeInstance) : ''}${window.MoSelfInstance ? window.MoSelfInstance.promptSection() : ''}${window.MoStoriesInstance ? window.MoStoriesInstance.promptSection() : ''}# ความจำจากแชท
 ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่มี'}
 
 หยิบเรื่องที่จำได้มาพูดเมื่อเกี่ยวกับที่คุย ทีละเรื่อง ตอบเป็นข้อความแชทของโมเท่านั้น ไม่ใส่ "โม:" นำหน้า`;
@@ -339,7 +339,7 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
             generationConfig: {
                 temperature: 0.85,
                 topP: 0.95,
-                maxOutputTokens: 250
+                maxOutputTokens: 360
             }
         };
 
@@ -586,10 +586,13 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
             if (Date.now() < state.until) continue;
             try {
                 if (window.MoMindInstance) window.MoMindInstance.fire('temporal', 0.8); // สร้างประโยค
-                const reply = await provider.call([userMessage, chatHistory, personality, memorySummary, image]);
+                let reply = await provider.call([userMessage, chatHistory, personality, memorySummary, image]);
                 this.cooldowns[provider.name] = { until: 0, fails: 0 };
                 this.lastProvider = provider.name;
                 // บางที model เลียนแบบตัวอย่างจนใส่ "โม:" มาด้วย
+                // ความคิดในใจ [คิด: ...] → เก็บไว้ ไม่โชว์ในแชท
+                if (window.MoInnerInstance) reply = window.MoInnerInstance.takeThought(reply);
+                else reply = reply.replace(/\[\s*คิด\s*:?[^\]]*\]\s*/g, '');
                 // บางที model เลียนแบบป้ายเวลา [วันนี้ 10:40] ในประวัติ → ตัดทิ้ง
                 return reply.replace(/^\s*โม\s*:\s*/gm, '').replace(/\[(?:วันนี้|เมื่อวาน|\d+ วันก่อน) \d{1,2}:\d{2}\]\s*/g, '').trim();
             } catch (err) {
