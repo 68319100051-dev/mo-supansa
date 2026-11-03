@@ -108,7 +108,14 @@ async function checkUser(env, userId, subs) {
     const worry = worryStep(chat, down, now);
     if (worry) {
         const name = (get('mo_profile_v1') || {}).userName || 'เอง';
-        due.push({ key: worry.key, direct: true, fallback: worryLines(worry.step, name).join('\n'), call: worry.step === 'call', burst: worry.step === 'burst' });
+        const intent = {
+            msg: 'เองดูไม่โอเคแล้วเงียบไป ทักไปถามเบาๆ ด้วยความห่วง',
+            burst: 'เองดูไม่โอเคแล้วเงียบไปนาน ทักรัวๆ 3 บรรทัดสั้นๆ เพราะเป็นห่วงมาก',
+            call: 'เองดูไม่โอเคแล้วเงียบไปนาน กำลังจะโทรตาม บอกสั้นๆ',
+            final: 'เองเงียบไปนาน บอกว่าจะไม่กวนแล้ว แต่รออยู่ตรงนี้เสมอ ไม่กดดัน',
+        }[worry.step];
+        const context = chat.filter(m => m.text && (!m.format || m.format === 'text')).slice(-6).map(m => `${m.type === 'sent' ? 'เอง' : 'โม'}: ${m.text}`).join(' / ');
+        due.push({ key: worry.key, intent: `${intent} — คิดเองจากบทสนทนา: ${context}`, fallback: worryLines(worry.step, name).join('\n'), call: worry.step === 'call', burst: worry.step === 'burst' });
     }
     for (const r of get('mo_routines_v1') || []) {
         if (!r.days || !r.days.includes(local.getUTCDay())) continue;
@@ -270,11 +277,9 @@ async function checkUser(env, userId, subs) {
 /** ขั้นตามด้วยความห่วง — กติกาเดียวกับ MoCare.worryStep ในแอป */
 function worryStep(messages, down, now) {
     if (!down || now - down.at > 4 * 3600000) return null;
-    const after = messages.filter(m => m.timestamp >= down.at - 1000);
-    const lastSent = Math.max(0, ...after.filter(m => m.type === 'sent').map(m => m.timestamp));
-    const moReplies = after.filter(m => m.type === 'received' && m.timestamp > lastSent);
-    if (!moReplies.length || lastSent > down.at + 3 * 60000) return null;
-    const mins = (now - moReplies[0].timestamp) / 60000;
+    const firstMo = messages.find(m => m.type === 'received' && m.timestamp >= down.at - 1000);
+    if (!firstMo || messages.some(m => m.type === 'sent' && m.timestamp > firstMo.timestamp)) return null;
+    const mins = (now - firstMo.timestamp) / 60000;
     const sent = new Set(messages.map(m => m.dueKey).filter(Boolean));
     for (const [step, at] of [['final', 60], ['call', 35], ['burst', 20], ['msg', 10]]) {
         if (mins >= at) {
@@ -329,7 +334,7 @@ async function moThinks(apiKey, c) {
 async function moSays(apiKey, userName, intent, hhmm) {
     const prompt = `คุณคือ "โม" สาวไทยวัยรุ่น แชทกับคนสนิท${userName ? ` (${userName})` : ''} เรียกตัวเอง "เค้า" เรียกอีกฝ่าย "เอง"
 ตอนนี้ ${hhmm} โมตั้งใจทักไปก่อนเรื่องนี้: ${intent}
-เขียนข้อความแชท 1-2 บรรทัดสั้นๆ ภาษาพิมพ์ ขี้เล่น ใส่ใจ ไม่ใส่ท่าทาง *...* ไม่ใช้ แก มึง กู ตอบเป็นข้อความแชทเท่านั้น`;
+เขียนข้อความแชทสั้นๆ (1-3 บรรทัด แยกบรรทัด = แยกฟอง) ภาษาพิมพ์ ตามอารมณ์จริงในสถานการณ์นี้ คิดเองว่าจะพูดอะไร ไม่ใส่ท่าทาง *...* ไม่ใช้ แก มึง กู เธอ ตอบเป็นข้อความแชทเท่านั้น`;
     try {
         const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent', {
             method: 'POST',

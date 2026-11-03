@@ -42,16 +42,18 @@
         // ถึงเวลานัด → โมโทรมา แล้วรอดูว่ามาตามนัดไหม
         if (r.kind === 'date') {
             chat.dateWaiting = { at: Date.now(), text: r.text };
-            chat.addMessage('received', reminders.dueMessage(r));
-            tagDue(`rm:${r.id}`, Date.now() - 1000);
-            if (!call.getCallStatus()) setTimeout(() => call.startIncomingCall(), 1500);
+            const since = Date.now();
+            chat.sendProactiveMessage(`ถึงเวลานัด${r.text}กับเองแล้ว`, 'ชวนเองมาตามนัดแบบตื่นเต้น สั้นๆ แล้วโมจะโทรหา')
+                .then(() => {
+                    tagDue(`rm:${r.id}`, since);
+                    if (!call.getCallStatus()) call.startIncomingCall();
+                });
             return;
         }
-        const msg = reminders.dueMessage(r);
         const since = Date.now();
-        chat.addMessage('received', msg);
-        tagDue(`rm:${r.id}`, since);
-        chat.showNotification(msg);
+        const kindText = r.kind === 'date-pre' ? `อีก 15 นาทีจะถึงนัด${r.text}` : `ถึงเวลาที่เองขอให้เตือนเรื่อง "${r.text}" แล้ว`;
+        chat.sendProactiveMessage(kindText, 'เตือนเรื่องนี้ให้ชัดเจนก่อน (บอกว่าเรื่องอะไร) แล้วพูดตามอารมณ์โมเอง สั้นๆ 1-2 บรรทัด')
+            .then(() => tagDue(`rm:${r.id}`, since));
     };
     reminders.onSpecialDay = (msg) => {
         chat.addMessage('received', msg);
@@ -462,13 +464,20 @@
         const sadStep = MoCare.worryStep(chat.messages, care.data.signals.down);
         if (sadStep && !chat.isTyping && !call.getCallStatus()) {
             mind.decide(`เองไม่โอเคแล้วเงียบไป → ${({ msg: 'ทักถาม', burst: 'ทักรัวๆ', call: 'โทรตาม', final: 'บอกว่ารออยู่' })[sadStep.step]}`);
-            const lines = MoCare.worryLines(sadStep.step, memory.getUserName());
             const since = Date.now();
-            lines.forEach((line, i) => setTimeout(() => {
-                const msg = chat.addMessage('received', line);
-                if (i === 0 && msg) { msg.dueKey = sadStep.key; chat.saveHistory(); }
-            }, i * 1400));
-            if (sadStep.step === 'call') setTimeout(() => call.startIncomingCall(), 1800);
+            const mins = Math.round((Date.now() - (chat.awaitingSince || since)) / 60000);
+            const intent = {
+                msg: 'ทักไปถามเบาๆ ด้วยความห่วง',
+                burst: 'ทักรัวๆ หลายข้อความติดกัน (แยกบรรทัด 3 บรรทัดสั้นๆ) เพราะเป็นห่วงมาก',
+                call: 'กำลังจะโทรตามเพราะเป็นห่วง บอกสั้นๆ ก่อนโทร',
+                final: 'บอกว่าจะไม่กวนแล้ว แต่รออยู่ตรงนี้เสมอ ไม่กดดัน',
+            }[sadStep.step];
+            chat.sendProactiveMessage(`เมื่อกี้เองดูไม่โอเค แล้วเงียบไป ${mins} นาที ไม่ตอบเลย โมเป็นห่วงมาก`,
+                `${intent} — คิดเองว่าจะพูดอะไรจากบทสนทนาที่ผ่านมาจริงๆ อ่อนโยน ไม่ซ้ำกับที่เคยพูด`)
+                .then(() => {
+                    tagDue(sadStep.key, since);
+                    if (sadStep.step === 'call' && !call.getCallStatus()) call.startIncomingCall();
+                });
             return;
         }
         // ผิดนัด: ถึงเวลานัดแล้ว 20 นาทีเองยังไม่มา → โมงอน
@@ -487,12 +496,8 @@
         if (chat.awaitingReply && chat.awaitingSince && !chat.nudged && canReachOut()
             && Date.now() - chat.awaitingSince > (6 + Math.random() * 6) * 60000) {
             chat.nudged = true;
-            const nudges = ['??', 'เองงง', 'อ่านแล้วไม่ตอบ 🙄', 'หลับไปแล้วเหรอ', 'ฮัลโหลลล', 'เมินเค้าอ่อ'];
-            chat.showTyping();
-            setTimeout(() => {
-                chat.hideTyping();
-                chat.addMessage('received', nudges[Math.floor(Math.random() * nudges.length)]);
-            }, 1200);
+            chat.sendProactiveMessage(`โมทักไปแล้ว เองเปิดอ่านแต่ไม่ตอบมา ${Math.round((Date.now() - chat.awaitingSince) / 60000)} นาที`,
+                'ทักตามสั้นๆ 1 บรรทัด ตามอารมณ์ตอนนี้จริงๆ (งอน แซว ห่วง หรือเรียกชื่อ ก็ได้ คิดเอง)');
             return;
         }
         if (!canReachOut() || chat.awaitingReply) return;

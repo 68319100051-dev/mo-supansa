@@ -65,12 +65,11 @@ class MoCare {
      */
     static worryStep(messages, down, now = Date.now()) {
         if (!down || now - down.at > 4 * 3600000) return null;
-        const after = messages.filter(m => m.timestamp >= down.at - 1000);
-        const lastSent = Math.max(0, ...after.filter(m => m.type === 'sent').map(m => m.timestamp));
-        const moReplies = after.filter(m => m.type === 'received' && m.timestamp > lastSent);
-        if (!moReplies.length) return null;                 // โมยังไม่ได้ตอบ → ยังไม่นับว่าเงียบ
-        if (lastSent > down.at + 3 * 60000) return null;    // เองตอบต่อแล้ว ไม่ได้เงียบ
-        const t0 = moReplies[0].timestamp;
+        // นับจากข้อความแรกที่โมตอบหลังประเมินว่าเองไม่โอเค / เองพิมพ์อะไรมาหลังจากนั้น = ไม่ได้เงียบ
+        const firstMo = messages.find(m => m.type === 'received' && m.timestamp >= down.at - 1000);
+        if (!firstMo) return null;
+        if (messages.some(m => m.type === 'sent' && m.timestamp > firstMo.timestamp)) return null;
+        const t0 = firstMo.timestamp;
         const mins = (now - t0) / 60000;
         const steps = [['msg', 10], ['burst', 20], ['call', 35], ['final', 60]];
         const sent = new Set(messages.map(m => m.dueKey).filter(Boolean));
@@ -106,8 +105,8 @@ class MoCare {
         if (/ออกไป|ไปทำงาน|ไปเรียน|เดินทาง|ขับรถ|นั่งรถ|ออกจากบ้าน/.test(t)) this.set('out', t);
         if (/ถึงบ้าน|กลับถึง|ถึงแล้ว/.test(t)) delete this.data.signals.out;
         if (/นอนไม่หลับ|ตาค้าง|ยังไม่นอน|นอนดึก/.test(t)) this.set('nosleep', t);
-        // ไม่โอเค/เศร้า → ถ้าเงียบไปหลังจากนี้ โมจะตามด้วยความห่วง (ดู worryStep)
-        if (MoCare.isDown(t)) this.set('down', t);
+        // ไม่โอเค: สมอง AI ประเมินเองผ่านแท็ก [เองไม่โอเค] — ตรงนี้จับแค่กรณีฉุกเฉินไว้ก่อนเผื่อ AI ล่ม
+        if (MoCare.isCrisis(t)) this.set('down', t);
         if (/ดีขึ้นแล้ว|โอเคแล้ว|ไม่เป็นไรแล้ว|หายเศร้า|สบายใจขึ้น/.test(t)) delete this.data.signals.down;
         // คุยกันตอนดึกมาก = นอนดึก
         if (h >= 0 && h < 5) this.set('late', `${h}:${String(new Date().getMinutes()).padStart(2, '0')}`);
