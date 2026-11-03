@@ -406,18 +406,21 @@
         }
         if (!canReachOut() || chat.awaitingReply) return;
         // สิ่งที่โมตั้งใจไว้เองเมื่อคืน → ลงมือทำวันนี้
-        const intent = inner.takeIntention();
+        const intent = inner.takeIntention(alreadySent);
         if (intent) {
             mind.decide(`ทำตามที่ตั้งใจไว้: ${intent.text}`);
+            const since = Date.now();
             chat.sendProactiveMessage(`เมื่อคืนก่อนนอนโมตั้งใจไว้เองว่าวันนี้จะ: ${intent.text}`,
-                `ทำตามที่ตั้งใจไว้จริง (${intent.text}) แบบเป็นธรรมชาติ เหมือนคนที่คิดมาแล้วตั้งแต่เมื่อคืน ไม่ต้องบอกว่า "ตั้งใจไว้"`);
+                `ทำตามที่ตั้งใจไว้จริง (${intent.text}) แบบเป็นธรรมชาติ เหมือนคนที่คิดมาแล้วตั้งแต่เมื่อคืน ไม่ต้องบอกว่า "ตั้งใจไว้"`)
+                .then(() => tagDue(`in:${intent.id}`, since));
             return;
         }
         // ห่วงเอง (กินข้าวยัง หายป่วยยัง ฝนตก ถึงบ้านยัง) → ทักถามก่อน
-        const worry = care.takeProactive();
+        const worry = care.takeProactive(alreadySent);
         if (worry) {
             mind.decide(worry.reason);
-            chat.sendProactiveMessage(worry.reason, worry.style);
+            const since = Date.now();
+            chat.sendProactiveMessage(worry.reason, worry.style).then(() => tagDue(worry.key, since));
             return;
         }
         // เรื่องของคนรอบตัวเพิ่งเกิดตอนใหม่ → โมอยากเล่า
@@ -428,8 +431,10 @@
                 `เล่าเรื่อง${fresh.who}ที่เพิ่งเกิดให้เองฟังแบบเม้าท์ เหมือนเพื่อนสนิทเล่าเรื่องในชีวิต (${fresh.beat}) มีความรู้สึกของโมด้วย แล้วถามความเห็นเอง`);
             return;
         }
-        // คิดถึงมาก → ทักเร็วขึ้น, ง่วง/เครียด → ช้าลง
-        if (Date.now() - lastActivity() < nextGapMs * mind.behavior().proactiveGapFactor) return;
+        // คิดถึงมาก → ทักเร็วขึ้น, ง่วง/เครียด → ช้าลง / นอกช่วงที่เองมักว่าง → รอนานขึ้น 2 เท่า
+        const active = MoCare.activeHours(chat.messages);
+        const offHours = active && !active.has(new Date().getHours()) ? 2 : 1;
+        if (Date.now() - lastActivity() < nextGapMs * mind.behavior().proactiveGapFactor * offHours) return;
         mind.decide(`เงียบกันไปนาน + อารมณ์${mind.emotion().label} → ทักไปก่อน`);
         nextGapMs = randomGap();
 

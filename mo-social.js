@@ -98,8 +98,11 @@ class MoSocial {
         return { who: arc.who, beat: arc.beats[arc.step], title: arc.title };
     }
 
-    promptSection() {
-        const lines = MO_CAST.map(c => `- ${c.name}: ${c.role} — ${c.traits}`);
+    promptSection(contextText = '') {
+        // ใส่นิสัยเฉพาะคนที่ถูกพูดถึง/มีเรื่องอยู่ — คนอื่นแค่ชื่อ (ประหยัด token)
+        const busy = this.active().map(a => a.who);
+        const lines = MO_CAST.map(c => (busy.includes(c.name) || contextText.includes(c.name.replace('พี่', ''))
+            ? `- ${c.name}: ${c.role} — ${c.traits}` : `- ${c.name} (${c.role})`));
         const arcs = this.active().map(a => {
             const past = a.beats.slice(0, a.step).join(' → ');
             return `- เรื่อง${a.who} "${a.title}": ${past ? `ก่อนหน้านี้ ${past} → ` : ''}ตอนนี้ ${a.beats[a.step]}`;

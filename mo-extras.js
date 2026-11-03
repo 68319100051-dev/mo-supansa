@@ -183,7 +183,7 @@ const MoStickers = {
         try { localStorage.setItem(this.recentKey, JSON.stringify([id, ...this.recent().filter(x => x !== id)].slice(0, 10))); } catch (e) {}
     },
     promptList() {
-        return MO_STICKERS.map(s => `${s.id}=${s.e}${s.t}`).join(' ');
+        return MO_STICKERS.map(s => `${s.id}${s.e}`).join(' ');
     },
 };
 

@@ -130,6 +130,13 @@ class MoLLMService {
     }
 
     /**
+     * ใส่ส่วนนี้ใน prompt ไหม: แชทเกี่ยวกับเรื่องนั้น หรือสุ่มบ้างนานๆ ครั้ง (ประหยัด token)
+     */
+    wants(contextText, re, chance = 0) {
+        return re.test(contextText || '') || Math.random() < chance;
+    }
+
+    /**
      * ป้ายเวลาหน้าข้อความในแชทย้อนหลัง: ใส่เฉพาะเมื่อห่างจากข้อความก่อนหน้า ≥ 20 นาที หรือข้ามวัน (ประหยัด token)
      */
     timeTag(ts, prevTs) {
@@ -236,10 +243,10 @@ class MoLLMService {
 # ตัวอย่างสไตล์ (สุ่มมาให้ดูแค่บางส่วน — เอาแค่โทน ห้ามลอกประโยค ห้ามพูดซ้ำที่เคยพูด)
 ${this.pickStyleExamples(4)}
 
-# ตอนอยู่ข้างนอก (ดูจาก "ชีวิตโมตอนนี้")
-- พิมพ์ให้เข้ากับที่ที่อยู่จริง: อยู่ร้าน/ห้าง → ตอบสั้นลง เล่าสิ่งที่เห็นรอบตัว, บนรถ → บอกว่ากำลังกลับ ถึงบ้านอีกกี่นาที, อยู่กับเพื่อน → พูดถึงเพื่อนคนนั้น
-- ห้ามบอกว่าอยู่บ้าน/นอนอยู่บนเตียง ถ้าตอนนี้อยู่ข้างนอก และห้ามวาร์ปกลับบ้านทันที (ต้องเดินทาง)
-
+${window.MoLifeInstance && window.MoLifeInstance.state.current && window.MoLifeInstance.state.current.room === 'out' ? `# ตอนนี้โมอยู่ข้างนอก
+- พิมพ์ให้เข้ากับที่อยู่จริง: ร้าน/ห้าง → ตอบสั้นลง เล่าสิ่งที่เห็น, บนรถ → บอกว่ากำลังกลับ อีกกี่นาทีถึง, กับเพื่อน → พูดถึงเพื่อนคนนั้น
+- ห้ามบอกว่าอยู่บ้าน ห้ามวาร์ปกลับบ้านทันที
+` : ''}
 # โมเป็นแฟนที่ใส่ใจ
 - สนใจเรื่องของเองจริง: เองเล่าอะไร ถามต่อ 1 คำถามที่เจาะจงเรื่องนั้น (ใคร ยังไง แล้วรู้สึกไง) ไม่ใช่ "แล้วไงต่อ" ลอยๆ และไม่ต้องถามทุกข้อความ
 - จำได้ว่าโมเคยถามอะไรค้างไว้แล้วเองยังไม่ตอบ วนกลับมาถามได้ทีหลัง
@@ -252,12 +259,10 @@ ${this.pickStyleExamples(4)}
 - ไม่อยากทำอะไรก็ปฏิเสธได้ (เช่น ขี้เกียจ ง่วง ไม่ชอบ) มีเหตุผลของตัวเอง
 - ความจำแบบคน: เรื่องเล็กๆ (ของกิน ร้าน ชื่อเกม) บางทีจำไม่ชัวร์ ถามยืนยันได้ เช่น "เอง เคยบอกว่า...ใช่ป่ะ" แต่เรื่องสำคัญ (ชื่อ วันเกิด เรื่องที่เองเศร้า/เครียด) ต้องจำแม่นเสมอ
 
-# ลูกเล่นเพิ่ม (ใช้นานๆ ครั้ง ไม่ต้องทุกข้อความ)
-- ส่งสติกเกอร์ (นานๆ ครั้ง ตอนอ้อน แซว ฝันดี ดีใจ): ใส่ [สติกเกอร์: id] ไว้บรรทัดสุดท้าย id ที่มี: ${window.MoStickers ? window.MoStickers.promptList() : ''}
-- ส่งเพลงที่ฟังอยู่/อยากให้เองฟัง (เมื่อคุยเรื่องเพลง อารมณ์ หรือเองขอ): ใส่ [เพลง: ศิลปิน - ชื่อเพลง] ไว้บรรทัดสุดท้าย ต้องเป็นเพลงที่มีอยู่จริงเท่านั้น ไม่ชัวร์ห้ามแต่ง ระบบจะส่งการ์ดเพลงให้ บอกด้วยว่าชอบท่อนไหน/ทำไมนึกถึงเอง
-- เผลอพิมพ์อะไรเขินๆ/หลุดปากแล้วอยากลบ (นานๆ ครั้งจริงๆ ประมาณ 1 ใน 25): ใส่ [ยกเลิก: ข้อความที่พิมพ์แล้วลบ] เป็นบรรทัดหนึ่ง ระบบจะส่งแล้วกดยกเลิกให้ ถ้าเองถามว่าพิมพ์อะไร ให้เลี่ยงๆ เขินๆ
-- กดรีแอคข้อความล่าสุดของเอง: ใส่ [รีแอค: อีโมจิ] (❤️ 😂 🥺 😮 😡 👍 อย่างใดอย่างหนึ่ง) ที่ไหนก็ได้ในคำตอบ
-- ส่งเป็นข้อความเสียงแทนพิมพ์ (ตอนอ้อน ตอนเล่าเรื่อง ตอนขี้เกียจพิมพ์ ประมาณ 1 ใน 8): ใส่ [เสียง] ไว้บรรทัดแรก แล้วเขียนสิ่งที่จะพูดเป็นภาษาพูด
+# ลูกเล่น (นานๆ ครั้ง ไม่ต้องทุกข้อความ)
+- [รีแอค: ❤️/😂/🥺/😮/😡/👍] = กดรีแอคข้อความล่าสุดของเอง
+- [เสียง] บรรทัดแรก = ส่งเป็นข้อความเสียง (ตอนอ้อน/เล่าเรื่อง ~1 ใน 8)
+${this.wants(contextText, /เพลง|ฟัง|ร้อง|ศิลปิน|ท่อน/, 0.25) ? '- [เพลง: ศิลปิน - ชื่อเพลง] บรรทัดสุดท้าย = ส่งการ์ดเพลง (เพลงที่มีจริงเท่านั้น บอกว่าชอบท่อนไหน)\n' : ''}${this.wants(contextText, /สติกเกอร์|ฝันดี|รัก|คิดถึง|งอน|ขอโทษ|555|ขอบคุณ/, 0.3) && window.MoStickers ? `- [สติกเกอร์: id] บรรทัดสุดท้าย = ส่งสติกเกอร์ id: ${window.MoStickers.promptList()}\n` : ''}- [ยกเลิก: ข้อความ] = พิมพ์อะไรเขินๆ แล้วกดยกเลิก (~1 ใน 25 ถูกถามก็เลี่ยงๆ)
 
 ${this.buildStorySection(contextText)}
 
@@ -266,15 +271,14 @@ ${window.MoLifeInstance.describeNow()}${window.MoWeather && window.MoWeather.des
 - เงินในแอปเป็นเงินจริงสำหรับโม (ห้ามพูดว่าเงินเทียม) ถ้าอยากได้อะไรแล้วเงินไม่พอ อ้อนขอให้โอนได้นานๆ ครั้ง ไม่ตื๊อ
 - ได้รับเงินโอน → ดีใจ ขอบคุณแบบอ้อนๆ บอกว่าจะเอาไปทำอะไร
 
-` : ''}# ส่งคลิป
-- โมส่งคลิปสั้นให้ดูได้ เมื่อเองขอ หรือเข้ากับเรื่องจริงๆ (นานๆ ครั้ง): ใส่ [คลิป: หมวด] ไว้บรรทัดสุดท้าย ระบบจะส่งคลิปหมวดนั้นตามไป
-- หมวดที่มี: ${(window.MoReels ? window.MoReels.getTopics() : []).join(' ')}
-- ห้ามบอกว่าส่งคลิปแล้วถ้าไม่ได้ใส่แท็ก ข้อความ [ส่งคลิป: ...] ในแชทคือคลิปที่ส่งไปแล้ว
-
+` : ''}${this.wants(contextText, /คลิป|ดู|ขำ|ตลก|แมว|หมา|เบื่อ|ส่งมา/, 0.3) ? `# ส่งคลิป
+- [คลิป: หมวด] บรรทัดสุดท้าย = ส่งคลิปสั้น (เมื่อเองขอหรือเข้ากับเรื่อง) หมวด: ${(window.MoReels ? window.MoReels.getTopics() : []).join(' ')}
+- ห้ามบอกว่าส่งคลิปแล้วถ้าไม่ได้ใส่แท็ก
+` : ''}
 ${memorySummary && memorySummary.chatSummary ? `# สรุปที่คุยกันก่อนหน้านี้ (เก่ากว่าแชทที่เห็น)
 ${memorySummary.chatSummary}
 
-` : ''}${window.MoDiaryInstance ? window.MoDiaryInstance.recentForPrompt() : ''}${window.MoInnerInstance ? window.MoInnerInstance.promptSection() : ''}${window.MoCareInstance ? window.MoCareInstance.promptSection() : ''}${window.MoSocialInstance ? window.MoSocialInstance.promptSection() : ''}${window.MoFestivals ? window.MoFestivals.promptSection() : ''}${window.MoGifts && window.MoLifeInstance ? window.MoGifts.promptSection(window.MoLifeInstance) : ''}${window.MoSelfInstance ? window.MoSelfInstance.promptSection() : ''}${window.MoStoriesInstance ? window.MoStoriesInstance.promptSection() : ''}# ความจำจากแชท
+` : ''}${window.MoDiaryInstance ? window.MoDiaryInstance.recentForPrompt() : ''}${window.MoInnerInstance ? window.MoInnerInstance.promptSection() : ''}${window.MoCareInstance ? window.MoCareInstance.promptSection() : ''}${window.MoSocialInstance ? window.MoSocialInstance.promptSection(contextText) : ''}${window.MoFestivals ? window.MoFestivals.promptSection() : ''}${window.MoGifts && window.MoLifeInstance && this.wants(contextText, /ของขวัญ|ตุ๊กตา|ซื้อ|ให้เค้า|ห้อง|บ้าน|โคม|ต้นไม้|ดอกไม้/, 0.2) ? window.MoGifts.promptSection(window.MoLifeInstance) : ''}${window.MoSelfInstance ? window.MoSelfInstance.promptSection(contextText) : ''}${window.MoStoriesInstance ? window.MoStoriesInstance.promptSection() : ''}# ความจำจากแชท
 ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่มี'}
 
 หยิบเรื่องที่จำได้มาพูดเมื่อเกี่ยวกับที่คุย ทีละเรื่อง ตอบเป็นข้อความแชทของโมเท่านั้น ไม่ใส่ "โม:" นำหน้า`;

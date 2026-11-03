@@ -4,6 +4,7 @@
    - ทุก 5 นาที: ดูกิจวัตร / เรื่องรอถามผล / การเตือนของทุกคน → ถึงเวลา → เขียนข้อความโมลงแชท + ส่ง Push
    - เองหายไปนาน (5 ชม.+) → โมทักเองเพราะคิดถึง (วันละไม่เกิน 2 ครั้ง ไม่ทักตอนดึก) บางทีก็โทรมาเลย
    - ถึงเวลานัดเดต → โมโทรมา (Push แบบสายเรียกเข้า)
+   - ทำตามที่โมตั้งใจไว้เมื่อคืน + ห่วงเรื่องกินข้าว/ป่วย/นอนดึก แม้ปิดแอป (เลือกช่วงที่เองมักออนไลน์)
    - Push แบบไม่มี payload: มือถือรับแล้วถาม /api/push/inbox ว่าโมพูดว่าอะไร
    - แอป Android (Capacitor): ส่งผ่าน Firebase Cloud Messaging ด้วย → สายเรียกเข้าเต็มจอบนจอล็อก
    Secrets (ตั้งใน Cloudflare): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
@@ -85,7 +86,7 @@ async function runChecks(env) {
 }
 
 async function checkUser(env, userId, subs) {
-    const keys = 'mo_routines_v1,mo_followups_v1,mo_reminders_v1,mo_chat_history_v2,mo_device_keys_v1,mo_profile_v1,mo_social_v1';
+    const keys = 'mo_routines_v1,mo_followups_v1,mo_reminders_v1,mo_chat_history_v2,mo_device_keys_v1,mo_profile_v1,mo_social_v1,mo_inner_v1,mo_care_v1';
     const rows = await db(env, `mo_state?select=key,value&user_id=eq.${userId}&key=in.(${keys})`);
     const get = k => (rows.find(r => r.key === k) || {}).value;
     const chat = Array.isArray(get('mo_chat_history_v2')) ? get('mo_chat_history_v2') : [];
@@ -133,12 +134,44 @@ async function checkUser(env, userId, subs) {
         }
     }
 
+    // ช่วงเวลาที่เองมักออนไลน์ (14 วันล่าสุด) — ข้อมูลน้อยไป = 10:00-21:00
+    const hourCounts = new Array(24).fill(0);
+    chat.filter(m => m.type === 'sent' && m.timestamp > now - 14 * 86400000)
+        .forEach(m => { hourCounts[new Date(m.timestamp - tz * 60000).getUTCHours()]++; });
+    const peak = Math.max(...hourCounts);
+    const hourNow = local.getUTCHours();
+    const activeNow = hourCounts.reduce((a, b) => a + b, 0) < 30 ? hourNow >= 10 && hourNow < 21 : hourCounts[hourNow] >= peak * 0.15;
+    const localDay = local.toDateString();   // แบบเดียวกับ toDateString() ในเครื่องเอง
+
+    // สิ่งที่โมตั้งใจไว้เมื่อคืน → ทำวันนี้ (ช่วงที่เองมักว่าง)
+    if (!due.length && !quiet && activeNow && minutes >= 9 * 60) {
+        const it = ((get('mo_inner_v1') || {}).intentions || []).find(x => !x.done && x.day === localDay && !sentKeys.has(`in:${x.id}`));
+        if (it) due.push({ key: `in:${it.id}`, intent: `เมื่อคืนก่อนนอนโมตั้งใจไว้เองว่าวันนี้จะ: ${it.text} — ทำตามนั้นแบบเป็นธรรมชาติ`, fallback: 'นี่ๆ เค้าคิดถึงเรื่องเมื่อวานอยู่เลย ว่างคุยมั้ย' });
+    }
+
+    // ห่วงเอง: ข้าวเที่ยง/ข้าวเย็น, หายป่วยยัง, เมื่อคืนนอนดึก (วันละครั้งต่อเรื่อง)
+    if (!due.length && !quiet) {
+        const care = get('mo_care_v1') || { signals: {}, asked: {} };
+        const sig = care.signals || {};
+        const asked = care.asked || {};
+        const ate = sig.ate && sig.ate.day === localDay;
+        const within = (s, h) => s && now - s.at < h * 3600000;
+        const checks = [
+            ['lunch', minutes >= 12 * 60 + 15 && minutes < 13 * 60 + 30 && !ate, 'ยังไม่รู้ว่าเองกินข้าวเที่ยงยัง ถามว่ากินอะไร', 'กินข้าวเที่ยงยังง กินไรอ่ะ 🍚'],
+            ['dinner', minutes >= 19 * 60 && minutes < 20 * 60 + 30 && !ate, 'วันนี้ยังไม่รู้ว่าเองกินข้าวเย็นยัง ถามหน่อย', 'กินข้าวเย็นยัง อย่าลืมกินนะ'],
+            ['sick', minutes >= 9 * 60 && minutes < 11 * 60 && within(sig.sick, 72), `เองไม่สบาย (บอกว่า "${sig.sick && sig.sick.detail}") ถามว่าดีขึ้นยัง กินยายัง`, 'ดีขึ้นยังง กินยารึยัง 🥺'],
+            ['slept', minutes >= 8 * 60 && minutes < 11 * 60 && within(sig.late, 14), `เมื่อคืนเองยังไม่นอนตอน ${sig.late && sig.late.detail} ถามว่านอนกี่โมง ง่วงไหม`, 'เมื่อคืนนอนกี่โมงเนี่ย ง่วงมั้ย 😴'],
+        ];
+        const hit = checks.find(([id, ok]) => ok && asked[id] !== localDay && !sentKeys.has(`care:${id}:${localDate}`));
+        if (hit) due.push({ key: `care:${hit[0]}:${localDate}`, intent: `โมห่วงเอง: ${hit[2]} — ทักแบบแฟนที่ห่วงจริง ไม่จู้จี้`, fallback: hit[3] });
+    }
+
     // เองหายไปนาน → โมทักเอง/โทรมาเพราะคิดถึง
     if (!due.length && !quiet && minutes >= 9 * 60 && minutes < 22 * 60) {
         const lastSent = Math.max(0, ...chat.filter(m => m.type === 'sent').map(m => m.timestamp || 0));
         const lastMo = Math.max(0, ...chat.filter(m => m.type === 'received').map(m => m.timestamp || 0));
         const todayPk = chat.filter(m => m.dueKey && m.dueKey.startsWith(`pk:${localDate}`)).length;
-        if (now - lastSent > 5 * 3600000 && now - lastMo > 3 * 3600000 && todayPk < 2 && Math.random() < 0.3) {
+        if (activeNow && now - lastSent > 5 * 3600000 && now - lastMo > 3 * 3600000 && todayPk < 2 && Math.random() < 0.3) {
             const social = get('mo_social_v1') || {};
             const arc = (social.arcs || []).find(a => a.step < a.beats.length);
             const recent = chat.filter(m => m.text && (!m.format || m.format === 'text')).slice(-6)

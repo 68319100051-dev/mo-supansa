@@ -157,12 +157,22 @@ ${lines.slice(-150).join('\n')}
         } catch (e) {}
     }
 
-    promptSection() {
+    /**
+     * เลือกข้อที่เกี่ยวกับที่คุยอยู่ก่อน (คำซ้ำกัน) แล้วเติมด้วยอันล่าสุด จนครบ max
+     */
+    pickRelevant(list, contextText, max) {
+        if (list.length <= max) return list;
+        const words = (contextText || '').split(/\s+/).filter(w => w.length >= 2);
+        const hit = list.filter(x => words.some(w => x.includes(w)));
+        return [...new Set([...hit, ...list.slice(-max)])].slice(0, max);
+    }
+
+    promptSection(contextText = '') {
         const d = this.data;
         const parts = [];
-        if (d.opinions.length) parts.push(`# ตัวตนของโม (สิ่งที่โมเคยบอกไปแล้ว ต้องตอบให้ตรงกันเสมอ ห้ามขัด)\n${d.opinions.map(o => `- ${o}`).join('\n')}`);
-        if (d.jokes.length) parts.push(`# มุก & ชื่อเรียกของเราสองคน (หยิบมาเล่นนานๆ ครั้งเมื่อเข้าจังหวะ)\n${d.jokes.map(j => `- ${j}`).join('\n')}`);
-        if (d.photos.length) parts.push(`# รูปที่เองเคยส่งให้ดู (พูดถึงได้ถ้าเกี่ยว)\n${d.photos.slice(-6).map(p => `- ${new Date(p.at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}: ${p.desc}`).join('\n')}`);
+        if (d.opinions.length) parts.push(`# ตัวตนของโม (สิ่งที่โมเคยบอกไปแล้ว ต้องตอบให้ตรงกันเสมอ ห้ามขัด)\n${this.pickRelevant(d.opinions, contextText, 10).map(o => `- ${o}`).join('\n')}`);
+        if (d.jokes.length) parts.push(`# มุก & ชื่อเรียกของเราสองคน (หยิบมาเล่นนานๆ ครั้งเมื่อเข้าจังหวะ)\n${this.pickRelevant(d.jokes, contextText, 5).map(j => `- ${j}`).join('\n')}`);
+        if (d.photos.length) parts.push(`# รูปที่เองเคยส่งให้ดู (พูดถึงได้ถ้าเกี่ยว)\n${d.photos.slice(-3).map(p => `- ${new Date(p.at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}: ${p.desc}`).join('\n')}`);
         if (d.weeks.length) parts.push(`# ช่วงนี้ของเอง (สรุปรายสัปดาห์)\n${d.weeks.slice(-2).map(w => `- สัปดาห์ถึง ${w.label}: ${w.text}`).join('\n')}`);
         const g = this.data.grudge;
         if (g && Date.now() - g.since < 26 * 3600000) {

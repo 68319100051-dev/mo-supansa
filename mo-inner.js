@@ -115,9 +115,9 @@ ${goals || '-'}
     /**
      * สิ่งที่ตั้งใจไว้สำหรับวันนี้ (หลัง 9 โมง) → ลงมือทักเอง (คืน intention แล้วจดว่าทำแล้ว)
      */
-    takeIntention() {
+    takeIntention(alreadySent = () => false) {
         if (new Date().getHours() < 9) return null;
-        const it = this.data.intentions.find(x => !x.done && x.day === this.dayKey());
+        const it = this.data.intentions.find(x => !x.done && x.day === this.dayKey() && !alreadySent(`in:${x.id}`));
         if (!it) return null;
         it.done = true;
         this.save();

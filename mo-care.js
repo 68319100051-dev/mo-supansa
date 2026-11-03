@@ -38,6 +38,19 @@ class MoCare {
     }
 
     /**
+     * ช่วงเวลาที่เองมักออนไลน์ (จากข้อความ 14 วันล่าสุด) → Set ของชั่วโมง / ข้อมูลน้อยไป → null
+     */
+    static activeHours(messages) {
+        const since = Date.now() - 14 * 86400000;
+        const counts = new Array(24).fill(0);
+        messages.filter(m => m.type === 'sent' && m.timestamp > since).forEach(m => { counts[new Date(m.timestamp).getHours()]++; });
+        const total = counts.reduce((a, b) => a + b, 0);
+        if (total < 30) return null;
+        const max = Math.max(...counts);
+        return new Set(counts.map((c, h) => (c >= max * 0.15 ? h : -1)).filter(h => h >= 0));
+    }
+
+    /**
      * อ่านข้อความของเอง → จดสัญญาณที่โมควรห่วง
      */
     observe(text) {
@@ -90,6 +103,11 @@ class MoCare {
         return `# เรื่องที่โมห่วงเองตอนนี้ (แฟนที่ใส่ใจจะถามเอง — หยิบมาถามแค่ 1 เรื่องเมื่อเข้าจังหวะ ไม่ต้องทุกข้อความ)\n${list.slice(0, 3).map(c => `- ${c.ask}`).join('\n')}\n\n`;
     }
 
+    // ป้ายกันทักซ้ำกับหลังบ้าน (worker.js ใช้ชื่อเดียวกัน)
+    dueKey(id) {
+        return `care:${id}:${new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10)}`;
+    }
+
     askedToday(id) {
         return this.data.asked[id] === this.today();
     }
@@ -117,11 +135,12 @@ class MoCare {
     /**
      * ทักก่อนเพราะห่วง: เรื่องที่ยังไม่ได้ถามวันนี้ → { reason, style } (แล้วจดว่าถามแล้ว)
      */
-    takeProactive() {
-        const c = this.concerns().find(x => !this.askedToday(x.id) && x.id !== 'bedtime');
+    takeProactive(alreadySent = () => false) {
+        const c = this.concerns().find(x => !this.askedToday(x.id) && x.id !== 'bedtime' && !alreadySent(this.dueKey(x.id)));
         if (!c) return null;
         this.markAsked(c.id);
         return {
+            key: this.dueKey(c.id),
             reason: `โมนึกขึ้นมาว่าห่วงเอง: ${c.ask}`,
             style: `ทักมาถามเรื่องนี้ตรงๆ แบบแฟนที่ห่วงจริง (${c.ask}) สั้นๆ 1-3 บรรทัด อาจเล่าว่าโมเองทำอะไรอยู่นิดนึง ไม่จู้จี้ ไม่สั่งสอน`,
         };
