@@ -342,6 +342,9 @@
         setInterval(() => life.tick(), 20000);
         setInterval(updateLifeStatus, 60000); // "ใช้งานล่าสุด X นาที" ต้องเดินตามเวลา
         life.onChange(handleLifeChange);
+    // คุยกันอยู่ (เองพิมพ์มาใน 4 นาที และแอปเปิดอยู่) → โมยังไม่ไปทำอย่างอื่น
+    life.isChatting = () => document.visibilityState === 'visible'
+        && chat.messages.some(m => m.type === 'sent' && Date.now() - m.timestamp < 4 * 60000);
         updateLifeStatus();
         replyToUnreadFromLastVisit();
         greetIfBackAfterLongGap();
@@ -356,6 +359,20 @@
 
     function handleLifeChange(cur, prev) {
         mind.bodyChanged(cur);
+        // กำลังจะไปทำอะไรที่ไม่ได้ถือมือถือ / ออกจากบ้าน → บอกก่อนไป (เหมือนแฟนจริง ไม่หายเงียบ)
+        const leaving = cur.id !== 'sleep' && prev && (prev.phone === 'with' || prev.phone === 'near')
+            && (cur.phone === 'away' || cur.phone === 'home' || (cur.room === 'out' && prev.room !== 'out'));
+        const talkedRecently = chat.messages.some(m => m.type === 'sent' && Date.now() - m.timestamp < 2 * 3600000);
+        if (leaving && (talkedRecently || Math.random() < 0.3) && !call.getCallStatus() && !chat.isTyping && !chat.pendingReply) {
+            updateLifeStatus();
+            const back = Math.max(5, Math.round((cur.endsAt - Date.now()) / 60000));
+            const where = cur.room === 'out' ? (cur.place || 'ข้างนอก') : '';
+            mind.decide(`บอกเองก่อน${/^(ไป|ออกไป)/.test(cur.label) ? cur.label : 'ไป' + cur.label}`);
+            const doing = /^(ไป|ออกไป)/.test(cur.label) ? cur.label : `ไป${cur.label}`;
+            chat.sendProactiveMessage(`โมกำลังจะ${doing}${where && !cur.label.includes(where) ? ` (${where})` : ''} ประมาณ ${back} นาที${cur.phone === 'home' ? ' และจะไม่ได้เอามือถือไป' : cur.phone === 'away' ? ' จะไม่ได้จับมือถือช่วงนั้น' : ''}`,
+                `บอกเองสั้นๆ ก่อนไปแบบแฟนจริง ว่าจะไปทำอะไร ไปนานแค่ไหนประมาณ แล้วเดี๋ยวกลับมาคุยต่อ (เช่น "ไปอาบน้ำแป๊บนะ เดี๋ยวมา") 1-2 บรรทัด ไม่ต้องถามคำถาม`);
+            return;
+        }
         // ก่อนหลับ: ถ้าเพิ่งถือมือถืออยู่ บอกฝันดีก่อน (ช่วงดึกปกติจะไม่ทัก แต่อันนี้ข้อยกเว้น)
         if (cur.id === 'sleep' && prev && (prev.phone === 'with' || prev.phone === 'near')
             && !call.getCallStatus() && !chat.isTyping && !chat.pendingReply && document.visibilityState === 'visible') {

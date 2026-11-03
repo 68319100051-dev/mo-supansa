@@ -395,7 +395,15 @@ class MoLife {
      * เรียกทุก 20 วิ: ถึงเวลาเปลี่ยนกิจกรรมหรือยัง
      */
     tick() {
-        if (this.state.current && Date.now() < this.state.current.endsAt) return;
+        const c = this.state.current;
+        if (c && Date.now() < c.endsAt) return;
+        // กำลังคุยกันอยู่ → ยังไม่ไปไหน ขอคุยต่ออีกแป๊บ (ไม่เกิน 3 รอบ ~30 นาที, ยกเว้นถึงเวลานอนจริง)
+        if (c && this.isChatting && this.isChatting() && (c.delays || 0) < 3 && !this.isSleepTime(Date.now())) {
+            c.endsAt = Date.now() + 10 * 60000;
+            c.delays = (c.delays || 0) + 1;
+            this.save();
+            return;
+        }
         const prev = this.advance(Date.now());
         this.save();
         this.emit(prev);
