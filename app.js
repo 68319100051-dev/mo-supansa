@@ -201,12 +201,38 @@
 
     // ======= เกม =======
     const gamesMenu = document.getElementById('games-menu');
-    gamesMenu.innerHTML = Object.entries(MO_GAMES).map(([id, g]) => `<button data-game="${id}">${g.emoji} ${g.name}</button>`).join('');
+    gamesMenu.innerHTML = '<button data-board="checkers">♟️ หมากฮอส (กระดาน)</button>'
+        + Object.entries(MO_GAMES).map(([id, g]) => `<button data-game="${id}">${g.emoji} ${g.name}</button>`).join('');
     document.getElementById('btn-games').addEventListener('click', (e) => {
         e.stopPropagation();
         gamesMenu.classList.toggle('hidden');
     });
+    // หมากฮอสกับโม: เล่นบนกระดาน จบแล้วโมคุยต่อในแชท (จำสถิติชนะ/แพ้)
+    let checkers = null;
+    const startCheckers = () => {
+        checkers = checkers || new MoCheckersGame({
+            userName: memory.getUserName(),
+            onEnd: (result, st) => {
+                const rec = games.data.board || { win: 0, lose: 0 };
+                if (result === 'win') rec.win++;
+                if (result === 'lose') rec.lose++;
+                games.data.board = rec;
+                games.save();
+                const what = result === 'win' ? 'เองชนะ' : result === 'lose' ? 'โมชนะ' : 'เองออกกลางคัน';
+                chat.addSystemMessage(`♟️ หมากฮอส: ${what} (เองกินโม ${st.userCaps} ตัว • โมกินเอง ${st.moCaps} ตัว) สถิติรวม เองชนะ ${rec.win} • โมชนะ ${rec.lose}`);
+                mind.decide(`เล่นหมากฮอสกับเองจบ: ${what}`);
+                chat.queueReply(note => chat.moRespond(`${note}[ข้อความระบบ: เพิ่งเล่นหมากฮอสกันจบ ${what} เดินไป ${st.moves} ตา เองกินโมไป ${st.userCaps} ตัว โมกินเองไป ${st.moCaps} ตัว สถิติรวม เองชนะ ${rec.win} โมชนะ ${rec.lose} — พูดถึงเกมนี้ตามอารมณ์จริง (แพ้ก็งอน/ขอแก้มือ ชนะก็แซว ออกกลางคันก็ว่าหนีเหรอ) 1-2 บรรทัด]`));
+            },
+        });
+        checkers.level = Number(document.getElementById('ck-level').value);
+        checkers.start();
+    };
+    document.getElementById('ck-level').addEventListener('change', (e) => { if (checkers) checkers.level = Number(e.target.value); });
     gamesMenu.addEventListener('click', (e) => {
+        if (e.target.closest('[data-board="checkers"]')) {
+            gamesMenu.classList.add('hidden');
+            return startCheckers();
+        }
         const btn = e.target.closest('[data-game]');
         if (!btn) return;
         gamesMenu.classList.add('hidden');

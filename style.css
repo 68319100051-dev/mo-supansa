@@ -3586,3 +3586,148 @@ button.mind-region-chip {
 .call-screen:not(.video-mode) #self-view {
     display: none;
 }
+
+/* ♟️ หมากฮอส */
+.checkers {
+    position: fixed;
+    inset: 0;
+    z-index: 450;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 12px 18px;
+    background: linear-gradient(180deg, #fff5f8, #fde4ef);
+    overflow-y: auto;
+}
+
+.checkers.hidden {
+    display: none;
+}
+
+.ck-top,
+.ck-bottom {
+    width: 100%;
+    max-width: 440px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ck-top strong {
+    flex: 1;
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+}
+
+.ck-level {
+    padding: 6px 10px;
+    border: 1px solid var(--pink-200);
+    border-radius: 999px;
+    background: #fff;
+    font: inherit;
+    font-size: 0.85rem;
+}
+
+.ck-mo {
+    width: 100%;
+    max-width: 440px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.ck-mo img {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--pink-300);
+    flex-shrink: 0;
+}
+
+.ck-say {
+    flex: 1;
+    min-height: 40px;
+    padding: 9px 14px;
+    border-radius: 18px 18px 18px 4px;
+    background: #fff;
+    box-shadow: var(--shadow-sm);
+    font-size: 0.92rem;
+}
+
+.ck-say.pop {
+    animation: watchIn 0.3s ease-out;
+}
+
+.ck-board {
+    width: min(100%, 440px);
+    aspect-ratio: 1;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(160, 27, 64, 0.2);
+    border: 6px solid #8d5a3c;
+}
+
+.ck-cell {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ck-cell.light {
+    background: #f6e3cf;
+}
+
+.ck-cell.dark {
+    background: #b9825d;
+}
+
+.ck-cell.last {
+    box-shadow: inset 0 0 0 3px rgba(255, 214, 102, 0.85);
+}
+
+.ck-cell.sel {
+    box-shadow: inset 0 0 0 3px #f04d85;
+}
+
+.ck-cell.target::after {
+    content: '';
+    width: 30%;
+    height: 30%;
+    border-radius: 50%;
+    background: rgba(240, 77, 133, 0.75);
+}
+
+.ck-piece {
+    width: 76%;
+    height: 76%;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.25), 0 3px 6px rgba(0, 0, 0, 0.3);
+}
+
+.ck-piece.me {
+    background: radial-gradient(circle at 35% 30%, #fff, #e9e9ef);
+}
+
+.ck-piece.mo {
+    background: radial-gradient(circle at 35% 30%, #ff9cc2, #e0306b);
+}
+
+.ck-bottom {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    font-size: 0.88rem;
+}
+
+.ck-status {
+    font-weight: 600;
+    color: var(--pink-600);
+}

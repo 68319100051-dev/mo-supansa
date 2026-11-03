@@ -404,6 +404,29 @@
     </div>
 
     <!-- Clip Player -->
+    <!-- หมากฮอส -->
+    <div id="checkers" class="checkers hidden">
+        <div class="ck-top">
+            <button class="close-btn ck-close" title="ออก">&times;</button>
+            <strong>♟️ หมากฮอสกับโม</strong>
+            <select class="ck-level" id="ck-level" title="ความเก่งของโม">
+                <option value="1">ง่าย</option>
+                <option value="2" selected>ปกติ</option>
+                <option value="3">เก่ง</option>
+            </select>
+        </div>
+        <div class="ck-mo">
+            <img src="mo_avatar.jpg" alt="โม">
+            <div class="ck-say"></div>
+        </div>
+        <div class="ck-board"></div>
+        <div class="ck-bottom">
+            <span class="ck-status"></span>
+            <span class="ck-score"></span>
+            <button class="btn-secondary ck-new">เริ่มใหม่</button>
+        </div>
+    </div>
+
     <!-- เมนูเกม -->
     <div id="games-menu" class="games-menu hidden"></div>
 
@@ -572,6 +595,7 @@
     <script src="mo-voice.js"></script>
     <script src="mo-stories.js"></script>
     <script src="mo-games.js"></script>
+    <script src="mo-checkers.js"></script>
     <script src="mo-recall.js"></script>
     <script src="mo-social.js"></script>
     <script src="mo-care.js"></script>
