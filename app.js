@@ -385,7 +385,8 @@
 
     function renderSync() {
         const loggedIn = Boolean(sync.user);
-        document.getElementById('sync-login').classList.toggle('hidden', loggedIn);
+        document.getElementById('sync-login').classList.toggle('hidden', loggedIn || !sync.client);
+        document.getElementById('sync-server').open = !sync.client;
         document.getElementById('sync-account').classList.toggle('hidden', !loggedIn);
         document.getElementById('sync-user').textContent = loggedIn ? `เข้าสู่ระบบเป็น ${sync.user.email}` : '';
         const when = sync.lastSync ? ` (${new Date(sync.lastSync).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })})` : '';
@@ -412,10 +413,7 @@
     }
 
     syncBtn.addEventListener('click', () => {
-        if (!sync.client) {
-            chat.showNotification('ยังไม่ได้ตั้งค่า Supabase ใน mo-keys.local.js');
-            return;
-        }
+        // ยังไม่มี Supabase (เช่นมือถือที่เปิดจากโฮส) → เปิดหน้าตั้งค่าเซิร์ฟเวอร์ให้กรอก
         renderSync();
         syncModal.classList.remove('hidden');
     });
