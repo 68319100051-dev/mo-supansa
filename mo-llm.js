@@ -88,10 +88,22 @@ class MoLLMService {
      */
     timeContext() {
         const now = new Date();
-        const h = now.getHours();
-        const period = h < 5 ? 'ดึกมาก' : h < 11 ? 'ช่วงเช้า' : h < 13 ? 'ช่วงเที่ยง' : h < 17 ? 'ช่วงบ่าย' : h < 20 ? 'ช่วงเย็น' : 'ช่วงค่ำ/ดึก';
+        const h = now.getHours(), m = now.getMinutes();
+        const period = h < 5 ? 'ดึกมาก' : h < 10 ? 'ช่วงเช้า' : h < 12 ? 'ช่วงสาย (ยังไม่เที่ยง)' : h < 13 ? 'ช่วงเที่ยง' : h < 16 ? 'ช่วงบ่าย' : h < 19 ? 'ช่วงเย็น' : 'ช่วงค่ำ/ดึก';
         const date = now.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-        return `${date} เวลา ${String(h).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')} น. (${period})`;
+        return `${date} เวลา ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} น. = ${this.spokenTime(h, m)} (${period})`;
+    }
+
+    /**
+     * เวลาแบบคนไทยพูด: 11:40 = สิบเอ็ดโมงสี่สิบนาที, 14:30 = บ่ายสองโมงครึ่ง, 20:00 = สองทุ่ม
+     */
+    spokenTime(h, m) {
+        const w = ['ศูนย์', 'หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า', 'สิบ', 'สิบเอ็ด', 'สิบสอง'];
+        const n = x => (x <= 12 ? w[x] : x < 20 ? 'สิบ' + w[x - 10] : (Math.floor(x / 10) === 2 ? 'ยี่' : w[Math.floor(x / 10)]) + 'สิบ' + (x % 10 === 1 ? 'เอ็ด' : x % 10 ? w[x % 10] : ''));
+        const base = h === 0 ? 'เที่ยงคืน' : h < 6 ? `ตี${w[h]}` : h < 12 ? `${w[h]}โมง${h < 10 ? 'เช้า' : ''}` : h === 12 ? 'เที่ยง' : h === 13 ? 'บ่ายโมง' : h < 16 ? `บ่าย${w[h - 12]}โมง` : h < 19 ? `${w[h - 12]}โมงเย็น` : `${w[h - 18]}ทุ่ม`;
+        if (!m) return h === 12 || h === 0 ? `${base}ตรง` : base;
+        if (m === 30) return `${base}ครึ่ง`;
+        return `${base}${n(m)}นาที`;
     }
 
     /**
