@@ -100,8 +100,28 @@
     // ตอนโทร: ใช้สมองเดียวกับแชท และจำสิ่งที่พูดด้วย
     call.setResponder(async (text) => {
         memory.extractFacts(text);
-        return brain.generateResponse(text, memory, chat.messages, llm);
+        // โทรด่วน: บอกโมว่านี่เป็นเรื่องด่วน (จนกว่าจะวางสาย)
+        const note = call.urgentNote ? `[ข้อความระบบ: นี่คือสายด่วน${call.urgentNote}— โมจริงจัง ตั้งใจฟัง ถามว่าเกิดอะไรขึ้น ช่วยคิด ไม่เล่นมุก]\n` : '';
+        return brain.generateResponse(note + text, memory, chat.messages, llm);
     });
+
+    // ======= โทรหาโม: รับตามสถานการณ์จริง / โทรด่วน = รับแน่นอน =======
+    call.canAnswer = ({ urgent }) => {
+        if (!urgent) return life.answerCall();
+        const { wasAsleep } = life.interruptUrgent();
+        mind.decide(wasAsleep ? 'สะดุ้งตื่นเพราะเองโทรมาด่วน' : 'ทิ้งทุกอย่างมารับสายด่วน');
+        updateLifeStatus();
+        return {
+            answer: true,
+            delay: wasAsleep ? 9000 : 4000,
+            greeting: wasAsleep ? 'ฮัลโหล... เค้าตื่นแล้วๆ มีไรด่วน เป็นไรรึเปล่า' : 'ฮัลโหล! มีไรด่วน เกิดอะไรขึ้น',
+        };
+    };
+    // ไม่รับสาย → พอโมเห็นมือถือ จะโทรกลับ/ทักกลับเอง
+    call.onMissed = () => {
+        chat.addSystemMessage('📵 โมไม่รับสาย — ถ้ามีเรื่องด่วน กด 🚨 ที่บ้านโม');
+        chat.missedCallAt = Date.now();
+    };
 
     // Make reels accessible globally for chat
     window.MoReels = reels;
@@ -291,6 +311,14 @@
         updateLifeStatus();
         if (chat.pendingReply) {
             chat.flushPending();
+            return;
+        }
+        // เพิ่งเห็นสายที่ไม่ได้รับ → ทักกลับ
+        if (chat.missedCallAt && life.canSeePhone() && !call.getCallStatus() && !chat.isTyping) {
+            const mins = Math.round((Date.now() - chat.missedCallAt) / 60000);
+            chat.missedCallAt = null;
+            chat.sendProactiveMessage(`โมเพิ่งเห็นว่าเองโทรมาเมื่อ ${mins} นาทีที่แล้วแต่ไม่ได้รับ เพราะตอนนั้น${prev ? prev.label : 'ไม่ได้ถือมือถือ'}`,
+                'ทักกลับแบบรู้สึกผิดนิดๆ ที่ไม่ได้รับ บอกสั้นๆ ว่าตอนนั้นทำอะไรอยู่ แล้วถามว่ามีอะไรรึเปล่า');
             return;
         }
         if (!prev || !canReachOut() || chat.awaitingReply) return;
@@ -947,14 +975,33 @@
         const fmt = ts => new Date(ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
         const phoneRoom = c.phone === 'home' ? 'bedroom' : c.room;
         const phoneText = { with: 'อยู่กับโม', near: 'วางไว้ใกล้ๆ', away: 'ไม่ได้ถืออยู่', home: 'ลืมไว้ที่บ้าน', asleep: 'ปิดเสียง (หลับอยู่)' }[c.phone];
+        const hour = new Date().getHours();
+        const night = hour >= 19 || hour < 6;
+        const asleep = c.id === 'sleep';
+        const spot = MO_SPOTS[c.id];
+        const sky = window.MoWeather && window.MoWeather.isRaining() ? '🌧️' : night ? '🌙' : '☀️';
         const room = (key) => {
             const r = MO_ROOMS[key];
             const here = c.room === key;
-            const tokens = `${here ? '<img src="mo_avatar.jpg" alt="โม">' : ''}${phoneRoom === key && c.phone !== 'with' ? '📱' : ''}`;
-            const label = key === 'out' ? `${r.emoji} ${here ? esc(c.place || 'ข้างนอก') : 'ข้างนอก'}` : `${r.emoji} ${r.name}`;
-            return `<div class="house-room ${key === 'out' ? 'outside' : ''} ${here ? 'here' : ''}">
-                <span>${label}</span><div class="house-room-tokens">${tokens}</div></div>`;
+            const phoneHere = phoneRoom === key && c.phone !== 'with';
+            const lit = here && !asleep;
+            if (key === 'out') {
+                return `<div class="house-room outside ${here ? 'here' : ''}">
+                    <span>${r.emoji} ${here ? esc(c.place || 'ข้างนอก') : 'ข้างนอก'}</span>
+                    <div class="house-room-tokens">${here ? '<img src="mo_avatar.jpg" alt="โม">' : ''}</div></div>`;
+            }
+            // ของในห้อง: โมอยู่ที่ของชิ้นที่กำลังใช้ (ไม่มี → อยู่ท้ายห้อง)
+            const items = MO_FURNITURE[key].map(f => {
+                const mo = here && f === spot;
+                return `<span class="house-item ${mo ? 'mo-spot' : ''}">${f === '🪟' ? sky : f}${mo ? '<img src="mo_avatar.jpg" alt="โม">' : ''}</span>`;
+            }).join('');
+            const moLoose = here && !MO_FURNITURE[key].includes(spot) ? '<span class="house-item mo-spot"><img src="mo_avatar.jpg" alt="โม"></span>' : '';
+            return `<div class="house-room room-${key} ${here ? 'here' : ''} ${lit ? 'lit' : ''}">
+                <span>${r.emoji} ${r.name}${asleep && here ? ' 💤' : ''}</span>
+                <div class="house-items">${items}${moLoose}${phoneHere ? '<span class="house-item">📱</span>' : ''}</div></div>`;
         };
+        const leftMin = Math.max(1, Math.round((c.endsAt - Date.now()) / 60000));
+        const leftText = asleep ? `น่าจะตื่นราว ${fmt(c.endsAt)}` : leftMin > 90 ? `อีกนานเลย` : `อีกประมาณ ${leftMin} นาที`;
         const bar = (label, value) => `<div class="house-bar"><span>${label}</span>
             <div class="house-bar-track"><div class="house-bar-fill" style="width:${value}%"></div></div><span>${value}</span></div>`;
 
@@ -963,12 +1010,20 @@
                 <img src="mo_avatar.jpg" alt="โม">
                 <div class="house-now-text">
                     <strong>${c.emoji} ${esc(c.label)}</strong>
-                    <span>ตั้งแต่ ${fmt(c.startedAt)} • มือถือ: ${phoneText}</span>
+                    <span>ตั้งแต่ ${fmt(c.startedAt)} • ${leftText}</span>
+                    <span>มือถือ: ${phoneText}</span>
                 </div>
             </div>
+            <div class="house-card house-urgent">
+                <div>
+                    <strong>มีเรื่องด่วน?</strong>
+                    <span>${life.canSeePhone() ? 'โมถือมือถืออยู่ โทรปกติก็รับ' : asleep ? 'โมหลับอยู่ โทรด่วนจะปลุกโมขึ้นมา' : 'โมไม่ได้ถือมือถือ โทรปกติอาจไม่รับ'}</span>
+                </div>
+                <button class="btn-primary" id="house-urgent">🚨 โทรด่วน</button>
+            </div>
             <div class="house-card">
-                <h3>แผนผังบ้าน</h3>
-                <div class="house-map">${['bedroom', 'living', 'kitchen', 'bathroom', 'out'].map(room).join('')}</div>
+                <h3>แผนผังบ้าน ${night ? '🌙 กลางคืน' : '☀️ กลางวัน'}${window.MoWeather && window.MoWeather.describe() ? ` • ${esc(window.MoWeather.describe())}` : ''}</h3>
+                <div class="house-map ${night ? 'night' : ''}">${['bedroom', 'living', 'kitchen', 'bathroom', 'balcony', 'out'].map(room).join('')}</div>
             </div>
             <div class="house-card">
                 <h3>สภาพโมตอนนี้</h3>
@@ -991,6 +1046,13 @@
                     `<div class="house-log-item"><time>${fmt(l.at)}</time><span>${l.emoji}</span><span>${esc(l.text)}</span></div>`).join('')}</div>
             </div>`;
         document.getElementById('house-transfer').addEventListener('click', openTransfer);
+        document.getElementById('house-urgent').addEventListener('click', () => {
+            const reason = prompt('เรื่องด่วนอะไร? (ไม่ใส่ก็ได้ โมจะถามเอง)', '');
+            if (reason === null) return;
+            call.urgentNote = reason.trim() ? ` เรื่อง: "${reason.trim().slice(0, 120)}" ` : ' ';
+            houseScreen.classList.add('hidden');
+            call.startOutgoingCall({ urgent: true });
+        });
     }
 
     // ======= โอนเงินเทียม =======

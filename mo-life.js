@@ -11,7 +11,26 @@ const MO_ROOMS = {
     living: { name: 'ห้องนั่งเล่น', emoji: '🛋️' },
     kitchen: { name: 'ครัว', emoji: '🍳' },
     bathroom: { name: 'ห้องน้ำ', emoji: '🛁' },
+    balcony: { name: 'ระเบียง', emoji: '🪴' },
     out: { name: 'ข้างนอก', emoji: '🚶‍♀️' },
+};
+
+// ของในแต่ละห้อง (แผนผังบ้าน) — ของชิ้นแรกที่ตรงกับ MO_SPOTS จะเป็นจุดที่โมอยู่
+const MO_FURNITURE = {
+    bedroom: ['🛏️', '💻', '🪞', '🧸', '👗'],
+    living: ['🛋️', '📺', '🪟', '🎮', '📚'],
+    kitchen: ['🍳', '🧊', '☕', '🍽️'],
+    bathroom: ['🛁', '🪥', '🧴', '🪒'],
+    balcony: ['🪴', '👕', '🪑'],
+};
+
+// กิจกรรม → ของที่โมกำลังใช้
+const MO_SPOTS = {
+    wake: '🛏️', sleep: '🛏️', nap: '🛏️', music: '🛏️', scroll: '🛏️', call_friend: '🛏️', game: '💻', draw: '💻',
+    series: '📺', delivery: '🛋️', snack: '🛋️', bored: '🛋️', chore: '🛋️',
+    breakfast: '🍽️', cook: '🍳',
+    shower_am: '🛁', shower_pm: '🛁', skincare: '🪞',
+    water_plants: '🪴', balcony_chill: '🪑', laundry: '👕', urgent: '📱',
 };
 
 // รายละเอียดสุ่มที่ใส่ในสถานการณ์ ({food} {show} ...)
@@ -51,6 +70,9 @@ const MO_ACTIVITIES = [
     { id: 'skincare', label: 'มาส์กหน้าทาครีม', status: 'มาส์กหน้า 🧖‍♀️', emoji: '🧖‍♀️', room: 'bathroom', hours: [19, 25], dur: [15, 30], phone: 'near', mood: 5, weight: 2 },
     { id: 'call_friend', label: 'คุยโทรศัพท์กับ{friend}', status: 'คุยโทรศัพท์ 📞', emoji: '📞', room: 'bedroom', hours: [10, 23], dur: [20, 50], phone: 'away', mood: 5, weight: 1 },
     { id: 'shower_pm', label: 'อาบน้ำ', status: 'อาบน้ำอยู่ 🛁', emoji: '🛁', room: 'bathroom', hours: [18, 24], dur: [15, 35], phone: 'away', mood: 5, weight: 3 },
+    { id: 'water_plants', label: 'รดน้ำต้นไม้ที่ระเบียง คุยกับต้นไม้', status: 'รดน้ำต้นไม้ 🪴', emoji: '🪴', room: 'balcony', hours: [7, 10], dur: [10, 20], phone: 'near', mood: 4, weight: 1 },
+    { id: 'balcony_chill', label: 'นั่งชิลที่ระเบียงดูฟ้า', status: 'นั่งเล่นระเบียง 🌇', emoji: '🌇', room: 'balcony', hours: [17, 24], dur: [15, 40], phone: 'with', mood: 7, weight: 2 },
+    { id: 'laundry', label: 'ตากผ้าที่ระเบียง', status: 'ตากผ้า 👕', emoji: '👕', room: 'balcony', hours: [8, 17], dur: [10, 25], phone: 'near', energy: -5, weight: 1 },
     { id: 'scroll', label: 'นอนไถ TikTok', status: 'ไถมือถือ 📱', emoji: '📱', room: 'bedroom', hours: [9, 25], dur: [15, 45], phone: 'with', energy: -5, weight: 3 },
     { id: 'bored', label: 'นอนเบื่อๆ ไม่รู้จะทำไร', status: 'ว่างๆ 😶', emoji: '😶', room: 'living', hours: [9, 24], dur: [15, 30], phone: 'with', mood: -3, weight: 2 },
     // ---- ออกไปข้างนอก ----
@@ -64,6 +86,7 @@ const MO_ACTIVITIES = [
 // กิจกรรมพิเศษ (ไม่สุ่ม เลือกโดยระบบ)
 const MO_SPECIAL = {
     sleep: { id: 'sleep', label: 'นอนหลับ', status: 'หลับอยู่ 😴', emoji: '😴', room: 'bedroom', phone: 'asleep' },
+    urgent: { id: 'urgent', label: 'รับสายด่วนจากเอง', status: 'คุยเรื่องด่วน 📞', emoji: '📞', phone: 'with', dur: [15, 30], energy: -5 },
     wish: { id: 'wish', label: 'ออกไปกิน{wish}', status: 'ไปกิน{wish} 🤤', emoji: '🤤', room: 'out', place: 'ร้าน{wish}', dur: [60, 100], phone: 'with', hunger: -70, mood: 15 },
 };
 
@@ -292,6 +315,41 @@ class MoLife {
             if (this.state.current.endsAt <= now) this.advance(now);
         }
         this.save();
+    }
+
+    /**
+     * เองโทรเรียกด่วน → โมทิ้งสิ่งที่ทำอยู่ (หลับอยู่ก็สะดุ้งตื่น) มารับสาย อยู่ห้องเดิม/ที่เดิม
+     */
+    interruptUrgent() {
+        const s = this.state;
+        const prev = s.current;
+        const wasAsleep = prev && prev.id === 'sleep';
+        if (prev) {
+            prev.endsAt = Date.now();
+            if (wasAsleep) s.energy = Math.max(0, s.energy - 10);
+        }
+        const call = this.makeActivity(MO_SPECIAL.urgent, Date.now());
+        call.room = prev ? prev.room : 'bedroom';
+        call.place = prev ? prev.place : null;
+        s.current = call;
+        s.lastSeen = Date.now();
+        this.addLog(Date.now(), '🚨', wasAsleep ? 'สะดุ้งตื่นเพราะเองโทรมาด่วน' : `หยุด${prev ? prev.label : ''}มารับสายด่วนจากเอง`);
+        this.save();
+        this.emit(prev);
+        return { wasAsleep, prevLabel: prev ? prev.label : '' };
+    }
+
+    /**
+     * เองโทรมา (ปกติ): โมรับไหม รับช้าแค่ไหน ตามสถานการณ์จริง
+     */
+    answerCall() {
+        const c = this.state.current;
+        if (!c) return { answer: true, delay: 3000 };
+        switch (c.phone) {
+            case 'with': return { answer: true, delay: this.rand(2, 5) * 1000 };
+            case 'near': return Math.random() < 0.6 ? { answer: true, delay: this.rand(8, 16) * 1000 } : { answer: false };
+            default: return { answer: false };
+        }
     }
 
     /**

@@ -94,19 +94,33 @@ class MoCall {
     /**
      * Start outgoing call
      */
-    startOutgoingCall() {
+    /**
+     * โทรหาโม: opts.urgent = เรื่องด่วน (โมรับแน่นอน) — ปกติโมรับตามสถานการณ์ (canAnswer จาก app.js)
+     */
+    startOutgoingCall(opts = {}) {
         if (this.isInCall) return;
 
         this.callScreen.classList.remove('hidden');
-        this.setStatus('กำลังโทร...');
+        this.setStatus(opts.urgent ? '🚨 กำลังโทรด่วน...' : 'กำลังโทร...');
         this.callTimer.classList.add('hidden');
         this.showTranscript('');
 
-        // Simulate Mo answering
-        const answerDelay = 2000 + Math.random() * 3000;
+        const plan = this.canAnswer ? this.canAnswer(opts) : { answer: true, delay: 2000 + Math.random() * 3000 };
+        this.greetingOverride = plan.greeting || null;
+        if (!plan.answer) {
+            // ไม่มีคนรับ: ดังไปสักพักแล้วตัดสาย
+            this._connectTimeout = setTimeout(() => {
+                this.setStatus('โมไม่รับสาย 📵');
+                setTimeout(() => {
+                    this.callScreen.classList.add('hidden');
+                    if (this.onMissed) this.onMissed();
+                }, 1800);
+            }, 20000);
+            return;
+        }
         this._connectTimeout = setTimeout(() => {
             this.connectCall();
-        }, answerDelay);
+        }, plan.delay);
     }
 
     /**
@@ -169,7 +183,7 @@ class MoCall {
 
         this._greetingTimeout = setTimeout(() => {
             const name = this.memory.data.longTerm.userName;
-            const greeting = greetings[Math.floor(Math.random() * greetings.length)];
+            const greeting = this.greetingOverride || greetings[Math.floor(Math.random() * greetings.length)];
             const text = name ? greeting.replace('ไอ้ดื้อ', name) : greeting;
             if (this.voiceSupported) {
                 this.moSays(text);
@@ -352,6 +366,7 @@ class MoCall {
      */
     endCall() {
         this.isInCall = false;
+        this.urgentNote = null;
         // ยกเลิกการต่อสายที่ยังค้างอยู่ (กรณีวางสายก่อนโมรับ)
         clearTimeout(this._connectTimeout);
         clearTimeout(this._greetingTimeout);
