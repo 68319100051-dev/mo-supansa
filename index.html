@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>โม 💕 - Mo Supansa</title>
+    <meta name="description" content="แชทกับโม แฟนสาว AI สุดน่ารัก">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <!-- Three.js สำหรับสมองโฮโลแกรม 3D (โหลดตอนเปิดหน้าสมองเท่านั้น) -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+</head>
+<body>
+    <!-- Splash Screen -->
+    <div id="splash-screen" class="splash-screen">
+        <div class="splash-content">
+            <div class="splash-avatar">
+                <img src="mo_avatar.jpg" alt="Mo">
+            </div>
+            <h1 class="splash-name">โม ✨</h1>
+            <p class="splash-subtitle">AI Companion ที่เป็นตัวของตัวเอง</p>
+            <div class="splash-hearts">
+                <span>💕</span><span>✨</span><span>💖</span><span>🌸</span><span>💕</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app" class="app hidden">
+        <!-- Top Bar -->
+        <header class="top-bar">
+            <div class="top-bar-left">
+                <div class="avatar-wrapper online">
+                    <img src="mo_avatar.jpg" alt="Mo" class="avatar-img">
+                    <span class="status-dot"></span>
+                </div>
+                <div class="user-info">
+                    <h1 class="user-name">โม 💕</h1>
+                    <span class="user-status" id="user-status">ออนไลน์</span>
+                </div>
+            </div>
+            <div class="top-bar-right">
+                <button class="icon-btn" id="btn-call" title="โทรหาโม">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
+                    </svg>
+                </button>
+                <button class="icon-btn" id="btn-video" title="วิดีโอคอล">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="23 7 16 12 23 17 23 7"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                </button>
+                <button class="icon-btn" id="btn-settings" title="ตั้งค่าสมอง AI (Gemini / OpenAI)">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    </svg>
+                </button>
+                <button class="icon-btn" id="btn-menu" title="เมนูความจำ">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Memory Panel (Side Panel) -->
+        <div id="memory-panel" class="memory-panel">
+            <div class="memory-header">
+                <h2>🧠 ความทรงจำของโม</h2>
+                <button class="close-btn" id="close-memory">&times;</button>
+            </div>
+            <div class="memory-content" id="memory-content">
+                <div class="memory-section">
+                    <h3>💕 ข้อมูลระยะยาว (Long-Term)</h3>
+                    <div id="memory-facts" class="memory-list"></div>
+                </div>
+                <div class="memory-section">
+                    <h3>📜 เหตุการณ์สำคัญ (Episodic)</h3>
+                    <div id="memory-events" class="memory-list"></div>
+                </div>
+                <div class="memory-section">
+                    <h3>⏰ การเตือน & วันสำคัญ</h3>
+                    <div id="memory-reminders" class="memory-list"></div>
+                </div>
+                <div class="memory-section">
+                    <h3>📔 ไดอารี่ของโม</h3>
+                    <div id="memory-diary" class="memory-list"></div>
+                </div>
+                <div class="memory-section">
+                    <h3>😊 อารมณ์ & บุคลิกปัจจุบัน</h3>
+                    <div id="memory-mood" class="mood-display"></div>
+                </div>
+                <div class="memory-section">
+                    <h3>📊 สถิติ</h3>
+                    <div id="memory-stats" class="stats-grid"></div>
+                </div>
+                <div class="memory-actions">
+                    <button class="memory-btn danger" id="btn-clear-memory">🗑️ ล้างความทรงจำทั้งหมด</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chat Area -->
+        <main class="chat-area" id="chat-area">
+            <div class="chat-date-divider">
+                <span id="chat-date">วันนี้</span>
+            </div>
+            <div id="messages-container" class="messages-container">
+                <!-- Messages will be injected here -->
+            </div>
+        </main>
+
+        <!-- Typing Indicator -->
+        <div class="typing-indicator hidden" id="typing-indicator">
+            <div class="typing-avatar">
+                <img src="mo_avatar.jpg" alt="Mo">
+            </div>
+            <div class="typing-bubble">
+                <div class="typing-dots">
+                    <span></span><span></span><span></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reply Bar (ตอบกลับข้อความ) -->
+        <div class="reply-bar hidden" id="reply-bar">
+            <div class="reply-bar-text">
+                <span class="reply-bar-who" id="reply-bar-who"></span>
+                <span class="reply-bar-snippet" id="reply-bar-snippet"></span>
+            </div>
+            <button class="reply-bar-cancel" id="reply-cancel" title="ยกเลิกการตอบกลับ">&times;</button>
+        </div>
+
+        <!-- Input Area -->
+        <footer class="input-area">
+            <div class="input-actions-left">
+                <button class="input-icon-btn" id="btn-sticker" title="สติกเกอร์">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                        <line x1="9" y1="9" x2="9.01" y2="9"/>
+                        <line x1="15" y1="9" x2="15.01" y2="9"/>
+                    </svg>
+                </button>
+                <button class="input-icon-btn input-emoji-btn" id="btn-transfer" title="โอนเงินให้โม">💸</button>
+                <button class="input-icon-btn" id="btn-image" title="ส่งรูป/คลิป">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                </button>
+            </div>
+            <input type="file" id="image-input" accept="image/*,video/*" hidden>
+            <div class="input-wrapper">
+                <input type="text" id="message-input" placeholder="พิมพ์ข้อความ..." autocomplete="off">
+            </div>
+            <button class="send-btn" id="btn-send" title="ส่ง">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+            </button>
+        </footer>
+
+        <!-- Bottom Nav -->
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-tab="chat" id="nav-chat">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                </svg>
+                <span>แชท</span>
+                <span class="badge hidden" id="chat-badge">0</span>
+            </button>
+            <button class="nav-item" data-tab="reels" id="nav-reels">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+                <span>คลิป</span>
+            </button>
+            <button class="nav-item" data-tab="memory" id="nav-memory">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+                </svg>
+                <span>ความจำ</span>
+            </button>
+            <button class="nav-item" data-tab="house" id="nav-house">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>
+                </svg>
+                <span>บ้านโม</span>
+            </button>
+        </nav>
+    </div>
+
+    <!-- Call Screen Overlay -->
+    <div id="call-screen" class="call-screen hidden">
+        <div class="call-bg">
+            <div class="call-particles" id="call-particles"></div>
+        </div>
+        <div class="call-content">
+            <div class="call-avatar-large pulse-ring">
+                <img src="mo_avatar.jpg" alt="Mo">
+            </div>
+            <h2 class="call-name">โม 💕</h2>
+            <p class="call-status" id="call-status">กำลังโทร...</p>
+            <p class="call-timer hidden" id="call-timer">00:00</p>
+            <p class="call-transcript hidden" id="call-transcript"></p>
+            <div class="call-actions">
+                <button class="call-action-btn mute" id="btn-mute" title="ปิดเสียง">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+                        <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+                        <line x1="12" y1="19" x2="12" y2="23"/>
+                        <line x1="8" y1="23" x2="16" y2="23"/>
+                    </svg>
+                </button>
+                <button class="call-action-btn end-call" id="btn-end-call" title="วางสาย">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 01-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.73-1.68-1.36-2.66-1.85a.994.994 0 01-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+                    </svg>
+                </button>
+                <button class="call-action-btn speaker" id="btn-speaker" title="ลำโพง">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                        <path d="M19.07 4.93a10 10 0 010 14.14"/>
+                        <path d="M15.54 8.46a5 5 0 010 7.07"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Reels Screen -->
+    <!-- Mind Screen (สมองโม) -->
+    <div id="mind-screen" class="mind-screen hidden">
+        <div class="mind-header">
+            <h2>🧠 ความทรงจำของโม</h2>
+            <button class="close-btn" id="close-mind">&times;</button>
+        </div>
+        <div class="mind-content" id="mind-content"></div>
+    </div>
+
+    <!-- House Screen (บ้านโม) -->
+    <div id="house-screen" class="reels-screen house-screen hidden">
+        <div class="reels-header">
+            <h2>🏠 บ้านโม</h2>
+            <button class="close-btn" id="close-house">&times;</button>
+        </div>
+        <div class="house-content" id="house-content"></div>
+    </div>
+
+    <!-- Transfer Modal (โอนเงิน) -->
+    <div id="transfer-modal" class="settings-modal hidden">
+        <div class="settings-card">
+            <div class="settings-header">
+                <h3>💸 โอนเงินให้โม</h3>
+                <button class="close-btn" id="close-transfer">&times;</button>
+            </div>
+            <div class="settings-body">
+                <p class="settings-desc" id="transfer-balance"></p>
+                <div class="transfer-chips" id="transfer-chips"></div>
+                <div class="setting-item">
+                    <label for="transfer-amount">จำนวนเงิน (บาท):</label>
+                    <input type="number" id="transfer-amount" class="setting-input" min="1" inputmode="numeric" placeholder="เช่น 20">
+                </div>
+                <div class="setting-item">
+                    <label for="transfer-note">โน้ต (ไม่ใส่ก็ได้):</label>
+                    <input type="text" id="transfer-note" class="setting-input" maxlength="60" placeholder="เช่น ไปกินหมูกระทะซะ">
+                </div>
+                <div class="settings-actions">
+                    <button class="btn-primary" id="btn-confirm-transfer">โอนเลย</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="reels-screen" class="reels-screen hidden">
+        <div class="reels-header">
+            <h2>🎬 คลิปจากโม</h2>
+            <button class="close-btn" id="close-reels">&times;</button>
+        </div>
+        <div class="reels-container" id="reels-container">
+            <!-- Reels will be injected here -->
+        </div>
+    </div>
+
+    <!-- Clip Player -->
+    <div id="clip-player" class="clip-player hidden">
+        <div class="clip-player-box">
+            <div class="clip-player-header">
+                <span class="clip-player-title" id="clip-player-title"></span>
+                <button class="close-btn" id="clip-player-close">&times;</button>
+            </div>
+            <div class="clip-player-frame" id="clip-player-frame"></div>
+        </div>
+    </div>
+
+    <!-- Sticker Panel -->
+    <div id="sticker-panel" class="sticker-panel hidden">
+        <div class="sticker-grid" id="sticker-grid">
+            <!-- Stickers injected here -->
+        </div>
+    </div>
+
+    <!-- Incoming Call Popup -->
+    <div id="incoming-call" class="incoming-call hidden">
+        <div class="incoming-call-card">
+            <div class="incoming-avatar pulse-ring">
+                <img src="mo_avatar.jpg" alt="Mo">
+            </div>
+            <h3>โม 💕</h3>
+            <p>กำลังโทรหาคุณ...</p>
+            <div class="incoming-actions">
+                <button class="incoming-btn decline" id="btn-decline-call">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 01-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28-.79-.73-1.68-1.36-2.66-1.85a.994.994 0 01-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+                    </svg>
+                    <span>ปฏิเสธ</span>
+                </button>
+                <button class="incoming-btn accept" id="btn-accept-call">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>
+                    </svg>
+                    <span>รับสาย</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LLM Settings Modal -->
+    <div id="settings-modal" class="settings-modal hidden">
+        <div class="settings-card">
+            <div class="settings-header">
+                <h3>⚙️ ตั้งค่าสมอง AI (LLM)</h3>
+                <button class="close-btn" id="close-settings">&times;</button>
+            </div>
+            <div class="settings-body">
+                <p class="settings-desc">เชื่อมต่อโมเดล AI จริง (Gemini / OpenAI) เพื่อให้โมตอบได้อย่างอิสระ ฉลาดลึกซึ้ง และเหมือนมนุษย์จริง</p>
+                
+                <div class="setting-item">
+                    <label class="setting-label">
+                        <span>เปิดใช้งานสมอง AI จริง</span>
+                        <input type="checkbox" id="llm-toggle" class="toggle-checkbox">
+                    </label>
+                </div>
+
+                <div class="setting-item">
+                    <label for="llm-provider">ผู้ให้บริการ (Provider):</label>
+                    <select id="llm-provider" class="setting-input">
+                        <option value="gemini">Google Gemini (แนะนำ - ฟรี & เร็ว)</option>
+                        <option value="openai">OpenAI (ChatGPT)</option>
+                    </select>
+                </div>
+
+                <div class="setting-item">
+                    <label for="llm-model">รุ่นโมเดล (Model):</label>
+                    <select id="llm-model" class="setting-input">
+                        <option value="gemini-3.8-flash">Gemini 3.8 Flash (แนะนำ - เร็วและฉลาดมาก)</option>
+                        <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
+                        <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    </select>
+                </div>
+
+                <div class="setting-item">
+                    <label for="llm-apikey">API Key:</label>
+                    <input type="password" id="llm-apikey" class="setting-input" placeholder="ใส่ AI Studio หรือ OpenAI Key">
+                    <small class="setting-hint">คีย์จะถูกบันทึกไว้ใน Browser ของคุณเท่านั้น ปลอดภัย 100%</small>
+                </div>
+
+                <div class="settings-actions">
+                    <button class="btn-primary" id="btn-save-settings">บันทึกการตั้งค่า</button>
+                    <button class="btn-secondary" id="btn-test-llm">ทดสอบเชื่อมต่อ</button>
+                </div>
+                <div id="llm-status-msg" class="llm-status-msg"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification-toast" class="notification-toast hidden">
+        <div class="toast-avatar">
+            <img src="mo_avatar.jpg" alt="Mo">
+        </div>
+        <div class="toast-content">
+            <span class="toast-name">โม 💕</span>
+            <span class="toast-message" id="toast-message"></span>
+        </div>
+    </div>
+
+    <script src="mo-keys.local.js"></script>
+    <script src="mo-llm.js"></script>
+    <script src="mo-brain.js"></script>
+    <script src="mo-memory.js"></script>
+    <script src="mo-chat.js"></script>
+    <script src="mo-call.js"></script>
+    <script src="mo-reels.js"></script>
+    <script src="mo-life.js"></script>
+    <script src="mo-mind.js"></script>
+    <script src="mo-mind-ui.js"></script>
+    <script src="mo-reminders.js"></script>
+    <script src="mo-diary.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
