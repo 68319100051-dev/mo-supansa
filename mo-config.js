@@ -32,6 +32,7 @@ const MoConfig = {
         const fileKeys = {};
         this.fields.forEach(f => { if (window.MO_KEYS && window.MO_KEYS[f]) fileKeys[f] = window.MO_KEYS[f]; });
         window.MO_KEYS = { ...this.loadKeys(), ...fileKeys };
+        this.fileKeys = fileKeys;
         this.hasFileKeys = Object.keys(fileKeys).length > 0;
         if (this.hasFileKeys) this.saveKeys(fileKeys);
 
@@ -58,7 +59,11 @@ const MoConfig = {
      */
     shareKeys() {
         if (!this.hasFileKeys) return;
-        try { localStorage.setItem(this.keysKey, JSON.stringify(this.loadKeys())); } catch (e) {}
+        // รวมกับของในไฟล์เสมอ (ของจากเครื่องอื่นที่ไม่มีคีย์ AI อาจซิงก์มาทับ)
+        const merged = { ...this.loadKeys(), ...this.fileKeys };
+        try {
+            if (localStorage.getItem(this.keysKey) !== JSON.stringify(merged)) localStorage.setItem(this.keysKey, JSON.stringify(merged));
+        } catch (e) {}
     },
 
     reloadProfile() {

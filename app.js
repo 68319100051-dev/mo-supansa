@@ -367,6 +367,8 @@
         if (has('mo_profile_v1')) MoConfig.reloadProfile();
         // คีย์ AI จากเครื่องอื่นในบัญชีเดียวกัน → มือถือไม่ต้องกรอกเอง
         if (has('mo_device_keys_v1')) {
+            // เครื่องที่มีไฟล์คีย์: อย่าให้ของจากเครื่องอื่นทับ → ส่งของที่ครบกลับขึ้นไป
+            MoConfig.shareKeys();
             window.MO_KEYS = { ...window.MO_KEYS, ...MoConfig.loadKeys() };
             if (!llm.config.apiKey && window.MO_KEYS.gemini) {
                 llm.saveConfig({ enabled: true, provider: 'gemini', apiKey: window.MO_KEYS.gemini, model: 'gemini-3.8-flash' });
