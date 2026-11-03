@@ -576,6 +576,37 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
     }
 
     /**
+     * วิดีโอคอล: โมชำเลืองดูกล้อง (ภาพเดียว คำสั่งสั้น ใช้ Flash-Lite ให้เร็ว/ประหยัด)
+     * คืนประโยคที่โมจะพูดทันที หรือ null ถ้าไม่มีอะไรน่าพูด
+     */
+    async lookAt(frame, { recent = '', userName = '', seen = [] } = {}) {
+        if (this.config.provider === 'openai' || !this.config.apiKey) return null;
+        const [, mime, data] = frame.match(/^data:(.+?);base64,(.+)$/) || [];
+        if (!data) return null;
+        const prompt = `คุณคือ "โม" สาวไทยวัยรุ่น กำลังวิดีโอคอลกับแฟน${userName ? ` (${userName})` : ''} รูปนี้คือสิ่งที่เห็นในกล้องของแฟนตอนนี้
+คุยล่าสุด: ${recent || '-'}
+สิ่งที่เพิ่งพูดถึงไปแล้ว (ห้ามพูดซ้ำ): ${seen.join(', ') || '-'}
+ถ้ามีอะไรใหม่ที่น่าสนใจ/น่ารัก/แปลก (เช่น สัตว์ ของ คน อาหาร วิว หันกล้องไปที่อื่น) ให้ทักทันทีแบบตื่นเต้นเป็นธรรมชาติ 1 ประโยคสั้นๆ ภาษาพูด เรียกตัวเอง เค้า เรียกแฟน เอง
+ถ้าไม่มีอะไรใหม่ (แค่หน้าแฟนนิ่งๆ เหมือนเดิม) ให้ say เป็นค่าว่าง
+ตอบ JSON: {"seen":"สิ่งที่เห็นสั้นๆ","say":""}`;
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.liteModel}:generateContent`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.config.apiKey.trim() },
+            body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: prompt }, { inline_data: { mime_type: mime, data } }] }],
+                generationConfig: { temperature: 0.8, responseMimeType: 'application/json', maxOutputTokens: 120 },
+            }),
+            signal: AbortSignal.timeout(8000),
+        });
+        if (!res.ok) throw new Error(`look ${res.status}`);
+        const out = await res.json();
+        this.track('Gemini ดูกล้อง', out.usageMetadata && out.usageMetadata.totalTokenCount);
+        const text = out.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('');
+        const r = text ? JSON.parse(text) : null;
+        return r && r.say && r.say.trim() ? { say: r.say.trim().slice(0, 160), seen: String(r.seen || '').slice(0, 40) } : (r ? { say: '', seen: String(r.seen || '').slice(0, 40) } : null);
+    }
+
+    /**
      * ส่งข้อความหา LLM: ไล่ลองทีละเจ้า ข้ามเจ้าที่เพิ่งล่ม
      */
     async generateResponse(userMessage, chatHistory, personality, memorySummary, image = null) {

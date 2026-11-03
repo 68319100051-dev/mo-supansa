@@ -145,6 +145,19 @@
         return brain.generateResponse(note + text, memory, chat.messages, llm);
     });
 
+    // ======= วิดีโอคอล: โมชำเลืองดูกล้อง ภาพเปลี่ยน → ทักเอง (เช่น ยกแมวมาให้ดู) =======
+    let seenInCall = [];
+    call.onLook = async (frame) => {
+        if (!call.isInCall) return null;
+        if (call.callDuration < 3) seenInCall = [];
+        const recent = chat.messages.filter(m => m.text && (!m.format || m.format === 'text')).slice(-3).map(m => m.text).join(' / ');
+        const r = await llm.lookAt(frame, { recent, userName: memory.getUserName(), seen: seenInCall.slice(-6) });
+        if (!r) return null;
+        if (r.seen) seenInCall.push(r.seen);
+        if (r.say) mind.see(`กล้องของเอง: ${r.seen}`);
+        return r.say || null;
+    };
+
     // ======= โทรหาโม: รับตามสถานการณ์จริง / โทรด่วน = รับแน่นอน =======
     call.canAnswer = ({ urgent, video }) => {
         const cur = life.state.current;

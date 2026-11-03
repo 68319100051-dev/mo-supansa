@@ -186,6 +186,70 @@ class MoCall {
         }
     }
 
+    // =============================================
+    //  โมดูกล้องตลอด: ภาพเปลี่ยนชัดๆ (ยกแมวมา หันกล้องไปที่อื่น) → ให้ AI ดูแล้วโมทักเอง
+    // =============================================
+
+    /** ภาพย่อ 32x24 ขาวดำ ไว้เทียบว่าภาพเปลี่ยนไปแค่ไหน */
+    thumb() {
+        const v = document.getElementById('self-view');
+        if (!this.camStream || !v || !v.videoWidth) return null;
+        this._thumbCanvas = this._thumbCanvas || Object.assign(document.createElement('canvas'), { width: 32, height: 24 });
+        const g = this._thumbCanvas.getContext('2d', { willReadFrequently: true });
+        g.drawImage(v, 0, 0, 32, 24);
+        const px = g.getImageData(0, 0, 32, 24).data;
+        const out = new Uint8Array(32 * 24);
+        for (let i = 0; i < out.length; i++) out[i] = (px[i * 4] * 3 + px[i * 4 + 1] * 6 + px[i * 4 + 2]) / 10;
+        return out;
+    }
+
+    sceneChange(a, b) {
+        if (!a || !b) return 1;
+        let changed = 0;
+        for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > 28) changed++;
+        return changed / a.length;
+    }
+
+    startWatching() {
+        this.stopWatching();
+        this._lastSeen = null;
+        this._lastLook = Date.now();
+        this._watch = setInterval(async () => {
+            if (!this.isInCall || !this.videoMode || this.isBusy || this._looking || !this.onLook) return;
+            const now = this.thumb();
+            if (!now) return;
+            const change = this.sceneChange(this._lastSeen, now);
+            // ภาพเปลี่ยน ≥ 25% (มีอะไรเข้ามาในกล้อง) และห่างจากครั้งก่อน ≥ 6 วิ / หรือเงียบนาน 45 วิ ก็ชำเลืองดูบ้าง
+            const quietLong = Date.now() - this._lastLook > 45000;
+            if ((change < 0.25 && !quietLong) || Date.now() - this._lastLook < 6000) {
+                if (!this._lastSeen) this._lastSeen = now;
+                return;
+            }
+            this._lastSeen = now;
+            this._lastLook = Date.now();
+            const frame = this.captureFrame();
+            if (!frame) return;
+            this._looking = true;
+            try {
+                const say = await this.onLook(frame, { change, quietLong });
+                if (say && this.isInCall && !this.isBusy) {
+                    this.stopListening();
+                    this.showTranscript('👀');
+                    this.moSays(say);
+                }
+            } catch (e) {
+                // ดูไม่สำเร็จ → ข้าม
+            } finally {
+                this._looking = false;
+            }
+        }, 1500);
+    }
+
+    stopWatching() {
+        clearInterval(this._watch);
+        this._watch = null;
+    }
+
     /**
      * ภาพจากกล้องตอนนี้ (JPEG เล็กๆ) ให้โมดูว่าเห็นอะไร — ไม่มีกล้อง → null
      */
@@ -265,6 +329,7 @@ class MoCall {
      */
     connectCall() {
         this.isInCall = true;
+        if (this.videoMode) this.startWatching();
         this.callStartTime = Date.now();
         this.callDuration = 0;
 
@@ -488,6 +553,7 @@ class MoCall {
      */
     endCall() {
         this.isInCall = false;
+        this.stopWatching();
         this.stopCamera();
         this.videoMode = false;
         this.callScreen.classList.remove('video-mode', 'speaking');
