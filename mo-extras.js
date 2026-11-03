@@ -147,7 +147,50 @@ const MoSongs = {
     },
 };
 
+// =============================================
+//  สติกเกอร์ & อีโมจิ
+// =============================================
+
+// สติกเกอร์ชุด "โม" (แบบ LINE: รูปใหญ่ + คำพูด) — id ใช้กับแท็ก [สติกเกอร์: id]
+const MO_STICKERS = [
+    { id: 'love', e: '🥰', t: 'รักนะ' }, { id: 'miss', e: '🥺', t: 'คิดถึง' }, { id: 'hug', e: '🫂', t: 'กอดๆ' },
+    { id: 'kiss', e: '😘', t: 'จุ๊บๆ' }, { id: 'heart', e: '💖', t: 'ใจให้เลย' }, { id: 'shy', e: '🙈', t: 'เขินอะ' },
+    { id: 'lol', e: '🤣', t: '555555' }, { id: 'wow', e: '😮', t: 'ห๊ะ!' }, { id: 'think', e: '🤔', t: 'อืมม' },
+    { id: 'sulk', e: '😤', t: 'งอนแล้ว' }, { id: 'angry', e: '😡', t: 'โกรธนะ' }, { id: 'cry', e: '😭', t: 'ฮือออ' },
+    { id: 'sorry', e: '🙏', t: 'ขอโทษน้า' }, { id: 'thanks', e: '🌷', t: 'ขอบคุณน้า' }, { id: 'ok', e: '👌', t: 'โอเคจ้า' },
+    { id: 'cheer', e: '💪', t: 'สู้ๆ นะ' }, { id: 'party', e: '🥳', t: 'เย้!' }, { id: 'hungry', e: '🤤', t: 'หิวว' },
+    { id: 'eat', e: '🍜', t: 'กินข้าวยัง' }, { id: 'morning', e: '☀️', t: 'อรุณสวัสดิ์' }, { id: 'sleepy', e: '😴', t: 'ง่วงแล้ว' },
+    { id: 'night', e: '🌙', t: 'ฝันดีนะ' }, { id: 'wait', e: '⏳', t: 'รอแป๊บ' }, { id: 'bye', e: '👋', t: 'ไปก่อนนะ' },
+];
+
+const MO_EMOJI = {
+    '😀': ['😀', '😁', '😂', '🤣', '😊', '🥰', '😍', '😘', '😚', '🙂', '😉', '😌', '😋', '😜', '🤪', '😎', '🥹', '🥺', '😢', '😭', '😤', '😡', '😳', '😱', '🤔', '🤭', '🙄', '😴', '🤤', '😇'],
+    '❤️': ['❤️', '🩷', '🧡', '💛', '💚', '💙', '💜', '🤍', '🖤', '💕', '💞', '💓', '💗', '💖', '💘', '💝', '💔', '❣️', '🫶', '💋'],
+    '👍': ['👍', '👎', '👌', '✌️', '🤞', '🤟', '👋', '🙏', '👏', '🙌', '💪', '🫂', '🤝', '🫵', '☝️', '👀'],
+    '🍜': ['🍜', '🍲', '🍛', '🍣', '🍕', '🍔', '🍟', '🍗', '🥟', '🍦', '🍰', '🎂', '🍩', '🍪', '🧋', '☕', '🍵', '🥤', '🍉', '🍓'],
+    '🐱': ['🐱', '🐶', '🐰', '🐻', '🐼', '🐨', '🐹', '🦊', '🐷', '🐸', '🐧', '🦄', '🐥', '🦋', '🌸', '🌷', '🌻', '🌈', '⭐', '✨'],
+};
+
+const MoStickers = {
+    byId(id) {
+        return MO_STICKERS.find(s => s.id === String(id || '').trim());
+    },
+    recentKey: 'mo_sticker_recent_v1',
+    recent() {
+        try { return JSON.parse(localStorage.getItem(this.recentKey) || '[]'); } catch (e) { return []; }
+    },
+    remember(id) {
+        try { localStorage.setItem(this.recentKey, JSON.stringify([id, ...this.recent().filter(x => x !== id)].slice(0, 10))); } catch (e) {}
+    },
+    promptList() {
+        return MO_STICKERS.map(s => `${s.id}=${s.e}${s.t}`).join(' ');
+    },
+};
+
 // Export
+window.MO_STICKERS = MO_STICKERS;
+window.MO_EMOJI = MO_EMOJI;
+window.MoStickers = MoStickers;
 window.MO_GIFTS = MO_GIFTS;
 window.MoGifts = MoGifts;
 window.MoFestivals = MoFestivals;

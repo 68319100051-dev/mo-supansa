@@ -3307,3 +3307,107 @@ button.mind-region-chip {
     font-weight: 600;
     text-decoration: none;
 }
+
+/* 😀 แผงสติกเกอร์ & อีโมจิ */
+.sticker-panel {
+    max-height: 46vh;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 12px 14px;
+}
+
+.sticker-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 10px;
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.sticker-tab {
+    flex-shrink: 0;
+    width: 40px;
+    height: 36px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    font-size: 1.2rem;
+    cursor: pointer;
+}
+
+.sticker-tab.active {
+    background: var(--pink-100);
+}
+
+.sticker-grid {
+    overflow-y: auto;
+}
+
+.sticker-grid.pack-grid {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.sticker-grid.emoji-grid {
+    grid-template-columns: repeat(8, 1fr);
+    gap: 2px;
+}
+
+.sticker-item.pack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 2px;
+}
+
+.sticker-item.pack span {
+    font-size: 2.1rem;
+    line-height: 1.1;
+}
+
+.sticker-item.pack small {
+    font-size: 0.68rem;
+    color: var(--text-secondary);
+}
+
+.emoji-item {
+    border: none;
+    background: transparent;
+    font-size: 1.45rem;
+    padding: 4px 0;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.emoji-item:active,
+.emoji-item:hover {
+    background: var(--pink-50);
+}
+
+.sticker-empty {
+    grid-column: 1 / -1;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* สติกเกอร์มีคำพูดในแชท */
+.message-sticker.with-caption {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: 3.4rem;
+}
+
+.sticker-caption {
+    padding: 2px 10px;
+    border-radius: var(--radius-full);
+    background: var(--bg-secondary);
+    border: 2px solid var(--pink-300);
+    color: var(--pink-600);
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.4;
+}

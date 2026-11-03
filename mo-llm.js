@@ -130,7 +130,7 @@ class MoLLMService {
         if (!m) return null;
         if (m.format === 'image') return { type: m.type, text: m.desc ? `[ส่งรูป: ${m.desc}]` : '[ส่งรูป]' };
         if (m.format === 'reel') return { type: m.type, text: `[ส่งคลิป: ${m.extra && m.extra.title ? m.extra.title : 'คลิป'}]` };
-        if (m.format === 'sticker') return { type: m.type, text: `[สติกเกอร์ ${m.text}]` };
+        if (m.format === 'sticker') return { type: m.type, text: `[สติกเกอร์ ${m.text}${m.extra && m.extra.caption ? ` "${m.extra.caption}"` : ''}]` };
         if (m.format === 'transfer') return { type: m.type, text: `[โอนเงินให้ ฿${m.extra ? m.extra.amount : ''}]` };
         if (m.format === 'voice') return { type: m.type, text: `[ข้อความเสียง: ${m.extra ? m.extra.text : ''}]` };
         if (m.format === 'song' && m.extra) return { type: m.type, text: `[ส่งเพลง: ${m.extra.artist} - ${m.extra.title}${m.extra.listened ? ' (เองกดฟังแล้ว)' : ''}]` };
@@ -202,6 +202,7 @@ ${this.pickStyleExamples(4)}
 - ความจำแบบคน: เรื่องเล็กๆ (ของกิน ร้าน ชื่อเกม) บางทีจำไม่ชัวร์ ถามยืนยันได้ เช่น "เอง เคยบอกว่า...ใช่ป่ะ" แต่เรื่องสำคัญ (ชื่อ วันเกิด เรื่องที่เองเศร้า/เครียด) ต้องจำแม่นเสมอ
 
 # ลูกเล่นเพิ่ม (ใช้นานๆ ครั้ง ไม่ต้องทุกข้อความ)
+- ส่งสติกเกอร์ (นานๆ ครั้ง ตอนอ้อน แซว ฝันดี ดีใจ): ใส่ [สติกเกอร์: id] ไว้บรรทัดสุดท้าย id ที่มี: ${window.MoStickers ? window.MoStickers.promptList() : ''}
 - ส่งเพลงที่ฟังอยู่/อยากให้เองฟัง (เมื่อคุยเรื่องเพลง อารมณ์ หรือเองขอ): ใส่ [เพลง: ศิลปิน - ชื่อเพลง] ไว้บรรทัดสุดท้าย ต้องเป็นเพลงที่มีอยู่จริงเท่านั้น ไม่ชัวร์ห้ามแต่ง ระบบจะส่งการ์ดเพลงให้ บอกด้วยว่าชอบท่อนไหน/ทำไมนึกถึงเอง
 - เผลอพิมพ์อะไรเขินๆ/หลุดปากแล้วอยากลบ (นานๆ ครั้งจริงๆ ประมาณ 1 ใน 25): ใส่ [ยกเลิก: ข้อความที่พิมพ์แล้วลบ] เป็นบรรทัดหนึ่ง ระบบจะส่งแล้วกดยกเลิกให้ ถ้าเองถามว่าพิมพ์อะไร ให้เลี่ยงๆ เขินๆ
 - กดรีแอคข้อความล่าสุดของเอง: ใส่ [รีแอค: อีโมจิ] (❤️ 😂 🥺 😮 😡 👍 อย่างใดอย่างหนึ่ง) ที่ไหนก็ได้ในคำตอบ

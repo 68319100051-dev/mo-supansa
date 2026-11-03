@@ -81,6 +81,45 @@ class MoChat {
      * Setup sticker grid
      */
     setupStickers() {
+        // แผง: แท็บสติกเกอร์โม / ล่าสุด / อีโมจิแต่ละหมวด (อีโมจิ = ใส่ลงช่องพิมพ์)
+        if (window.MO_STICKERS) {
+            const tabs = [['mo', '🐰'], ['recent', '🕘'], ...Object.keys(MO_EMOJI).map(k => [k, k])];
+            const panel = this.stickerPanel;
+            panel.innerHTML = `<div class="sticker-tabs">${tabs.map(([k, label], i) =>
+                `<button class="sticker-tab ${i === 0 ? 'active' : ''}" data-tab="${k}">${label}</button>`).join('')}</div>
+                <div class="sticker-grid" id="sticker-grid"></div>`;
+            this.stickerGrid = panel.querySelector('#sticker-grid');
+            const show = (tab) => {
+                panel.querySelectorAll('.sticker-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+                const isEmoji = Boolean(MO_EMOJI[tab]);
+                this.stickerGrid.className = `sticker-grid ${isEmoji ? 'emoji-grid' : 'pack-grid'}`;
+                const ids = tab === 'recent' ? MoStickers.recent() : MO_STICKERS.map(s => s.id);
+                this.stickerGrid.innerHTML = isEmoji
+                    ? MO_EMOJI[tab].map(e => `<button class="emoji-item" data-emoji="${e}">${e}</button>`).join('')
+                    : ids.map(id => MoStickers.byId(id)).filter(Boolean).map(s =>
+                        `<button class="sticker-item pack" data-sticker="${s.id}"><span>${s.e}</span><small>${s.t}</small></button>`).join('')
+                        || '<p class="sticker-empty">ยังไม่มีสติกเกอร์ที่ใช้ล่าสุด</p>';
+            };
+            panel.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const tab = e.target.closest('.sticker-tab');
+                if (tab) return show(tab.dataset.tab);
+                const emoji = e.target.closest('[data-emoji]');
+                if (emoji) {
+                    this.input.value += emoji.dataset.emoji;
+                    this.input.dispatchEvent(new Event('input'));
+                    return;
+                }
+                const st = e.target.closest('[data-sticker]');
+                if (st) {
+                    MoStickers.remember(st.dataset.sticker);
+                    this.stickerPanel.classList.add('hidden');
+                    this.sendSticker(MoStickers.byId(st.dataset.sticker));
+                }
+            });
+            show('mo');
+            return;
+        }
         this.stickerGrid.innerHTML = '';
         this.stickers.forEach(sticker => {
             const btn = document.createElement('button');
@@ -950,9 +989,24 @@ class MoChat {
      * Send a sticker
      */
     sendSticker(sticker) {
+        // สติกเกอร์ชุดโม (มีคำพูด) → โมเข้าใจความหมายแล้วตอบด้วย AI
+        if (sticker && typeof sticker === 'object') {
+            this.addMessage('sent', sticker.e, 'sticker', { id: sticker.id, caption: sticker.t });
+            this.memory.incrementMessages();
+            this.awaitingReply = false;
+            if (this.llmService && this.llmService.isReady()) {
+                this.queueReply(note => this.moRespond(`${note}[ข้อความระบบ: เองส่งสติกเกอร์ ${sticker.e} "${sticker.t}" มา — ตอบสั้นๆ ตามความหมาย อาจตอบกลับเป็นสติกเกอร์ด้วย [สติกเกอร์: id] ก็ได้]`));
+                return;
+            }
+            sticker = sticker.e;
+            return this.sendStickerFallback();
+        }
         this.addMessage('sent', sticker, 'sticker');
         this.memory.incrementMessages();
+        this.sendStickerFallback();
+    }
 
+    sendStickerFallback() {
         // Mo responds to sticker
         setTimeout(() => {
             this.showTyping();
@@ -1045,6 +1099,14 @@ class MoChat {
             }
             return '';
         });
+
+        // [สติกเกอร์: id] = โมส่งสติกเกอร์ชุดโม (ตามหลังข้อความ)
+        let moSticker = null;
+        response = response.replace(/\[\s*สติกเกอร์\s*:?\s*([^\]]*)\]/g, (_, id) => {
+            moSticker = window.MoStickers && MoStickers.byId(id);
+            return '';
+        });
+        if (moSticker) setTimeout(() => this.addMessage('received', moSticker.e, 'sticker', { id: moSticker.id, caption: moSticker.t }), 1200 + Math.random() * 1000);
 
         // [เพลง: ศิลปิน - ชื่อเพลง] = โมส่งการ์ดเพลง (ส่งตามหลังข้อความ)
         let song = null;
@@ -1350,7 +1412,8 @@ ${moToday.length ? `ที่โมพูดไปแล้ววันนี้
         let bubbleContent = '';
 
         if (msg.format === 'sticker') {
-            bubbleContent = `<div class="message-bubble message-sticker">${msg.text}</div>`;
+            const cap = msg.extra && msg.extra.caption ? `<span class="sticker-caption">${String(msg.extra.caption).replace(/</g, '&lt;')}</span>` : '';
+            bubbleContent = `<div class="message-bubble message-sticker${cap ? ' with-caption' : ''}">${msg.text}${cap}</div>`;
         } else if (msg.format === 'reel' && msg.extra) {
             const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
             bubbleContent = `
