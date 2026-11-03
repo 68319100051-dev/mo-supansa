@@ -101,7 +101,7 @@ class MoLLMService {
         return (chatHistory || [])
             .map(m => {
                 if (!m) return null;
-                if (m.format === 'image') return { type: m.type, text: '[ส่งรูป]' };
+                if (m.format === 'image') return { type: m.type, text: m.desc ? `[ส่งรูป: ${m.desc}]` : '[ส่งรูป]' };
                 if (m.format === 'reel') return { type: m.type, text: `[ส่งคลิป: ${m.extra && m.extra.title ? m.extra.title : 'คลิป'}]` };
                 if (m.format === 'sticker') return { type: m.type, text: `[สติกเกอร์ ${m.text}]` };
                 if (m.format === 'transfer') return { type: m.type, text: `[โอนเงินให้ ฿${m.extra ? m.extra.amount : ''}]` };
@@ -186,7 +186,7 @@ ${window.MoLifeInstance.describeNow()}${window.MoWeather && window.MoWeather.des
 ${memorySummary && memorySummary.chatSummary ? `# สรุปที่คุยกันก่อนหน้านี้ (เก่ากว่าแชทที่เห็น)
 ${memorySummary.chatSummary}
 
-` : ''}${window.MoDiaryInstance ? window.MoDiaryInstance.recentForPrompt() : ''}# ความจำจากแชท
+` : ''}${window.MoDiaryInstance ? window.MoDiaryInstance.recentForPrompt() : ''}${window.MoSelfInstance ? window.MoSelfInstance.promptSection() : ''}# ความจำจากแชท
 ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่มี'}
 
 หยิบเรื่องที่จำได้มาพูดเมื่อเกี่ยวกับที่คุย ทีละเรื่อง ตอบเป็นข้อความแชทของโมเท่านั้น ไม่ใส่ "โม:" นำหน้า`;

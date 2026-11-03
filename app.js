@@ -58,6 +58,13 @@
         return true;
     };
 
+    // ตัวตนของโม: ความเห็น มุกของเรา รูปที่เคยเห็น สรุปรายสัปดาห์ วันแย่ของโม
+    const self = new MoSelf();
+    window.MoSelfInstance = self;
+    chat.self = self;
+    // "สถานะหลังบ้านเป็นไง" → โมไล่เช็คระบบตัวเอง
+    chat.statusContext = () => ({ llm, sync: window.MoSyncInstance, memory, routines, reminders, self });
+
     // ไดอารี่ของโม
     const diary = new MoDiary(memory, brain, llm);
     window.MoDiaryInstance = diary;
@@ -336,6 +343,7 @@
         if (has('mo_reminders_v1')) reminders.reminders = reminders.load();
         if (has('mo_routines_v1')) routines.routines = routines.load();
         if (has('mo_followups_v1')) routines.followUps = routines.loadFollowUps();
+        if (has('mo_self_v1')) self.data = self.load();
         if (has('mo_clips_v1')) {
             reels.reels = [...reels.reels.filter(r => r.from === 'mo'), ...reels.loadUserClips()];
             reels.renderReels();
@@ -697,6 +705,14 @@
     imageInput.addEventListener('change', () => {
         const file = imageInput.files[0];
         imageInput.value = '';
+        if (file) chat.sendImage(file);
+    });
+    // กล้อง: มือถือเปิดกล้องถ่ายทันที (คอมจะเปิดหน้าต่างเลือกไฟล์แทน)
+    const cameraInput = document.getElementById('camera-input');
+    document.getElementById('btn-camera').addEventListener('click', () => cameraInput.click());
+    cameraInput.addEventListener('change', () => {
+        const file = cameraInput.files[0];
+        cameraInput.value = '';
         if (file) chat.sendImage(file);
     });
 

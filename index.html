@@ -168,6 +168,12 @@
                     </svg>
                 </button>
                 <button class="input-icon-btn input-emoji-btn" id="btn-transfer" title="โอนเงินให้โม">💸</button>
+                <button class="input-icon-btn" id="btn-camera" title="ถ่ายรูปส่งให้โม">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                    </svg>
+                </button>
                 <button class="input-icon-btn" id="btn-image" title="ส่งรูป/คลิป">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -177,6 +183,7 @@
                 </button>
             </div>
             <input type="file" id="image-input" accept="image/*,video/*" hidden>
+            <input type="file" id="camera-input" accept="image/*" capture="environment" hidden>
             <div class="input-wrapper">
                 <input type="text" id="message-input" placeholder="พิมพ์ข้อความ..." autocomplete="off">
             </div>
@@ -461,6 +468,8 @@
     <script src="mo-mind-ui.js"></script>
     <script src="mo-reminders.js"></script>
     <script src="mo-routines.js"></script>
+    <script src="mo-self.js"></script>
+    <script src="mo-status.js"></script>
     <script src="mo-diary.js"></script>
     <script src="app.js"></script>
 </body>

@@ -149,6 +149,12 @@ class MoChat {
         this.memory.updateLastChat();
         this.memory.increaseAffection(1);
 
+        // ถามสถานะหลังบ้าน → โมไล่เช็คระบบจริงแล้วรายงาน (ไม่ใช้ AI ตอบ)
+        if (window.MoStatus && this.statusContext && MoStatus.isAsking(text)) {
+            this.queueReply(() => this.reportStatus());
+            return;
+        }
+
         // ขอให้เตือน → โมรับเรื่องแทนการคุยปกติ
         const reminder = this.reminders && this.reminders.parse(text);
         if (reminder) {
@@ -186,6 +192,25 @@ class MoChat {
             return `[ข้อความระบบ: เองหายไป ${goneH >= 48 ? Math.round(goneH / 24) + ' วัน' : 'ทั้งวัน'} ไม่ได้ทักมาเลย — โมคิดถึงและงอนนิดๆ แบบน่ารัก ถามว่าหายไปไหนมา]\n`;
         }
         return '';
+    }
+
+    async reportStatus() {
+        this.showTyping();
+        this.mind && this.mind.decide('เช็คระบบหลังบ้านให้เอง');
+        let lines;
+        try {
+            lines = await MoStatus.report(this.statusContext());
+        } catch (e) {
+            lines = [`เช็คไม่สำเร็จอ่ะ ${e.message} 🥺`];
+        }
+        for (let i = 0; i < lines.length; i++) {
+            this.hideTyping();
+            this.addMessage('received', lines[i]);
+            if (i + 1 < lines.length) {
+                this.showTyping();
+                await new Promise(r => setTimeout(r, 600));
+            }
+        }
     }
 
     /**
@@ -228,6 +253,10 @@ class MoChat {
             // สรุปแชทเก่าที่ AI มองไม่เห็นแล้ว (จะทำจริงเมื่อมีแชทใหม่หลุดหน้าต่างพอ)
             .then(() => this.memory.summarizeOldChat(this.llmService, this.messages))
             .catch(err => console.warn('summarizeOldChat failed:', err.message))
+            // ตัวตนของโม + มุกของเรา, สรุปรายสัปดาห์ (ทำจริงสัปดาห์ละครั้ง)
+            .then(() => this.self && this.self.learn(this.llmService, this.messages, this.memory.getUserName()))
+            .then(() => this.self && this.self.weeklySummary(this.llmService, this.messages, this.memory.getUserName()))
+            .catch(err => console.warn('self learn failed:', err.message))
             .finally(() => { this.learning = false; });
     }
 
@@ -518,7 +547,7 @@ class MoChat {
         this.awaitingReply = false;
 
         this.queueReply(note => this.mediaReply(
-            `${note}${caption || 'ส่งรูปนี้ให้ดู'}\n(ผู้ใช้ส่งรูปมา ดูรูปแล้วคอมเมนต์สั้นๆ แบบโม 1-3 ประโยค พูดถึงสิ่งที่เห็นในรูปจริงๆ)`,
+            `${note}${caption || 'ส่งรูปนี้ให้ดู'}\n(ผู้ใช้ส่งรูปมา ดูรูปแล้วคอมเมนต์สั้นๆ แบบโม 1-3 ประโยค พูดถึงสิ่งที่เห็นในรูปจริงๆ แล้วใส่ [จำรูป: รูปอะไร สั้นๆ ไม่เกิน 12 คำ] ไว้บรรทัดสุดท้าย)`,
             dataUrl, this.brain.imageResponses));
     }
 
@@ -837,6 +866,17 @@ class MoChat {
         // (AI บางทีเลียนแบบรูปแบบในประวัติแชทเป็น [ส่งคลิป: ...] → รับทั้งสองแบบ)
         response = response.replace(/\[\s*(?:ส่ง)?คลิป\s*:?\s*([^\]]*)\]/g, (_, topic) => {
             clipTopic = topic.trim();
+            return '';
+        });
+
+        // [จำรูป: ...] = คำอธิบายรูปที่เองเพิ่งส่ง → จำไว้พูดถึงทีหลัง
+        response = response.replace(/\[\s*จำรูป\s*:?\s*([^\]]*)\]/g, (_, desc) => {
+            const img = [...this.messages].reverse().find(m => m.type === 'sent' && m.format === 'image');
+            if (img && desc.trim()) {
+                img.desc = desc.trim().slice(0, 80);
+                this.saveHistory();
+                if (this.self) this.self.rememberPhoto(img.desc);
+            }
             return '';
         });
 
