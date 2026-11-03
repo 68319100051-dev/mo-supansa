@@ -3146,3 +3146,54 @@ button.mind-region-chip {
 .input-wrapper {
     min-width: 0;
 }
+
+/* 🏡 บ้านตุ๊กตา isometric */
+.house-view {
+    display: block;
+    width: 100%;
+    height: auto;
+    margin-top: 6px;
+    border-radius: var(--radius-md);
+    background: linear-gradient(180deg, #fdf1f5, #f7e7dc);
+}
+
+.house-view.night {
+    background: linear-gradient(180deg, #23203a, #3a3352);
+}
+
+.hv-label {
+    font-size: 9px;
+    font-weight: 600;
+    fill: #8a6d7b;
+    text-anchor: middle;
+    paint-order: stroke;
+    stroke: rgba(255, 255, 255, 0.85);
+    stroke-width: 3px;
+}
+
+.house-view.night .hv-label {
+    fill: #e8dff5;
+    stroke: rgba(30, 26, 50, 0.8);
+}
+
+.hv-zzz {
+    font-size: 11px;
+    font-weight: 700;
+    fill: #8b7bd8;
+}
+
+.hv-phone,
+.hv-sky {
+    font-size: 15px;
+}
+
+.hv-out-t {
+    font-size: 11px;
+    font-weight: 700;
+    fill: #f04d85;
+}
+
+.hv-out-s {
+    font-size: 9px;
+    fill: #8a6d7b;
+}

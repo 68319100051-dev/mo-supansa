@@ -980,26 +980,6 @@
         const asleep = c.id === 'sleep';
         const spot = MO_SPOTS[c.id];
         const sky = window.MoWeather && window.MoWeather.isRaining() ? '🌧️' : night ? '🌙' : '☀️';
-        const room = (key) => {
-            const r = MO_ROOMS[key];
-            const here = c.room === key;
-            const phoneHere = phoneRoom === key && c.phone !== 'with';
-            const lit = here && !asleep;
-            if (key === 'out') {
-                return `<div class="house-room outside ${here ? 'here' : ''}">
-                    <span>${r.emoji} ${here ? esc(c.place || 'ข้างนอก') : 'ข้างนอก'}</span>
-                    <div class="house-room-tokens">${here ? '<img src="mo_avatar.jpg" alt="โม">' : ''}</div></div>`;
-            }
-            // ของในห้อง: โมอยู่ที่ของชิ้นที่กำลังใช้ (ไม่มี → อยู่ท้ายห้อง)
-            const items = MO_FURNITURE[key].map(f => {
-                const mo = here && f === spot;
-                return `<span class="house-item ${mo ? 'mo-spot' : ''}">${f === '🪟' ? sky : f}${mo ? '<img src="mo_avatar.jpg" alt="โม">' : ''}</span>`;
-            }).join('');
-            const moLoose = here && !MO_FURNITURE[key].includes(spot) ? '<span class="house-item mo-spot"><img src="mo_avatar.jpg" alt="โม"></span>' : '';
-            return `<div class="house-room room-${key} ${here ? 'here' : ''} ${lit ? 'lit' : ''}">
-                <span>${r.emoji} ${r.name}${asleep && here ? ' 💤' : ''}</span>
-                <div class="house-items">${items}${moLoose}${phoneHere ? '<span class="house-item">📱</span>' : ''}</div></div>`;
-        };
         const leftMin = Math.max(1, Math.round((c.endsAt - Date.now()) / 60000));
         const leftText = asleep ? `น่าจะตื่นราว ${fmt(c.endsAt)}` : leftMin > 90 ? `อีกนานเลย` : `อีกประมาณ ${leftMin} นาที`;
         const bar = (label, value) => `<div class="house-bar"><span>${label}</span>
@@ -1023,7 +1003,7 @@
             </div>
             <div class="house-card">
                 <h3>แผนผังบ้าน ${night ? '🌙 กลางคืน' : '☀️ กลางวัน'}${window.MoWeather && window.MoWeather.describe() ? ` • ${esc(window.MoWeather.describe())}` : ''}</h3>
-                <div class="house-map ${night ? 'night' : ''}">${['bedroom', 'living', 'kitchen', 'bathroom', 'balcony', 'out'].map(room).join('')}</div>
+                ${MoHouseView.render(life, { night, spot, phoneRoom, rain: window.MoWeather && window.MoWeather.isRaining() })}
             </div>
             <div class="house-card">
                 <h3>สภาพโมตอนนี้</h3>
