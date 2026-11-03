@@ -18,3 +18,9 @@ docs
 package.json
 package-lock.json
 capacitor.config.json
+android
+native-www
+docs
+package.json
+package-lock.json
+capacitor.config.json
