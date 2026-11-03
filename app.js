@@ -345,6 +345,13 @@
         if (has('mo_followups_v1')) routines.followUps = routines.loadFollowUps();
         if (has('mo_self_v1')) self.data = self.load();
         if (has('mo_profile_v1')) MoConfig.reloadProfile();
+        // คีย์ AI จากเครื่องอื่นในบัญชีเดียวกัน → มือถือไม่ต้องกรอกเอง
+        if (has('mo_device_keys_v1')) {
+            window.MO_KEYS = { ...window.MO_KEYS, ...MoConfig.loadKeys() };
+            if (!llm.config.apiKey && window.MO_KEYS.gemini) {
+                llm.saveConfig({ enabled: true, provider: 'gemini', apiKey: window.MO_KEYS.gemini, model: 'gemini-3.8-flash' });
+            }
+        }
         if (has('mo_clips_v1')) {
             reels.reels = [...reels.reels.filter(r => r.from === 'mo'), ...reels.loadUserClips()];
             reels.renderReels();
@@ -353,6 +360,7 @@
 
     // เครื่องที่มี mo-keys.local.js → ส่งโปรไฟล์ขึ้นซิงก์ให้มือถือรู้ด้วย
     MoConfig.shareProfile();
+    MoConfig.shareKeys();
 
     // เครื่องใหม่ (เช่นมือถือที่เปิดจากโฮส): กรอก Supabase เองครั้งแรก
     document.getElementById('sync-url').value = window.MO_KEYS.supabaseUrl || '';

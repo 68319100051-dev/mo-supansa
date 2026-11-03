@@ -1,7 +1,8 @@
 /* ============================================
    Mo Config 🔑 - คีย์ & ข้อมูลส่วนตัว แบบเก็บในเครื่อง
    - เวอร์ชันบนโฮสไม่มี mo-keys.local.js (ไม่อยู่ใน git) → กรอกคีย์ในหน้าตั้งค่าของแต่ละเครื่องแทน
-   - คีย์อยู่ใน localStorage ของเครื่องนั้นเท่านั้น ไม่ซิงก์ ไม่อัปขึ้นโฮส
+   - คีย์อยู่ใน localStorage และซิงก์ผ่านบัญชี Supabase ของเอง (ไม่อยู่ในโค้ดบนโฮส)
+     → มือถือแค่ใส่ Supabase + ล็อกอิน ก็ได้คีย์ AI ตามมาเอง
    - MO_PROFILE (เรื่องที่โมรู้ตั้งแต่แรก) ซิงก์ผ่าน Supabase → มือถือรู้เรื่องเดียวกับคอม
    ต้องโหลดหลัง mo-keys.local.js และก่อน mo-sync.js
    ============================================ */
@@ -31,7 +32,8 @@ const MoConfig = {
         const fileKeys = {};
         this.fields.forEach(f => { if (window.MO_KEYS && window.MO_KEYS[f]) fileKeys[f] = window.MO_KEYS[f]; });
         window.MO_KEYS = { ...this.loadKeys(), ...fileKeys };
-        if (Object.keys(fileKeys).length) this.saveKeys(fileKeys);
+        this.hasFileKeys = Object.keys(fileKeys).length > 0;
+        if (this.hasFileKeys) this.saveKeys(fileKeys);
 
         if (window.MO_PROFILE) return;
         try {
@@ -49,6 +51,14 @@ const MoConfig = {
         try {
             if (localStorage.getItem(this.profileKey) !== json) localStorage.setItem(this.profileKey, json);
         } catch (e) {}
+    },
+
+    /**
+     * เรียกหลัง MoSync พร้อมแล้ว: เครื่องที่มี mo-keys.local.js → ส่งคีย์ขึ้นบัญชีให้มือถือ
+     */
+    shareKeys() {
+        if (!this.hasFileKeys) return;
+        try { localStorage.setItem(this.keysKey, JSON.stringify(this.loadKeys())); } catch (e) {}
     },
 
     reloadProfile() {
