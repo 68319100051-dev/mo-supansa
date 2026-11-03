@@ -144,6 +144,16 @@ const MoHouseView = {
         for (let x = 0.3; x < 10.8; x += 0.75) g += B(x, 3.9, 4.8, 0.06, 0.06, 1.1, '#2d2d2d');
         g += B(0, 3.88, 5.9, 10.8, 0.1, 0.08, '#2d2d2d');
 
+        // ---- ของขวัญจากเอง + ของแต่งตามเทศกาล ----
+        const item = (x, y, z, emoji, size = 15, cls = 'hv-gift') => {
+            const [sx, sy] = this.iso(x, y, z);
+            return `<text x="${sx}" y="${sy}" class="${cls}" style="font-size:${size}px">${emoji}</text>`;
+        };
+        (opts.gifts || []).forEach(gf => { g += item(...gf.pos, gf.emoji); });
+        if (opts.festival) {
+            g += item(1.0, 8.6, 0, opts.festival.decor, 20, 'hv-decor') + item(3.6, 3.6, 4.8, opts.festival.decor, 18, 'hv-decor');
+        }
+
         // ---- ไฟห้องที่โมอยู่ (กลางคืน) ----
         if (night && !asleep && this.centers[c.room]) {
             const [gx, gy] = this.iso(...this.centers[c.room]);

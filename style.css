@@ -3206,3 +3206,104 @@ button.mind-region-chip {
     border: 1px dashed var(--pink-200) !important;
     box-shadow: none !important;
 }
+
+/* 🎁 ร้านของขวัญ */
+.gift-shop {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.gift-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 10px 6px;
+    border: 1px solid var(--pink-100);
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    font: inherit;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.gift-item small {
+    color: var(--text-pink);
+    font-weight: 600;
+}
+
+.gift-item.owned {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.gift-emoji {
+    font-size: 1.6rem;
+}
+
+.house-card h3 small {
+    float: right;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.hv-gift,
+.hv-decor {
+    text-anchor: middle;
+}
+
+/* 🎵 การ์ดเพลง */
+.message-bubble.message-song {
+    display: grid;
+    grid-template-columns: 44px 1fr;
+    gap: 6px 10px;
+    align-items: center;
+    min-width: 220px;
+}
+
+.song-art {
+    grid-row: span 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #f04d85, #a97aff);
+    font-size: 1.3rem;
+}
+
+.song-info {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.song-info strong,
+.song-info span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.song-info span {
+    font-size: 0.78rem;
+    opacity: 0.7;
+}
+
+.song-links {
+    display: flex;
+    gap: 6px;
+}
+
+.song-links a {
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    background: var(--pink-50);
+    color: var(--pink-600);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-decoration: none;
+}

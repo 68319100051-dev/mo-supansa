@@ -388,6 +388,19 @@
         mind.decide(`เงียบกันไปนาน + อารมณ์${mind.emotion().label} → ทักไปก่อน`);
         nextGapMs = randomGap();
 
+        // วันเทศกาล: ทักวันละครั้ง
+        const fest = MoFestivals.takeGreeting('mo_festival_greeted_v1');
+        if (fest) {
+            chat.sendProactiveMessage(`วันนี้เป็น${fest.name} ${fest.emoji}`,
+                `ทักเรื่อง${fest.name}แบบตื่นเต้น อวยพร/ชวนทำกิจกรรมตามเทศกาล (${fest.idea}) เหมือนแฟนที่รอวันนี้อยู่`);
+            return;
+        }
+        // บางทีกำลังฟังเพลงอยู่ → ส่งเพลงมาให้ฟัง
+        if (life.state.current && life.state.current.id === 'music' && Math.random() < 0.5) {
+            chat.sendProactiveMessage(`โมกำลัง${life.state.current.label} แล้วอยากแชร์เพลงที่ฟังอยู่ให้เอง`,
+                'เล่าว่าฟังเพลงอะไรอยู่ ชอบท่อนไหน แล้วส่งเพลงนั้นด้วย [เพลง: ศิลปิน - ชื่อเพลง] (เพลงที่มีจริงเท่านั้น)');
+            return;
+        }
         // วันละครั้ง: คำถามประจำวัน
         const daily = games.takeDailyQuestion();
         if (daily) {
@@ -1031,7 +1044,15 @@
             </div>
             <div class="house-card">
                 <h3>แผนผังบ้าน ${night ? '🌙 กลางคืน' : '☀️ กลางวัน'}${window.MoWeather && window.MoWeather.describe() ? ` • ${esc(window.MoWeather.describe())}` : ''}</h3>
-                ${MoHouseView.render(life, { night, spot, phoneRoom, rain: window.MoWeather && window.MoWeather.isRaining() })}
+                ${MoHouseView.render(life, { night, spot, phoneRoom, rain: window.MoWeather && window.MoWeather.isRaining(), gifts: MoGifts.owned(life), festival: MoFestivals.upcoming() })}
+            </div>
+            <div class="house-card">
+                <h3>🎁 ร้านของขวัญ <small>เงินเรา ฿${s.userWallet.toLocaleString()}</small></h3>
+                <div class="gift-shop">${MO_GIFTS.map(gf => {
+                    const has = (s.gifts || []).some(x => x.id === gf.id);
+                    return `<button class="gift-item ${has ? 'owned' : ''}" data-gift="${gf.id}" ${has ? 'disabled' : ''}>
+                        <span class="gift-emoji">${gf.emoji}</span><span>${esc(gf.name)}</span><small>${has ? 'โมมีแล้ว 💕' : `฿${gf.price}`}</small></button>`;
+                }).join('')}</div>
             </div>
             <div class="house-card">
                 <h3>สภาพโมตอนนี้</h3>
@@ -1054,6 +1075,17 @@
                     `<div class="house-log-item"><time>${fmt(l.at)}</time><span>${l.emoji}</span><span>${esc(l.text)}</span></div>`).join('')}</div>
             </div>`;
         document.getElementById('house-transfer').addEventListener('click', openTransfer);
+        document.querySelectorAll('[data-gift]').forEach(btn => btn.addEventListener('click', () => {
+            const gift = MO_GIFTS.find(g => g.id === btn.dataset.gift);
+            if (!confirm(`ซื้อ${gift.name} ให้โม ฿${gift.price}?`)) return;
+            const r = MoGifts.buy(life, gift.id);
+            if (r.error) return chat.showNotification(r.error);
+            mind.decide(`ได้${gift.name}จากเอง ดีใจมาก`);
+            renderHouse();
+            houseScreen.classList.add('hidden');
+            chat.addSystemMessage(`🎁 ส่ง${gift.name}ให้โมแล้ว`);
+            chat.queueReply(note => chat.moRespond(`${note}[ข้อความระบบ: เองเพิ่งซื้อ "${gift.name}" ${gift.emoji} ให้โม (฿${gift.price}) — ดีใจมาก ขอบคุณแบบอ้อนๆ บอกว่าจะเอาไป${gift.note}]`));
+        }));
         document.getElementById('house-urgent').addEventListener('click', () => {
             const reason = prompt('เรื่องด่วนอะไร? (ไม่ใส่ก็ได้ โมจะถามเอง)', '');
             if (reason === null) return;

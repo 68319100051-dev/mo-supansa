@@ -279,6 +279,7 @@ class MoChat {
 
     snippetOf(msg) {
         if (msg.format === 'image') return '📷 รูปภาพ';
+        if (msg.format === 'song') return `🎵 ${msg.extra ? msg.extra.title : 'เพลง'}`;
         if (msg.format === 'reel') return `🎬 ${msg.extra ? msg.extra.title : 'คลิป'}`;
         return msg.text.length > 80 ? msg.text.slice(0, 80) + '…' : msg.text;
     }
@@ -519,6 +520,12 @@ class MoChat {
         this.container.addEventListener('click', (e) => {
             const quote = e.target.closest('.reply-quote');
             if (quote) this.scrollToMessage(quote.dataset.replyId);
+
+            // กดฟังเพลงที่โมส่ง
+            const songLink = e.target.closest('[data-song]');
+            if (songLink) {
+                this.songOpened(this.messages.find(m => String(m.id) === songLink.closest('.message').dataset.id));
+            }
 
             // กดเล่นข้อความเสียง
             const voiceBtn = e.target.closest('.voice-play');
@@ -807,6 +814,24 @@ class MoChat {
         return `[ข้อความระบบ: เองยังไม่ได้เปิดดูคลิป "${msg.extra && msg.extra.title}" ที่โมส่งไป — ถ้าเข้าจังหวะ แซวหรืองอนนิดๆ ว่าไม่ดูคลิปเค้า (ไม่ต้องทุกครั้ง)]\n`;
     }
 
+    sendSong(song) {
+        this.mind && this.mind.act(`แชร์เพลง ${song.artist} - ${song.title}`);
+        this.addMessage('received', '', 'song', { ...song, ...MoSongs.links(song.artist, song.title) });
+    }
+
+    /**
+     * เองกดฟังเพลงที่โมส่ง → สักพักโมถามว่าเป็นไง (ครั้งเดียวต่อเพลง)
+     */
+    songOpened(msg) {
+        if (!msg || msg.type !== 'received' || msg.extra.listened) return;
+        msg.extra.listened = true;
+        this.saveHistory();
+        setTimeout(() => {
+            if (this.isTyping) return;
+            this.queueReply(note => this.moRespond(`${note}[ข้อความระบบ: เองเพิ่งกดไปฟังเพลง "${msg.extra.artist} - ${msg.extra.title}" ที่โมส่ง — ถามว่าเป็นไง ชอบมั้ย ท่อนไหน แล้วเล่าว่าโมชอบท่อนไหน สั้นๆ 1-2 บรรทัด]`));
+        }, 3 * 60000);
+    }
+
     /**
      * โมส่งแล้วกดยกเลิกข้อความ (หลังไม่กี่วิ) — เองเห็นแค่ว่า "โมยกเลิกข้อความ"
      */
@@ -1020,6 +1045,14 @@ class MoChat {
             }
             return '';
         });
+
+        // [เพลง: ศิลปิน - ชื่อเพลง] = โมส่งการ์ดเพลง (ส่งตามหลังข้อความ)
+        let song = null;
+        response = response.replace(/\[\s*เพลง\s*:?\s*([^\]]*)\]/g, (_, raw) => {
+            song = window.MoSongs && MoSongs.parse(raw);
+            return '';
+        });
+        if (song) setTimeout(() => this.sendSong(song), 1800 + Math.random() * 1200);
 
         // [ยกเลิก: ...] = โมส่งข้อความนี้แล้วกดยกเลิก (เหลือแค่ "ยกเลิกข้อความ")
         let unsendText = null;
@@ -1353,6 +1386,17 @@ ${moToday.length ? `ที่โมพูดไปแล้ววันนี้
                     ${msg.extra.note ? `<div class="transfer-note">${esc(msg.extra.note)}</div>` : ''}
                 </div>
             `;
+        } else if (msg.format === 'song' && msg.extra) {
+            const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            bubbleContent = `
+                <div class="message-bubble message-song">
+                    <div class="song-art">🎵</div>
+                    <div class="song-info"><strong>${esc(msg.extra.title)}</strong><span>${esc(msg.extra.artist)}</span></div>
+                    <div class="song-links">
+                        <a href="${esc(msg.extra.youtube)}" target="_blank" rel="noopener" data-song="yt">▶ YouTube</a>
+                        <a href="${esc(msg.extra.spotify)}" target="_blank" rel="noopener" data-song="sp">Spotify</a>
+                    </div>
+                </div>`;
         } else if (msg.unsent) {
             bubbleContent = '<div class="message-bubble message-unsent">🚫 โมยกเลิกข้อความ</div>';
         } else if (msg.format === 'image') {
