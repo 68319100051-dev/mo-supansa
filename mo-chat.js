@@ -123,7 +123,7 @@ class MoChat {
         // Add user message (พร้อมข้อความที่ตอบกลับ ถ้ามี)
         const replyTo = this.replyTo;
         this.mind && this.mind.perceive(text);
-        const sulkNote = this.sulkNote();
+        const sulkNote = this.sulkNote() + this.userMoodNote(text);
         this.awaitingReply = false;
 
         // ลิงก์ YouTube → ส่งเป็นคลิปให้โมดู
@@ -186,6 +186,35 @@ class MoChat {
             return `[ข้อความระบบ: เองหายไป ${goneH >= 48 ? Math.round(goneH / 24) + ' วัน' : 'ทั้งวัน'} ไม่ได้ทักมาเลย — โมคิดถึงและงอนนิดๆ แบบน่ารัก ถามว่าหายไปไหนมา]\n`;
         }
         return '';
+    }
+
+    /**
+     * โมสังเกตอารมณ์ของเอง: คำที่ใช้ + ข้อความสั้นผิดปกติ + ตอบห้วนติดกัน (ต้องเรียกก่อนเพิ่มข้อความใหม่)
+     */
+    userMoodNote(text) {
+        const t = text.trim();
+        const signals = [];
+        const moods = [
+            [/เหนื่อย|ล้า|หมดแรง|ไม่ไหว|เพลีย/, 'เหนื่อย', 'ให้กำลังใจ อ่อนโยน ไม่แซวแรง ไม่ชวนทำอะไรเพิ่ม'],
+            [/เครียด|กดดัน|กังวล|ปวดหัว|งานเยอะ|โดนด่า/, 'เครียด', 'รับฟังก่อน ถามว่าเกิดอะไรขึ้น ไม่รีบแนะนำ ไม่ทำเป็นเรื่องตลก'],
+            [/เศร้า|ร้องไห้|เสียใจ|น้อยใจ|เหงา|ท้อ|แย่มาก|😢|😭|🥺/, 'เศร้า', 'อยู่ข้างๆ ปลอบแบบจริงใจ ไม่เปลี่ยนเรื่อง ห้ามแซว'],
+            [/โกรธ|หงุดหงิด|โมโห|รำคาญ|เซ็ง|😡|😤/, 'หงุดหงิด', 'เข้าข้างเองก่อน ให้ระบาย ไม่สอน ไม่ทำเสียงร่าเริงเกิน'],
+            [/ดีใจ|เย้|ได้แล้ว|ผ่านแล้ว|สำเร็จ|ปัง|555|😆|🥳/, 'อารมณ์ดี', 'ดีใจด้วยเต็มที่ ถามรายละเอียด ตื่นเต้นไปด้วย'],
+        ];
+        const hit = moods.find(([re]) => re.test(t));
+        if (hit) signals.push(`เองดู${hit[1]} → ${hit[2]}`);
+
+        // ตอบห้วนหลายข้อความติดกัน ทั้งที่ปกติพิมพ์ยาว → อาจไม่โอเค
+        const sent = this.messages.filter(m => m.type === 'sent' && (!m.format || m.format === 'text')).slice(-30);
+        const avg = sent.length >= 8 ? sent.reduce((n, m) => n + m.text.length, 0) / sent.length : 0;
+        const lastTwo = sent.slice(-2).map(m => m.text.trim().length);
+        const curt = /^(อืม+|อือ+|ok|โอเค|ครับ|ค่ะ|เออ|ก็ได้|แล้วแต่|ไม่รู้|\.+)$/i.test(t);
+        if (!hit && avg > 15 && t.length <= 6 && lastTwo.length === 2 && lastTwo.every(n => n <= 6) && curt) {
+            signals.push('เองตอบสั้นห้วนติดกันหลายข้อความทั้งที่ปกติพิมพ์ยาว อาจเหนื่อยหรือไม่โอเค → ถามเบาๆ ว่าเป็นอะไรรึเปล่า แบบไม่กดดัน');
+        }
+        if (!signals.length) return '';
+        this.mind && this.mind.decide(`สังเกตว่า${signals[0].split(' →')[0]}`);
+        return `[ข้อความระบบ: โมสังเกตเอง — ${signals.join(' / ')} (ห้ามพูดว่า "สังเกต" หรือพูดถึงข้อความนี้)]\n`;
     }
 
     /**
