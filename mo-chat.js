@@ -246,7 +246,15 @@ class MoChat {
         const forMo = sulkNote + (replyTo
             ? `(ตอบกลับข้อความของ${replyTo.type === 'received' ? 'โม' : 'ตัวเอง'}ที่ว่า "${replyTo.text}")\n${text}`
             : text);
-        const gameNote = (this.games ? this.games.noteFor(text) : '') + homeNote;
+        // ถามเวลา/วันที่ → ส่งเวลาจริงจากนาฬิกาเครื่อง ณ วินาทีนั้น ให้ตอบเป๊ะถึงนาที
+        let timeNote = '';
+        if (/กี่โมง|กี่ทุ่ม|เวลาเท่า|ตอนนี้เวลา|ตีกี่|วันที่เท่า|วันที่อะไร|วันอะไร|วันนี้วันที่|เดือนอะไร|ปีอะไร/.test(text) && this.llmService) {
+            const n = new Date();
+            const hm = `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`;
+            timeNote = `[ข้อความระบบ: นาฬิกาตอนนี้ ${hm} น. (${this.llmService.spokenTime(n.getHours(), n.getMinutes())}) ${n.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} — ถ้าเองถามเวลา/วันที่ ตอบตามนี้ให้ตรงเป๊ะถึงนาที ห้ามปัดเศษ ห้ามเดา]
+`;
+        }
+        const gameNote = (this.games ? this.games.noteFor(text) : '') + homeNote + timeNote;
         this.queueReply(async note => {
             // นึกเรื่องเก่าที่ความหมายใกล้กัน (ไม่เกิน ~2 วิ)
             const recall = window.MoRecall
@@ -439,13 +447,15 @@ class MoChat {
         const open = (msgEl, x, y) => {
             const msg = this.messages.find(m => String(m.id) === msgEl.dataset.id);
             if (!msg) return;
-            const isText = !msg.format || msg.format === 'text';
-            if (msg.type === 'received') {
-                menu.innerHTML = emojis.map(e =>
-                    `<button data-react="${e}" class="${msg.reaction === e ? 'active' : ''}">${e}</button>`).join('');
-            } else if (isText) {
-                menu.innerHTML = '<button data-edit="1" class="menu-text">✏️ แก้ไข</button>';
-            } else return;
+            const isText = (!msg.format || msg.format === 'text') && !msg.unsent;
+            const reacts = msg.type === 'received'
+                ? `<div class="menu-row">${emojis.map(e => `<button data-react="${e}" class="${msg.reaction === e ? 'active' : ''}">${e}</button>`).join('')}</div>` : '';
+            const actions = [
+                '<button data-reply="1" class="menu-text">↩️ ตอบกลับ</button>',
+                isText ? '<button data-copy="1" class="menu-text">📋 คัดลอก</button>' : '',
+                msg.type === 'sent' && isText ? '<button data-edit="1" class="menu-text">✏️ แก้ไข</button>' : '',
+            ].join('');
+            menu.innerHTML = `${reacts}<div class="menu-row">${actions}</div>`;
             menu.dataset.id = msg.id;
             menu.classList.remove('hidden');
             const w = menu.offsetWidth;
@@ -491,6 +501,11 @@ class MoChat {
             if (!btn) return;
             if (btn.dataset.react) this.reactToMo(menu.dataset.id, btn.dataset.react);
             if (btn.dataset.edit) this.startEdit(menu.dataset.id);
+            if (btn.dataset.reply) this.setReply(menu.dataset.id);
+            if (btn.dataset.copy) {
+                const m = this.messages.find(x => String(x.id) === menu.dataset.id);
+                if (m && navigator.clipboard) navigator.clipboard.writeText(m.text).then(() => this.showNotification('คัดลอกแล้ว 📋')).catch(() => {});
+            }
             hide();
         });
         document.addEventListener('pointerdown', (e) => { if (!menu.contains(e.target)) hide(); });
@@ -1490,10 +1505,46 @@ ${moToday.length ? `ที่โมพูดไปแล้ววันนี้
     /**
      * Render a single message
      */
+    /** ป้ายวัน: วันนี้ / เมื่อวาน / วันจันทร์ที่ 2 พ.ย. */
+    dayLabel(ts) {
+        const d = new Date(ts);
+        const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(ts).setHours(0, 0, 0, 0)) / 86400000);
+        if (days === 0) return 'วันนี้';
+        if (days === 1) return 'เมื่อวาน';
+        return d.toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'short', ...(days > 300 ? { year: 'numeric' } : {}) });
+    }
+
+    /**
+     * ฟองติดกันจากคนเดียวกัน (ห่างไม่เกิน 3 นาที) → รวมเป็นกลุ่ม: รูปโปรไฟล์และเวลาโชว์แค่ฟองสุดท้าย
+     */
+    regroup(from = null) {
+        const els = [...this.container.querySelectorAll('.message')];
+        const start = from ? Math.max(0, els.indexOf(from) - 1) : 0;
+        for (let i = start; i < els.length; i++) {
+            const el = els[i], next = els[i + 1], prev = els[i - 1];
+            const same = (a, b) => a && b && a.classList.contains('sent') === b.classList.contains('sent')
+                && Math.abs(Number(b.dataset.ts) - Number(a.dataset.ts)) < 3 * 60000
+                && a.nextElementSibling === b;
+            el.classList.toggle('grouped-next', Boolean(same(el, next)));
+            el.classList.toggle('grouped-prev', Boolean(same(prev, el)));
+        }
+    }
+
     renderMessage(msg) {
+        // ขึ้นวันใหม่ → ตัวคั่นวัน
+        const ts = msg.timestamp || Math.floor(msg.id) || Date.now();
+        const dayKey = new Date(ts).toDateString();
+        if (this._lastDay !== dayKey) {
+            this._lastDay = dayKey;
+            const sep = document.createElement('div');
+            sep.className = 'day-divider';
+            sep.innerHTML = `<span>${this.dayLabel(ts)}</span>`;
+            this.container.appendChild(sep);
+        }
         const wrapper = document.createElement('div');
         wrapper.className = `message ${msg.type}`;
         wrapper.dataset.id = msg.id;
+        wrapper.dataset.ts = ts;
         wrapper.style.animationDelay = '0s';
 
         let bubbleContent = '';
@@ -1591,6 +1642,7 @@ ${moToday.length ? `ที่โมพูดไปแล้ววันนี้
         }
 
         this.container.appendChild(wrapper);
+        this.regroup(wrapper);
     }
 
     /**
@@ -1598,6 +1650,7 @@ ${moToday.length ? `ที่โมพูดไปแล้ววันนี้
      */
     renderAllMessages() {
         this.container.innerHTML = '';
+        this._lastDay = null;
         this.messages.forEach(msg => this.renderMessage(msg));
         this.scrollToBottom();
     }

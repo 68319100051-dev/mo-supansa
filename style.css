@@ -3748,3 +3748,118 @@ button.mind-region-chip {
 .checkers.watching .ck-new {
     display: none;
 }
+
+/* ===== UI/UX อัปเกรด ===== */
+
+/* ตัวคั่นวันในแชท */
+.chat-date-divider {
+    display: none;
+}
+
+.day-divider {
+    display: flex;
+    justify-content: center;
+    margin: 14px 0 6px;
+}
+
+.day-divider span {
+    padding: 3px 12px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 1px 4px rgba(240, 77, 133, 0.12);
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+}
+
+/* ฟองติดกัน: รูปและเวลาเฉพาะฟองสุดท้าย, ระยะห่างแคบลง, มุมฟองต่อกัน */
+.message.grouped-next .message-time {
+    display: none;
+}
+
+.message.grouped-next .message-avatar {
+    visibility: hidden;
+}
+
+.message.grouped-prev {
+    margin-top: -6px;
+}
+
+.message.received.grouped-next .message-bubble {
+    border-bottom-left-radius: 8px;
+}
+
+.message.received.grouped-prev .message-bubble {
+    border-top-left-radius: 8px;
+}
+
+.message.sent.grouped-next .message-bubble {
+    border-bottom-right-radius: 8px;
+}
+
+.message.sent.grouped-prev .message-bubble {
+    border-top-right-radius: 8px;
+}
+
+/* เมนู ⋯ บนหัวแชท */
+.top-bar-right {
+    position: relative;
+}
+
+.top-more {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 200;
+    min-width: 210px;
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    box-shadow: 0 12px 32px rgba(160, 27, 64, 0.18);
+    animation: watchIn 0.18s ease-out;
+}
+
+.top-more.hidden {
+    display: none;
+}
+
+.top-more .top-more-item {
+    width: 100% !important;
+    height: auto !important;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 1.1rem;
+}
+
+.top-more .top-more-item::after {
+    content: attr(data-label);
+    font-family: var(--font-primary);
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.top-more .top-more-item:hover {
+    transform: none;
+}
+
+/* เมนูกดค้าง: 2 แถว (รีแอค / คำสั่ง) */
+.message-menu {
+    flex-direction: column;
+    border-radius: 18px;
+}
+
+.message-menu .menu-row {
+    display: flex;
+    gap: 2px;
+}
+
+.message-menu .menu-row + .menu-row {
+    border-top: 1px solid var(--pink-50);
+    padding-top: 2px;
+    margin-top: 2px;
+}

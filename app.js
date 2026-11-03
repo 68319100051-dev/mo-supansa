@@ -1457,4 +1457,19 @@
         if (prevRemote) prevRemote(keys);
         if (keys.includes('mo_chat_history_v2')) ingestRemoteLife();
     };
+
+    // ======= เมนู ⋯ บนหัวแชท (ค้นหา / ซิงก์ / ตั้งค่า / สมอง) =======
+    const topMore = document.getElementById('top-more');
+    const topMoreBtn = document.getElementById('btn-top-more');
+    topMoreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const open = topMore.classList.toggle('hidden') === false;
+        topMoreBtn.setAttribute('aria-expanded', String(open));
+    });
+    topMore.addEventListener('click', () => topMore.classList.add('hidden'));
+    document.addEventListener('click', (e) => { if (!topMore.contains(e.target) && e.target !== topMoreBtn) topMore.classList.add('hidden'); });
+
+    // ======= แท็บล่าง: ปิดหน้าคลิป/บ้าน → ไฮไลต์กลับไปที่แชท =======
+    const backToChatTab = () => document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.tab === 'chat'));
+    ['close-reels', 'close-house'].forEach(id => { const b = document.getElementById(id); if (b) b.addEventListener('click', backToChatTab); });
 })();
