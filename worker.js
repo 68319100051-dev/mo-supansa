@@ -45,7 +45,8 @@ async function db(env, path, init = {}) {
         ...init,
         headers: {
             apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-            Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+            // คีย์แบบใหม่ (sb_secret_...) ใช้แค่ apikey / แบบเก่า (JWT service_role) ต้องมี Bearer ด้วย
+            ...(env.SUPABASE_SERVICE_ROLE_KEY.startsWith('sb_') ? {} : { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` }),
             'content-type': 'application/json',
             ...(init.headers || {}),
         },
