@@ -1378,4 +1378,23 @@
         psyche.save();
         mind.decide(`ปรับความเป็นตัวของตัวเองเป็นระดับ ${psyche.data.autonomy}`);
     });
+
+    // ======= เรื่องที่โมทำตอนแอปปิด (หลังบ้านเล่ามา) → ใส่ในบันทึก "วันนี้โมทำอะไร" + ความจำชีวิตโม =======
+    function ingestRemoteLife() {
+        const dayAgo = Date.now() - 24 * 3600000;
+        let changed = false;
+        chat.messages.filter(m => m.type === 'received' && m.life && m.life.at > dayAgo).forEach(m => {
+            if (life.state.log.some(l => l.text === m.life.text)) return;
+            life.addLog(m.life.at, '📍', m.life.text);
+            psyche.remember(m.life.text, 2, m.life.at);
+            changed = true;
+        });
+        if (changed) life.save();
+    }
+    ingestRemoteLife();
+    const prevRemote = sync.onRemoteChange;
+    sync.onRemoteChange = (keys) => {
+        if (prevRemote) prevRemote(keys);
+        if (keys.includes('mo_chat_history_v2')) ingestRemoteLife();
+    };
 })();

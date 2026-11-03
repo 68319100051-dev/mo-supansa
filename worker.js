@@ -166,13 +166,14 @@ async function checkUser(env, userId, subs) {
         if (hit) due.push({ key: `care:${hit[0]}:${localDate}`, intent: `โมห่วงเอง: ${hit[2]} — ทักแบบแฟนที่ห่วงจริง ไม่จู้จี้`, fallback: hit[3] });
     }
 
-    // หัวใจเต้น (ปิดแอป): ช่วงที่เองมักว่าง โมคิดเองแล้วตัดสินใจว่าจะทักไหม (วันละไม่เกิน 3 ครั้ง ห่างกัน 3 ชม.+)
+    // หัวใจเต้น (ปิดแอป): ช่วงที่เองมักว่าง โมใช้ชีวิตต่อ คิดเอง แล้วตัดสินใจว่าจะทักไหม
+    // (ทักหา / เล่าเรื่องที่เพิ่งไปทำมา / ถามไถ่) วันละไม่เกิน 4 ครั้ง ห่างกัน 2.5 ชม.+
     const geminiKeyHb = (get('mo_device_keys_v1') || {}).gemini;
     if (!due.length && !quiet && activeNow && geminiKeyHb) {
         const hbToday = chat.filter(m => m.dueKey && m.dueKey.startsWith(`hb:${localDate}`));
         const lastHb = Math.max(0, ...hbToday.map(m => m.timestamp || 0));
         const lastSentHb = Math.max(0, ...chat.filter(m => m.type === 'sent').map(m => m.timestamp || 0));
-        if (hbToday.length < 3 && now - lastHb > 3 * 3600000 && now - lastSentHb > 2 * 3600000 && Math.random() < 0.2) {
+        if (hbToday.length < 4 && now - lastHb > 2.5 * 3600000 && now - lastSentHb > 2 * 3600000 && Math.random() < 0.3) {
             const psyche = get('mo_psyche_v1') || {};
             const innerD = get('mo_inner_v1') || {};
             const decision = await moThinks(geminiKeyHb, {
@@ -182,9 +183,16 @@ async function checkUser(env, userId, subs) {
                 userModel: psyche.userModel && psyche.userModel.text,
                 goals: (innerD.goals || []).map(g => `${g.title} ${g.progress}%`).join(', '),
                 recent: chat.filter(m => m.text && (!m.format || m.format === 'text')).slice(-6).map(m => `${m.type === 'sent' ? 'แฟน' : 'โม'}: ${m.text}`).join(' / '),
+                // เรื่องในชีวิตโมที่เล่าไปแล้ววันนี้ (ห้ามซ้ำ ต้องต่อเนื่อง) + ชีวิตโมล่าสุดที่แอปรู้
+                toldToday: chat.filter(m => m.life && new Date(m.timestamp - tz * 60000).toISOString().slice(0, 10) === localDate).map(m => m.life.text).join(' / '),
+                lastLife: (() => { const L = get('mo_life_v1'); return L && L.current ? `${L.current.label} (${L.current.place || 'ที่บ้าน'})` : ''; })(),
+                arc: (() => { const a = ((get('mo_social_v1') || {}).arcs || []).find(x => x.step < x.beats.length); return a ? `เรื่อง${a.who}: ${a.beats[a.step]}` : ''; })(),
             });
             if (decision && decision.action === 'message' && decision.message) {
-                due.push({ key: `hb:${localDate}:${hbToday.length + 1}`, intent: `ตอนอยู่คนเดียวโมคิดว่า: ${decision.thought} แล้วตัดสินใจทักเอง พูดใกล้เคียง: "${decision.message}"`, fallback: decision.message });
+                due.push({
+                    key: `hb:${localDate}:${hbToday.length + 1}`, direct: true, fallback: decision.message,
+                    life: decision.event ? { text: String(decision.event).slice(0, 80), at: now } : null,
+                });
             }
         }
     }
@@ -216,11 +224,11 @@ async function checkUser(env, userId, subs) {
     const hhmm = `${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
     const fresh = [];
     for (const item of due.slice(0, 3)) {
-        const text = (geminiKey && await moSays(geminiKey, profile.userName, item.intent, hhmm)) || item.fallback;
+        const text = item.direct ? item.fallback : (geminiKey && await moSays(geminiKey, profile.userName, item.intent, hhmm)) || item.fallback;
         text.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 3).forEach((line, i) => {
             fresh.push({
                 id: now + fresh.length + Math.random(), type: 'received', text: line, format: 'text',
-                time: hhmm, timestamp: now + fresh.length, ...(i === 0 ? { dueKey: item.key } : {}),
+                time: hhmm, timestamp: now + fresh.length, ...(i === 0 ? { dueKey: item.key, ...(item.life ? { life: item.life } : {}) } : {}),
             });
         });
     }
@@ -255,9 +263,13 @@ async function moThinks(apiKey, c) {
 ตอนนี้: ${c.time} / คุยกับแฟนล่าสุด ${c.lastChatH} ชม.ที่แล้ว
 มุมมองต่อความสัมพันธ์: ${c.view || '-'} / ภาพในใจเกี่ยวกับแฟน: ${c.userModel || '-'}
 เป้าหมายของโม: ${c.goals || '-'} / แชทล่าสุด: ${c.recent || '-'}
-คิดในใจ 1 ประโยค แล้วตัดสินใจเองว่าจะทักแฟนไหม (คนจริงไม่ได้ทักทุกครั้งที่คิดถึง ทักเมื่อมีเหตุผล)
-ถ้าทัก เขียนข้อความแชท 1-2 บรรทัด เรียกตัวเอง เค้า เรียกแฟน เอง
-ตอบ JSON: {"thought":"","action":"none|message","message":""}`;
+ชีวิตโมล่าสุดที่รู้: ${c.lastLife || '-'} / ${c.arc || ''}
+เรื่องที่โมเล่าให้แฟนไปแล้ววันนี้ (ห้ามซ้ำ ต้องต่อเนื่องกัน): ${c.toldToday || '-'}
+
+ระหว่างที่ไม่ได้คุยกัน โมใช้ชีวิตต่อตามเวลาจริง (เช้า: ตื่น อาบน้ำ กินข้าวเช้า / เที่ยง: ออกไปกินข้าว สั่งอาหาร / บ่าย: งีบ ดูซีรีส์ ไปห้าง ร้านกาแฟ / เย็น: เดินเล่น ช่วยแม่ ทำกับข้าว / ค่ำ: อาบน้ำ ดูซีรีส์ เล่นเกม)
+คิดในใจ 1 ประโยคว่าเพิ่งทำอะไรมาและรู้สึกยังไง แล้วตัดสินใจเองว่าจะทักแฟนไหม (คนจริงไม่ได้ทักทุกครั้ง ทักเมื่อมีเรื่องอยากเล่า/คิดถึง/ห่วง)
+ถ้าทัก ส่วนใหญ่ให้ "เล่าเรื่องที่เพิ่งเกิด" แบบเพื่อนสนิทเล่า มีรายละเอียดจริง (กินอะไร ร้านไหน เจออะไร คนเยอะ อร่อย/ไม่อร่อย บ่น ตลก) แล้วโยนถามแฟน 2-3 บรรทัด ภาษาพิมพ์ แยกบรรทัด = แยกฟองแชท เรียกตัวเอง เค้า เรียกแฟน เอง ไม่ใส่ท่าทาง *...*
+ตอบ JSON: {"thought":"","action":"none|message","event":"สิ่งที่โมเพิ่งทำมาสั้นๆ (ถ้ามี) เช่น ไปกินก๋วยเตี๋ยวเรือแถวบ้าน","message":""}`;
     try {
         const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent', {
             method: 'POST',
