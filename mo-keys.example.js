@@ -30,6 +30,8 @@ window.MO_PROFILE = {
 };
 
 window.MO_KEYS = {
+    supabaseUrl: '',      // https://xxxx.supabase.co (ซิงก์ข้ามเครื่อง — ไม่ใส่ก็ใช้แบบเครื่องเดียวได้)
+    supabaseAnonKey: '',  // publishable/anon key เท่านั้น ห้ามใช้ service_role
     gemini: '',  // Google AI Studio key
     groq: '',    // console.groq.com key
 };

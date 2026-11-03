@@ -289,6 +289,91 @@
         document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.tab === 'chat'));
     };
 
+    // ======= ซิงก์ข้อมูลผ่าน Supabase (มือถือ ↔ คอม) =======
+    const sync = window.MoSyncInstance;
+
+    // เครื่องอื่นแก้ข้อมูล → โหลดเข้าระบบที่กำลังทำงานอยู่ (ไม่ต้องรีเฟรชหน้า)
+    sync.onRemoteChange = (keys) => {
+        const has = k => keys.includes(k);
+        if (has('mo_chat_history_v2')) {
+            chat.messages = memory.loadChatHistory();
+            chat.renderAllMessages();
+        }
+        if (has('mo_memory_v2') || has('mo_memory_settings_v2')) {
+            memory.settings = memory.loadSettings();
+            memory.data = memory.load();
+        }
+        if (has('mo_stats_v2')) memory.stats = memory.loadStats();
+        if (has('mo_life_v1')) {
+            life.state = life.load();
+            life.catchUp();
+            updateLifeStatus();
+        }
+        if (has('mo_mind_v1')) mind.state = mind.load();
+        if (has('mo_diary_v1')) diary.entries = diary.load();
+        if (has('mo_reminders_v1')) reminders.reminders = reminders.load();
+        if (has('mo_clips_v1')) {
+            reels.reels = [...reels.reels.filter(r => r.from === 'mo'), ...reels.loadUserClips()];
+            reels.renderReels();
+        }
+    };
+
+    const syncModal = document.getElementById('sync-modal');
+    const syncStatus = document.getElementById('sync-status');
+    const syncBtn = document.getElementById('btn-sync');
+
+    function renderSync() {
+        const loggedIn = Boolean(sync.user);
+        document.getElementById('sync-login').classList.toggle('hidden', loggedIn);
+        document.getElementById('sync-account').classList.toggle('hidden', !loggedIn);
+        document.getElementById('sync-user').textContent = loggedIn ? `เข้าสู่ระบบเป็น ${sync.user.email}` : '';
+        const when = sync.lastSync ? ` (${new Date(sync.lastSync).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })})` : '';
+        syncStatus.textContent = sync.status + (loggedIn ? when : '');
+        syncStatus.className = 'llm-status-msg' + (/ไม่สำเร็จ|ผิด/.test(sync.status) ? ' error' : loggedIn ? ' success' : '');
+        syncBtn.classList.toggle('synced', loggedIn && !/ไม่สำเร็จ/.test(sync.status));
+    }
+    sync.onStatus(renderSync);
+
+    async function syncAction(fn) {
+        const email = document.getElementById('sync-email').value.trim();
+        const password = document.getElementById('sync-password').value;
+        if (!email || password.length < 6) {
+            sync.setStatus('ใส่อีเมล และรหัสผ่านอย่างน้อย 6 ตัว');
+            return;
+        }
+        sync.setStatus('กำลังเชื่อมต่อ...');
+        try {
+            await fn(email, password);
+        } catch (err) {
+            sync.setStatus(`ไม่สำเร็จ: ${err.message}`);
+        }
+        renderSync();
+    }
+
+    syncBtn.addEventListener('click', () => {
+        if (!sync.client) {
+            chat.showNotification('ยังไม่ได้ตั้งค่า Supabase ใน mo-keys.local.js');
+            return;
+        }
+        renderSync();
+        syncModal.classList.remove('hidden');
+    });
+    document.getElementById('close-sync').addEventListener('click', () => syncModal.classList.add('hidden'));
+    document.getElementById('btn-sync-signin').addEventListener('click', () => syncAction((e, p) => sync.signIn(e, p)));
+    document.getElementById('btn-sync-signup').addEventListener('click', () => syncAction(async (e, p) => {
+        const loggedIn = await sync.signUp(e, p);
+        if (!loggedIn) sync.setStatus('สมัครแล้ว! เปิดอีเมลเพื่อกดยืนยัน แล้วกลับมากด "เข้าสู่ระบบ"');
+    }));
+    document.getElementById('btn-sync-now').addEventListener('click', async () => {
+        await sync.syncNow();
+        renderSync();
+    });
+    document.getElementById('btn-sync-signout').addEventListener('click', async () => {
+        await sync.signOut();
+        renderSync();
+    });
+    sync.start().then(renderSync);
+
     function openMemoryPanel() {
         if (!mindUI.open) mindUI.show();
     }

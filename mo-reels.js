@@ -44,7 +44,7 @@ const MoMediaStore = {
             req.onerror = () => reject(req.error);
         });
     },
-    async put(id, blob) {
+    async putLocal(id, blob) {
         const db = await this.open();
         return new Promise((resolve, reject) => {
             const tx = db.transaction('videos', 'readwrite');
@@ -53,13 +53,28 @@ const MoMediaStore = {
             tx.onerror = () => reject(tx.error);
         });
     },
-    async get(id) {
+    async getLocal(id) {
         const db = await this.open();
         return new Promise((resolve, reject) => {
             const req = db.transaction('videos').objectStore('videos').get(id);
             req.onsuccess = () => resolve(req.result || null);
             req.onerror = () => reject(req.error);
         });
+    },
+    /** เก็บในเครื่อง + อัปขึ้นคลาวด์ (ถ้าซิงก์อยู่) เครื่องอื่นจะเปิดได้ด้วย */
+    async put(id, blob) {
+        await this.putLocal(id, blob);
+        const sync = window.MoSyncInstance;
+        if (sync) sync.uploadMedia(id, blob).catch(() => {});
+    },
+    /** หาในเครื่องก่อน ไม่มีค่อยดาวน์โหลดจากคลาวด์ (แล้วเก็บไว้ในเครื่อง) */
+    async get(id) {
+        const local = await this.getLocal(id).catch(() => null);
+        if (local) return local;
+        const sync = window.MoSyncInstance;
+        const remote = sync ? await sync.downloadMedia(id).catch(() => null) : null;
+        if (remote) await this.putLocal(id, remote).catch(() => {});
+        return remote;
     },
 };
 

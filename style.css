@@ -1385,6 +1385,30 @@ body {
     line-height: 1;
 }
 
+/* ☁️ ซิงก์: จางเมื่อยังไม่เชื่อม, จุดเขียวเมื่อซิงก์แล้ว */
+.sync-btn {
+    position: relative;
+    filter: grayscale(1);
+    opacity: 0.55;
+}
+
+.sync-btn.synced {
+    filter: none;
+    opacity: 1;
+}
+
+.sync-btn.synced::after {
+    content: '';
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #2bb673;
+    border: 2px solid #fff;
+}
+
 .mind-screen {
     --holo: #5ff2ff;
     --holo-dim: rgba(95, 242, 255, 0.35);

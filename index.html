@@ -60,6 +60,7 @@
                         <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                     </svg>
                 </button>
+                <button class="icon-btn icon-emoji-btn sync-btn" id="btn-sync" title="ซิงก์ข้อมูล (มือถือ ↔ คอม)">☁️</button>
                 <button class="icon-btn" id="btn-settings" title="ตั้งค่าสมอง AI (Gemini / OpenAI)">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="12" cy="12" r="3"/>
@@ -260,6 +261,41 @@
         <div class="house-content" id="house-content"></div>
     </div>
 
+    <!-- Sync Modal (ซิงก์ผ่าน Supabase) -->
+    <div id="sync-modal" class="settings-modal hidden">
+        <div class="settings-card">
+            <div class="settings-header">
+                <h3>☁️ ซิงก์โมทุกเครื่อง</h3>
+                <button class="close-btn" id="close-sync">&times;</button>
+            </div>
+            <div class="settings-body">
+                <p class="settings-desc">ล็อกอินบัญชีเดียวกันในมือถือและคอม แชท ความทรงจำ ชีวิต และสมองของโมจะตรงกันทุกเครื่อง</p>
+                <p class="llm-status-msg" id="sync-status"></p>
+                <div id="sync-login">
+                    <div class="setting-item">
+                        <label for="sync-email">อีเมล:</label>
+                        <input type="email" id="sync-email" class="setting-input" autocomplete="email" placeholder="you@example.com">
+                    </div>
+                    <div class="setting-item">
+                        <label for="sync-password">รหัสผ่าน (อย่างน้อย 6 ตัว):</label>
+                        <input type="password" id="sync-password" class="setting-input" autocomplete="current-password">
+                    </div>
+                    <div class="settings-actions">
+                        <button class="btn-primary" id="btn-sync-signin">เข้าสู่ระบบ</button>
+                        <button class="btn-secondary" id="btn-sync-signup">สมัครใหม่</button>
+                    </div>
+                </div>
+                <div id="sync-account" class="hidden">
+                    <p class="settings-desc" id="sync-user"></p>
+                    <div class="settings-actions">
+                        <button class="btn-primary" id="btn-sync-now">ซิงก์ตอนนี้</button>
+                        <button class="btn-secondary" id="btn-sync-signout">ออกจากระบบ</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Transfer Modal (โอนเงิน) -->
     <div id="transfer-modal" class="settings-modal hidden">
         <div class="settings-card">
@@ -399,6 +435,8 @@
     </div>
 
     <script src="mo-keys.local.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+    <script src="mo-sync.js"></script>
     <script src="mo-llm.js"></script>
     <script src="mo-brain.js"></script>
     <script src="mo-memory.js"></script>
