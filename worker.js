@@ -1,0 +1,205 @@
+/* ============================================
+   Mo Worker ☁️ - หลังบ้านบน Cloudflare (ทำงานแม้ปิดแอป)
+   - เสิร์ฟไฟล์แอปตามปกติ (ASSETS)
+   - ทุก 5 นาที: ดูกิจวัตร / เรื่องรอถามผล / การเตือนของทุกคน → ถึงเวลา → เขียนข้อความโมลงแชท + ส่ง Push
+   - Push แบบไม่มี payload: มือถือรับแล้วถาม /api/push/inbox ว่าโมพูดว่าอะไร
+   Secrets (ตั้งใน Cloudflare): SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
+   ============================================ */
+
+const LATE_MIN = 2 * 60000;          // ให้แอป (ถ้าเปิดอยู่) ทักเองก่อน 2 นาที
+const ROUTINE_WINDOW = 30 * 60000;
+const FOLLOW_WINDOW = 12 * 3600000;
+const REMINDER_WINDOW = 2 * 3600000;
+
+export default {
+    async fetch(request, env) {
+        const url = new URL(request.url);
+        if (url.pathname === '/api/push/key') {
+            return json({ key: env.VAPID_PUBLIC_KEY || null });
+        }
+        if (url.pathname === '/api/push/inbox' && request.method === 'POST') {
+            const { endpoint } = await request.json().catch(() => ({}));
+            if (!endpoint || !env.SUPABASE_URL) return json({}, 400);
+            const rows = await db(env, `mo_state?select=value&key=like.push_sub:*&value->>endpoint=eq.${encodeURIComponent(endpoint)}`);
+            return json((rows[0] && rows[0].value.inbox) || {});
+        }
+        return env.ASSETS.fetch(request);
+    },
+
+    async scheduled(event, env, ctx) {
+        if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY || !env.VAPID_PRIVATE_KEY) return;
+        ctx.waitUntil(runChecks(env));
+    },
+};
+
+function json(data, status = 200) {
+    return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
+}
+
+// =============================================
+//  Supabase REST (service role — อยู่ฝั่ง server เท่านั้น)
+// =============================================
+
+async function db(env, path, init = {}) {
+    const res = await fetch(`${env.SUPABASE_URL}/rest/v1/${path}`, {
+        ...init,
+        headers: {
+            apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
+            'content-type': 'application/json',
+            ...(init.headers || {}),
+        },
+    });
+    if (!res.ok) throw new Error(`supabase ${res.status}: ${await res.text()}`);
+    return res.status === 204 || init.method === 'DELETE' ? null : res.json().catch(() => null);
+}
+
+function upsert(env, rows) {
+    return db(env, 'mo_state', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify(rows),
+    });
+}
+
+// =============================================
+//  ตรวจว่าถึงเวลาที่โมตั้งใจทักหรือยัง
+// =============================================
+
+async function runChecks(env) {
+    const subs = await db(env, 'mo_state?select=user_id,key,value&key=like.push_sub:*');
+    const users = [...new Set(subs.map(s => s.user_id))];
+    for (const userId of users) {
+        try {
+            await checkUser(env, userId, subs.filter(s => s.user_id === userId));
+        } catch (e) {
+            console.error('checkUser failed', userId, e.message);
+        }
+    }
+}
+
+async function checkUser(env, userId, subs) {
+    const keys = 'mo_routines_v1,mo_followups_v1,mo_reminders_v1,mo_chat_history_v2,mo_device_keys_v1,mo_profile_v1';
+    const rows = await db(env, `mo_state?select=key,value&user_id=eq.${userId}&key=in.(${keys})`);
+    const get = k => (rows.find(r => r.key === k) || {}).value;
+    const chat = Array.isArray(get('mo_chat_history_v2')) ? get('mo_chat_history_v2') : [];
+    const sentKeys = new Set(chat.map(m => m.dueKey).filter(Boolean));
+
+    // เวลาท้องถิ่นของผู้ใช้ (จากเครื่องที่สมัครแจ้งเตือน)
+    const tz = Number(subs[0].value.tz) || -420;
+    const now = Date.now();
+    const local = new Date(now - tz * 60000);       // อ่านด้วย getUTC* = เวลาท้องถิ่น
+    const localDate = local.toISOString().slice(0, 10);
+    const minutes = local.getUTCHours() * 60 + local.getUTCMinutes();
+    const quiet = minutes >= 30 && minutes < 7 * 60 + 30;
+    const localMs = (hh, mm) => Date.UTC(local.getUTCFullYear(), local.getUTCMonth(), local.getUTCDate(), hh, mm) + tz * 60000;
+
+    const due = [];
+    for (const r of get('mo_routines_v1') || []) {
+        if (!r.days || !r.days.includes(local.getUTCDay())) continue;
+        const [hh, mm] = String(r.checkIn).split(':').map(Number);
+        const late = now - localMs(hh, mm);
+        const key = `rt:${r.id}:${localDate}`;
+        if (late >= LATE_MIN && late <= ROUTINE_WINDOW && !sentKeys.has(key)) {
+            due.push({ key, intent: `${r.intent} (เพราะจำได้ว่าเอง${r.what}ตอน ${r.time})`, fallback: r.intent });
+        }
+    }
+    if (!quiet) {
+        for (const f of get('mo_followups_v1') || []) {
+            const late = now - f.askAt;
+            const key = `fu:${f.id}`;
+            if (late >= LATE_MIN && late <= FOLLOW_WINDOW && !sentKeys.has(key)) {
+                due.push({ key, intent: `ถามผลเรื่อง${f.topic}: ${f.intent}`, fallback: `${f.topic}เป็นไงบ้าง เล่าให้เค้าฟังหน่อย` });
+            }
+        }
+    }
+    for (const r of get('mo_reminders_v1') || []) {
+        const late = now - r.dueAt;
+        const key = `rm:${r.id}`;
+        if (!r.done && late >= LATE_MIN && late <= REMINDER_WINDOW && !sentKeys.has(key)) {
+            due.push({ key, intent: `เตือนเรื่อง${r.text} ที่เองขอให้เตือน`, fallback: `⏰ ถึงเวลา${r.text}แล้วนะ!` });
+        }
+    }
+    if (!due.length) return;
+
+    const profile = get('mo_profile_v1') || {};
+    const geminiKey = (get('mo_device_keys_v1') || {}).gemini;
+    const hhmm = `${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
+    const fresh = [];
+    for (const item of due.slice(0, 3)) {
+        const text = (geminiKey && await moSays(geminiKey, profile.userName, item.intent, hhmm)) || item.fallback;
+        text.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 3).forEach((line, i) => {
+            fresh.push({
+                id: now + fresh.length + Math.random(), type: 'received', text: line, format: 'text',
+                time: hhmm, timestamp: now + fresh.length, ...(i === 0 ? { dueKey: item.key } : {}),
+            });
+        });
+    }
+
+    // เขียนลงแชท (แอปรวมแชทตาม id → ไม่ทับของเดิม)
+    await upsert(env, [{ user_id: userId, key: 'mo_chat_history_v2', value: [...chat, ...fresh].slice(-200), updated_at: new Date().toISOString() }]);
+
+    const inbox = { title: 'โม 💕', body: fresh.map(m => m.text).join('\n').slice(0, 180), at: now };
+    for (const sub of subs) {
+        const status = await sendPush(env, sub.value.endpoint);
+        if (status === 404 || status === 410) {
+            await db(env, `mo_state?user_id=eq.${userId}&key=eq.${encodeURIComponent(sub.key)}`, { method: 'DELETE' });
+        } else {
+            await upsert(env, [{ user_id: userId, key: sub.key, value: { ...sub.value, inbox }, updated_at: new Date().toISOString() }]);
+        }
+    }
+}
+
+/**
+ * ให้ AI เขียนข้อความทักแบบโม (ใช้ Gemini key ของผู้ใช้เอง ที่ซิงก์มาจากเครื่องของเขา)
+ */
+async function moSays(apiKey, userName, intent, hhmm) {
+    const prompt = `คุณคือ "โม" สาวไทยวัยรุ่น แชทกับคนสนิท${userName ? ` (${userName})` : ''} เรียกตัวเอง "เค้า" เรียกอีกฝ่าย "เอง"
+ตอนนี้ ${hhmm} โมตั้งใจทักไปก่อนเรื่องนี้: ${intent}
+เขียนข้อความแชท 1-2 บรรทัดสั้นๆ ภาษาพิมพ์ ขี้เล่น ใส่ใจ ไม่ใส่ท่าทาง *...* ไม่ใช้ แก มึง กู ตอบเป็นข้อความแชทเท่านั้น`;
+    try {
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+            body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.9 } }),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const text = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('').trim();
+        return text ? text.replace(/^\s*โม\s*:\s*/gm, '') : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// =============================================
+//  Web Push (VAPID, ไม่มี payload)
+// =============================================
+
+const b64u = {
+    encode: buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+    decode: s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0)),
+};
+
+let signingKey = null;
+async function vapidKey(env) {
+    if (signingKey) return signingKey;
+    const pub = b64u.decode(env.VAPID_PUBLIC_KEY);   // 0x04 || x(32) || y(32)
+    signingKey = await crypto.subtle.importKey('jwk', {
+        kty: 'EC', crv: 'P-256', d: env.VAPID_PRIVATE_KEY,
+        x: b64u.encode(pub.slice(1, 33)), y: b64u.encode(pub.slice(33, 65)), ext: true,
+    }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+    return signingKey;
+}
+
+async function sendPush(env, endpoint) {
+    const aud = new URL(endpoint).origin;
+    const enc = obj => b64u.encode(new TextEncoder().encode(JSON.stringify(obj)));
+    const unsigned = `${enc({ typ: 'JWT', alg: 'ES256' })}.${enc({ aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: env.VAPID_SUBJECT || 'mailto:mo@example.com' })}`;
+    const sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, await vapidKey(env), new TextEncoder().encode(unsigned));
+    const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { TTL: '86400', Urgency: 'high', Authorization: `vapid t=${unsigned}.${b64u.encode(sig)}, k=${env.VAPID_PUBLIC_KEY}` },
+    });
+    return res.status;
+}

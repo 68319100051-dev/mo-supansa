@@ -1,0 +1,12 @@
+# ไฟล์ที่ไม่ต้องเสิร์ฟบนเว็บ
+worker.js
+wrangler.jsonc
+.assetsignore
+.gitignore
+.git
+.claude
+.wrangler
+node_modules
+scripts
+mo-keys.local.js
+mo_avatar_old.jpg

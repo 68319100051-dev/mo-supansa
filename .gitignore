@@ -3,3 +3,6 @@ mo-keys.local.js
 
 # ตั้งค่าเฉพาะเครื่อง
 .claude/
+
+# Cloudflare
+.wrangler/

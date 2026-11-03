@@ -1,0 +1,16 @@
+{
+    // Mo: เสิร์ฟไฟล์แอป + หลังบ้าน (worker.js) ส่ง Push ทุก 5 นาที
+    // Secrets ตั้งใน Cloudflare → Worker → Settings → Variables and Secrets
+    "$schema": "node_modules/wrangler/config-schema.json",
+    "name": "mo-supansa",
+    "main": "worker.js",
+    "compatibility_date": "2026-11-02",
+    "observability": { "enabled": true },
+    "assets": {
+        "directory": ".",
+        "binding": "ASSETS",
+        "run_worker_first": ["/api/*"]
+    },
+    "triggers": { "crons": ["*/5 * * * *"] },
+    "workers_dev": true
+}

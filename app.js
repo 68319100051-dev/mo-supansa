@@ -27,9 +27,22 @@
     // การเตือน & วันสำคัญ
     const reminders = new MoReminders(memory);
     chat.reminders = reminders;
+    // เรื่องที่ทักตามเวลา มี dueKey ติดข้อความ → ถ้าหลังบ้าน (worker.js) ส่ง Push ไปแล้ว แอปจะไม่ทักซ้ำ
+    const localDate = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    const alreadySent = key => chat.messages.some(m => m.dueKey === key);
+    const tagDue = (key, since) => {
+        const msg = chat.messages.find(m => m.type === 'received' && m.timestamp >= since);
+        if (!msg) return;
+        msg.dueKey = key;
+        chat.saveHistory();
+    };
+
     reminders.onDue = (r) => {
+        if (alreadySent(`rm:${r.id}`)) return;
         const msg = reminders.dueMessage(r);
+        const since = Date.now();
         chat.addMessage('received', msg);
+        tagDue(`rm:${r.id}`, since);
         chat.showNotification(msg);
     };
     reminders.onSpecialDay = (msg) => {
@@ -41,20 +54,27 @@
     const routines = new MoRoutines(llm);
     chat.routines = routines;
     routines.onDue = (r) => {
+        const key = `rt:${r.id}:${localDate()}`;
+        if (alreadySent(key)) return true;
         if (call.getCallStatus() || chat.isTyping) return false;
         mind.decide(`ถึงเวลาที่ตั้งใจไว้: ${r.intent}`);
+        const since = Date.now();
         chat.sendProactiveMessage(
             `โมตั้งใจไว้เองว่าจะทักตอนนี้ เพราะจำได้ว่าเอง${r.what}ตอน ${r.time} — ${r.intent}`,
-            `ทักเรื่องนี้ตรงๆ แบบคนที่จำกิจวัตรของอีกฝ่ายได้และใส่ใจจริง: ${r.intent} (อย่าเล่าเรื่องอื่นของโมแทรก)`);
+            `ทักเรื่องนี้ตรงๆ แบบคนที่จำกิจวัตรของอีกฝ่ายได้และใส่ใจจริง: ${r.intent} (อย่าเล่าเรื่องอื่นของโมแทรก)`)
+            .then(() => tagDue(key, since));
         return true;
     };
     // เรื่องที่รอถามผล (สัมภาษณ์/สอบ/หาหมอ) → ทักถามเองเมื่อถึงเวลา
     routines.onFollowUp = (f) => {
+        if (alreadySent(`fu:${f.id}`)) return true;
         if (!canReachOut() || chat.awaitingReply) return false;
         mind.decide(`ถึงเวลาถามเรื่อง${f.topic}`);
+        const since = Date.now();
         chat.sendProactiveMessage(
             `โมจำได้ว่าเองมีเรื่อง "${f.topic}" แล้วตอนนี้น่าจะผ่านไปแล้ว — ${f.intent}`,
-            `ทักถามผลเรื่อง${f.topic}ตรงๆ แบบคนที่จำได้และลุ้นอยู่ตลอด (${f.intent}) อย่าเล่าเรื่องอื่นของโมแทรก`);
+            `ทักถามผลเรื่อง${f.topic}ตรงๆ แบบคนที่จำได้และลุ้นอยู่ตลอด (${f.intent}) อย่าเล่าเรื่องอื่นของโมแทรก`)
+            .then(() => tagDue(`fu:${f.id}`, since));
         return true;
     };
 
@@ -379,6 +399,55 @@
         location.reload();
     });
 
+    // ======= แจ้งเตือนจากโม (Push) — ให้โมทักได้แม้ปิดแอป =======
+    const pushBtn = document.getElementById('btn-push');
+    const pushStatus = document.getElementById('push-status');
+    const pushSupported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    async function renderPush() {
+        if (!pushSupported) {
+            pushBtn.disabled = true;
+            pushStatus.textContent = 'เครื่องนี้ยังไม่รองรับ (iPhone ต้องติดตั้งลงหน้าจอโฮมก่อน)';
+            return;
+        }
+        const reg = await navigator.serviceWorker.getRegistration();
+        const sub = reg && await reg.pushManager.getSubscription();
+        pushBtn.textContent = sub ? '🔔 แจ้งเตือนเปิดอยู่ (กดเพื่อปิด)' : '🔔 เปิดแจ้งเตือนจากโม';
+        pushStatus.textContent = Notification.permission === 'denied' ? 'ถูกบล็อกไว้ ไปเปิดในตั้งค่าของเบราว์เซอร์/มือถือ' : '';
+    }
+    const b64ToBytes = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+    async function subKey(sub) {
+        const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(sub.endpoint));
+        return 'push_sub:' + [...new Uint8Array(hash)].slice(0, 8).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    pushBtn.addEventListener('click', async () => {
+        if (!sync.user) return chat.showNotification('เข้าสู่ระบบซิงก์ก่อนนะ');
+        try {
+            const reg = await navigator.serviceWorker.ready;
+            const existing = await reg.pushManager.getSubscription();
+            if (existing) {
+                await sync.client.from('mo_state').delete().eq('user_id', sync.user.id).eq('key', await subKey(existing));
+                await existing.unsubscribe();
+                chat.showNotification('ปิดแจ้งเตือนแล้ว');
+                return renderPush();
+            }
+            const { key } = await (await fetch('/api/push/key')).json();
+            if (!key) return chat.showNotification('หลังบ้านยังไม่ได้ตั้งค่า VAPID key');
+            if (await Notification.requestPermission() !== 'granted') return renderPush();
+            const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(key) });
+            const { error } = await sync.client.from('mo_state').upsert({
+                user_id: sync.user.id,
+                key: await subKey(sub),
+                value: { endpoint: sub.endpoint, tz: new Date().getTimezoneOffset(), ua: navigator.userAgent.slice(0, 80) },
+                updated_at: new Date().toISOString(),
+            });
+            if (error) throw new Error(error.message);
+            chat.showNotification('🔔 เปิดแล้ว! ปิดแอปไปโมก็ทักได้');
+        } catch (e) {
+            chat.showNotification(`เปิดแจ้งเตือนไม่สำเร็จ: ${e.message}`);
+        }
+        renderPush();
+    });
+
     const syncModal = document.getElementById('sync-modal');
     const syncStatus = document.getElementById('sync-status');
     const syncBtn = document.getElementById('btn-sync');
@@ -415,6 +484,7 @@
     syncBtn.addEventListener('click', () => {
         // ยังไม่มี Supabase (เช่นมือถือที่เปิดจากโฮส) → เปิดหน้าตั้งค่าเซิร์ฟเวอร์ให้กรอก
         renderSync();
+        renderPush();
         syncModal.classList.remove('hidden');
     });
     document.getElementById('close-sync').addEventListener('click', () => syncModal.classList.add('hidden'));

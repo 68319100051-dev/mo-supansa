@@ -2,9 +2,10 @@
    Mo Service Worker 📲 - ให้ติดตั้งเป็นแอป & เปิดได้ตอนเน็ตหลุด
    - ไฟล์ของแอป: ดึงจากเน็ตก่อน (แก้โค้ดแล้วเห็นทันที) ไม่มีเน็ต → ใช้ของที่เก็บไว้
    - ไม่แตะ API ภายนอก (Gemini / Groq / Supabase) และไม่เก็บ mo-keys.local.js
+   - Push จากหลังบ้าน (ไม่มี payload) → ถาม /api/push/inbox ว่าโมพูดอะไร แล้วเด้งแจ้งเตือน
    ============================================ */
 
-const CACHE = 'mo-app-v1';
+const CACHE = 'mo-app-v2';
 const SHELL = [
     './', 'index.html', 'style.css', 'manifest.json', 'mo_avatar.jpg', 'icons/icon-192.png', 'icons/icon-512.png',
     'mo-config.js', 'mo-sync.js', 'mo-llm.js', 'mo-brain.js', 'mo-brain3d.js', 'mo-memory.js', 'mo-chat.js',
@@ -38,4 +39,35 @@ self.addEventListener('fetch', (event) => {
             })
             .catch(() => caches.match(event.request, { ignoreSearch: true }))
     );
+});
+
+self.addEventListener('push', (event) => {
+    event.waitUntil((async () => {
+        let msg = {};
+        try {
+            const sub = await self.registration.pushManager.getSubscription();
+            const res = await fetch('/api/push/inbox', {
+                method: 'POST',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ endpoint: sub && sub.endpoint }),
+            });
+            msg = await res.json();
+        } catch (e) {}
+        await self.registration.showNotification(msg.title || 'โม 💕', {
+            body: msg.body || 'โมทักมา~ เปิดดูหน่อยสิ',
+            icon: 'icons/icon-192.png',
+            badge: 'icons/icon-192.png',
+            tag: 'mo-chat',
+            renotify: true,
+        });
+    })());
+});
+
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    event.waitUntil((async () => {
+        const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        if (wins.length) return wins[0].focus();
+        return self.clients.openWindow('./');
+    })());
 });
