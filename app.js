@@ -83,6 +83,13 @@
     window.MoSelfInstance = self;
     chat.self = self;
     window.MoLLMInstance = llm;
+    // คนรอบตัวโม & เรื่องราวที่ดำเนินต่อหลายวัน
+    const social = new MoSocial(llm);
+    window.MoSocialInstance = social;
+    setInterval(() => social.tick(), 15 * 60000);
+    setTimeout(() => social.tick(), 30000);
+    // โทร: ใช้เสียงโมจริง (Gemini TTS) ถ้ามี key
+    call.tts = text => llm.speak(text);
     // สตอรี่ของโม, เกม & คำถามประจำวัน
     const stories = new MoStories(llm);
     window.MoStoriesInstance = stories;
@@ -355,7 +362,27 @@
                 mind.ignored(hours);
             }
         }
+        // ทักไปแล้วเองเปิดแอปอยู่แต่ไม่ตอบ → ทักตามสั้นๆ ครั้งเดียว (แบบคนจริง)
+        if (chat.awaitingReply && chat.awaitingSince && !chat.nudged && canReachOut()
+            && Date.now() - chat.awaitingSince > (6 + Math.random() * 6) * 60000) {
+            chat.nudged = true;
+            const nudges = ['??', 'เองงง', 'อ่านแล้วไม่ตอบ 🙄', 'หลับไปแล้วเหรอ', 'ฮัลโหลลล', 'เมินเค้าอ่อ'];
+            chat.showTyping();
+            setTimeout(() => {
+                chat.hideTyping();
+                chat.addMessage('received', nudges[Math.floor(Math.random() * nudges.length)]);
+            }, 1200);
+            return;
+        }
         if (!canReachOut() || chat.awaitingReply) return;
+        // เรื่องของคนรอบตัวเพิ่งเกิดตอนใหม่ → โมอยากเล่า
+        const fresh = social.takeFresh();
+        if (fresh && Math.random() < 0.7) {
+            mind.decide(`อยากเล่าเรื่อง${fresh.who}ให้เองฟัง`);
+            chat.sendProactiveMessage(`มีเรื่องของ${fresh.who}เพิ่งเกิดขึ้น: ${fresh.beat}`,
+                `เล่าเรื่อง${fresh.who}ที่เพิ่งเกิดให้เองฟังแบบเม้าท์ เหมือนเพื่อนสนิทเล่าเรื่องในชีวิต (${fresh.beat}) มีความรู้สึกของโมด้วย แล้วถามความเห็นเอง`);
+            return;
+        }
         // คิดถึงมาก → ทักเร็วขึ้น, ง่วง/เครียด → ช้าลง
         if (Date.now() - lastActivity() < nextGapMs * mind.behavior().proactiveGapFactor) return;
         mind.decide(`เงียบกันไปนาน + อารมณ์${mind.emotion().label} → ทักไปก่อน`);
@@ -469,6 +496,7 @@
         if (has('mo_profile_v1')) MoConfig.reloadProfile();
         if (has('mo_stories_v1')) { stories.data = stories.load(); renderStoryRing(); }
         if (has('mo_games_v1')) games.data = games.load();
+        if (has('mo_social_v1')) social.data = social.load();
         // คีย์ AI จากเครื่องอื่นในบัญชีเดียวกัน → มือถือไม่ต้องกรอกเอง
         if (has('mo_device_keys_v1')) {
             // เครื่องที่มีไฟล์คีย์: อย่าให้ของจากเครื่องอื่นทับ → ส่งของที่ครบกลับขึ้นไป

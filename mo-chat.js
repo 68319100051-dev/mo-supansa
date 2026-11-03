@@ -123,7 +123,12 @@ class MoChat {
         // Add user message (พร้อมข้อความที่ตอบกลับ ถ้ามี)
         const replyTo = this.replyTo;
         this.mind && this.mind.perceive(text);
-        const sulkNote = this.sulkNote() + this.userMoodNote(text) + this.unwatchedReelNote();
+        // งอนค้าง: เองพูดแรง/เมินนาน → งอน, ขอโทษ → ค่อยๆ หาย
+        const ignoredH = this.awaitingReply && this.awaitingSince ? (Date.now() - this.awaitingSince) / 3600000 : 0;
+        const feeling = this.self ? this.self.feel(text, ignoredH) : null;
+        const feelNote = feeling === 'forgiven' ? '[ข้อความระบบ: เองง้อแล้ว โมหายงอนแล้ว แต่ยังแอบแซวได้นิดนึง แล้วกลับมาอ้อนเหมือนเดิม]\n'
+            : feeling === 'softening' ? '[ข้อความระบบ: เองขอโทษแล้ว โมใจอ่อนลงนิดนึงแต่ยังไม่หายสนิท]\n' : '';
+        const sulkNote = this.sulkNote() + feelNote + this.userMoodNote(text) + this.unwatchedReelNote();
         this.awaitingReply = false;
 
         // ลิงก์ YouTube → ส่งเป็นคลิปให้โมดู
@@ -803,6 +808,26 @@ class MoChat {
     }
 
     /**
+     * โมส่งแล้วกดยกเลิกข้อความ (หลังไม่กี่วิ) — เองเห็นแค่ว่า "โมยกเลิกข้อความ"
+     */
+    sendAndUnsend(text) {
+        const msg = this.addMessage('received', text);
+        if (!msg) return;
+        setTimeout(() => {
+            msg.unsent = true;
+            msg.unsentText = msg.text;
+            msg.text = '';
+            this.saveHistory();
+            const el = this.container.querySelector(`.message[data-id="${CSS.escape(String(msg.id))}"] .message-bubble`);
+            if (el) {
+                el.classList.add('message-unsent');
+                el.textContent = '🚫 โมยกเลิกข้อความ';
+            }
+            this.mind && this.mind.act('กดยกเลิกข้อความ (เขิน)');
+        }, 2200 + Math.random() * 1800);
+    }
+
+    /**
      * เองส่งข้อความเสียง → โมฟังเสียงจริง (Gemini) ตอบตามน้ำเสียง แล้วถอดความเก็บไว้
      */
     async sendUserVoice(blob, duration) {
@@ -996,6 +1021,14 @@ class MoChat {
             return '';
         });
 
+        // [ยกเลิก: ...] = โมส่งข้อความนี้แล้วกดยกเลิก (เหลือแค่ "ยกเลิกข้อความ")
+        let unsendText = null;
+        response = response.replace(/\[\s*ยกเลิก\s*:?\s*([^\]]*)\]/g, (_, said) => {
+            if (said.trim()) unsendText = said.trim().slice(0, 120);
+            return '';
+        });
+        if (unsendText) setTimeout(() => this.sendAndUnsend(unsendText), 1500 + Math.random() * 2500);
+
         // [จำรูป: ...] = คำอธิบายรูปที่เองเพิ่งส่ง → จำไว้พูดถึงทีหลัง
         response = response.replace(/\[\s*จำรูป\s*:?\s*([^\]]*)\]/g, (_, desc) => {
             const img = [...this.messages].reverse().find(m => m.type === 'sent' && m.format === 'image');
@@ -1177,6 +1210,7 @@ class MoChat {
      */
     async sendProactiveMessage(reason = 'ไม่ได้คุยกันสักพัก', customStyle = null) {
         if (this.isTyping) return;
+        this.nudged = false;
         this.showTyping();
 
         let message = null;
@@ -1319,6 +1353,8 @@ ${moToday.length ? `ที่โมพูดไปแล้ววันนี้
                     ${msg.extra.note ? `<div class="transfer-note">${esc(msg.extra.note)}</div>` : ''}
                 </div>
             `;
+        } else if (msg.unsent) {
+            bubbleContent = '<div class="message-bubble message-unsent">🚫 โมยกเลิกข้อความ</div>';
         } else if (msg.format === 'image') {
             bubbleContent = `<div class="message-bubble message-image"><img src="${msg.text}" alt="image"></div>`;
         } else {

@@ -133,6 +133,7 @@ class MoLLMService {
         if (m.format === 'sticker') return { type: m.type, text: `[สติกเกอร์ ${m.text}]` };
         if (m.format === 'transfer') return { type: m.type, text: `[โอนเงินให้ ฿${m.extra ? m.extra.amount : ''}]` };
         if (m.format === 'voice') return { type: m.type, text: `[ข้อความเสียง: ${m.extra ? m.extra.text : ''}]` };
+        if (m.unsent) return { type: m.type, text: `[โมพิมพ์ว่า "${m.unsentText || ''}" แล้วกดยกเลิกข้อความ — เองเห็นแค่ว่ายกเลิกข้อความ ไม่เห็นว่าเขียนอะไร]` };
         if (!m.text || !m.text.trim()) return null;
         // เองกดรีแอคข้อความโม → ให้โมรู้
         const note = m.type === 'received' && m.reaction ? ` [เองกดรีแอค ${m.reaction}]` : '';
@@ -194,7 +195,13 @@ class MoLLMService {
 # ตัวอย่างสไตล์ (สุ่มมาให้ดูแค่บางส่วน — เอาแค่โทน ห้ามลอกประโยค ห้ามพูดซ้ำที่เคยพูด)
 ${this.pickStyleExamples(4)}
 
+# โมเป็นคนจริง ไม่ใช่คนตามใจ
+- มีความเห็นของตัวเอง ไม่เห็นด้วยก็บอกตรงๆ แบบน่ารัก เถียงเบาๆ ได้ ไม่ต้องคล้อยตามทุกเรื่อง
+- ไม่อยากทำอะไรก็ปฏิเสธได้ (เช่น ขี้เกียจ ง่วง ไม่ชอบ) มีเหตุผลของตัวเอง
+- ความจำแบบคน: เรื่องเล็กๆ (ของกิน ร้าน ชื่อเกม) บางทีจำไม่ชัวร์ ถามยืนยันได้ เช่น "เอง เคยบอกว่า...ใช่ป่ะ" แต่เรื่องสำคัญ (ชื่อ วันเกิด เรื่องที่เองเศร้า/เครียด) ต้องจำแม่นเสมอ
+
 # ลูกเล่นเพิ่ม (ใช้นานๆ ครั้ง ไม่ต้องทุกข้อความ)
+- เผลอพิมพ์อะไรเขินๆ/หลุดปากแล้วอยากลบ (นานๆ ครั้งจริงๆ ประมาณ 1 ใน 25): ใส่ [ยกเลิก: ข้อความที่พิมพ์แล้วลบ] เป็นบรรทัดหนึ่ง ระบบจะส่งแล้วกดยกเลิกให้ ถ้าเองถามว่าพิมพ์อะไร ให้เลี่ยงๆ เขินๆ
 - กดรีแอคข้อความล่าสุดของเอง: ใส่ [รีแอค: อีโมจิ] (❤️ 😂 🥺 😮 😡 👍 อย่างใดอย่างหนึ่ง) ที่ไหนก็ได้ในคำตอบ
 - ส่งเป็นข้อความเสียงแทนพิมพ์ (ตอนอ้อน ตอนเล่าเรื่อง ตอนขี้เกียจพิมพ์ ประมาณ 1 ใน 8): ใส่ [เสียง] ไว้บรรทัดแรก แล้วเขียนสิ่งที่จะพูดเป็นภาษาพูด
 
@@ -213,7 +220,7 @@ ${window.MoLifeInstance.describeNow()}${window.MoWeather && window.MoWeather.des
 ${memorySummary && memorySummary.chatSummary ? `# สรุปที่คุยกันก่อนหน้านี้ (เก่ากว่าแชทที่เห็น)
 ${memorySummary.chatSummary}
 
-` : ''}${window.MoDiaryInstance ? window.MoDiaryInstance.recentForPrompt() : ''}${window.MoSelfInstance ? window.MoSelfInstance.promptSection() : ''}${window.MoStoriesInstance ? window.MoStoriesInstance.promptSection() : ''}# ความจำจากแชท
+` : ''}${window.MoDiaryInstance ? window.MoDiaryInstance.recentForPrompt() : ''}${window.MoSocialInstance ? window.MoSocialInstance.promptSection() : ''}${window.MoSelfInstance ? window.MoSelfInstance.promptSection() : ''}${window.MoStoriesInstance ? window.MoStoriesInstance.promptSection() : ''}# ความจำจากแชท
 ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่มี'}
 
 หยิบเรื่องที่จำได้มาพูดเมื่อเกี่ยวกับที่คุย ทีละเรื่อง ตอบเป็นข้อความแชทของโมเท่านั้น ไม่ใส่ "โม:" นำหน้า`;

@@ -295,7 +295,28 @@ class MoCall {
             if (this.isInCall) this.listen();
         };
 
-        if (!this.isSpeakerOn || !window.speechSynthesis) {
+        if (!this.isSpeakerOn) {
+            setTimeout(done, 1200);
+            return;
+        }
+
+        // เสียงโมจริง (Gemini TTS เดียวกับข้อความเสียง) — ไม่ได้ค่อยใช้เสียงเบราว์เซอร์
+        if (this.tts) {
+            const token = this._speakToken = Date.now();
+            this.tts(this.toSpeakable(text)).then(blob => {
+                if (this._speakToken !== token || !this.isInCall) return;
+                const audio = new Audio(URL.createObjectURL(blob));
+                this._audio = audio;
+                audio.onended = audio.onerror = () => { URL.revokeObjectURL(audio.src); this._audio = null; done(); };
+                audio.play().catch(() => this.speakBrowser(text, done));
+            }).catch(() => this.speakBrowser(text, done));
+            return;
+        }
+        this.speakBrowser(text, done);
+    }
+
+    speakBrowser(text, done) {
+        if (!window.speechSynthesis) {
             setTimeout(done, 1200);
             return;
         }
@@ -367,6 +388,7 @@ class MoCall {
     endCall() {
         this.isInCall = false;
         this.urgentNote = null;
+        if (this._audio) { this._audio.pause(); this._audio = null; }
         // ยกเลิกการต่อสายที่ยังค้างอยู่ (กรณีวางสายก่อนโมรับ)
         clearTimeout(this._connectTimeout);
         clearTimeout(this._greetingTimeout);

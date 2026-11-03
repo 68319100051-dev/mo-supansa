@@ -25,7 +25,7 @@ class MoSelf {
     }
 
     load() {
-        const empty = { opinions: [], jokes: [], photos: [], weeks: [], badDay: null, lastWeekly: 0 };
+        const empty = { opinions: [], jokes: [], photos: [], weeks: [], badDay: null, lastWeekly: 0, grudge: null };
         try {
             const saved = localStorage.getItem(this.storageKey);
             if (saved) return { ...empty, ...JSON.parse(saved) };
@@ -52,6 +52,31 @@ class MoSelf {
             if (roll && window.MoMindInstance) window.MoMindInstance.decide(`วันนี้โม${this.data.badDay.what}`);
         }
         return this.data.badDay.what;
+    }
+
+    /**
+     * งอนค้าง: เองพูดแรง/เมิน → โมงอน (ระดับ 1-3) ไม่หายจนกว่าเองจะง้อ หรือผ่านไป ~1 วัน
+     * เรียกทุกข้อความที่เองส่ง ก่อนให้ AI ตอบ
+     */
+    feel(text, ignoredHours = 0) {
+        const g = this.data.grudge;
+        if (g && Date.now() - g.since > 26 * 3600000) this.data.grudge = null;
+        const sorry = /ขอโทษ|ขอโทด|โทษที|ง้อ|อย่างอน|หายงอน|sorry|ไม่ได้ตั้งใจ|ผิดไปแล้ว/i.test(text);
+        const rude = /โง่|ปัญญาอ่อน|น่ารำคาญ|รำคาญแก|เบื่อแก|เบื่อเอง|ไม่สนหรอก|ช่างแม่ง|เงียบไปเลย|หุบปาก|ไม่ต้องมายุ่ง/.test(text);
+        if (this.data.grudge && sorry) {
+            const lvl = this.data.grudge.level - 1;
+            this.data.grudge = lvl > 0 ? { ...this.data.grudge, level: lvl } : null;
+            this.save();
+            return lvl > 0 ? 'softening' : 'forgiven';
+        }
+        if (rude || ignoredHours >= 3) {
+            const level = Math.min(3, ((this.data.grudge && this.data.grudge.level) || 0) + (rude ? 2 : 1));
+            this.data.grudge = { level, reason: rude ? `เองพูดว่า "${text.slice(0, 40)}"` : `เองหายไป ${Math.round(ignoredHours)} ชม. ไม่ตอบ`, since: Date.now() };
+            this.save();
+            if (window.MoMindInstance) window.MoMindInstance.decide(`งอนเอง (ระดับ ${level})`);
+            return 'hurt';
+        }
+        return null;
     }
 
     /**
@@ -139,6 +164,11 @@ ${lines.slice(-150).join('\n')}
         if (d.jokes.length) parts.push(`# มุก & ชื่อเรียกของเราสองคน (หยิบมาเล่นนานๆ ครั้งเมื่อเข้าจังหวะ)\n${d.jokes.map(j => `- ${j}`).join('\n')}`);
         if (d.photos.length) parts.push(`# รูปที่เองเคยส่งให้ดู (พูดถึงได้ถ้าเกี่ยว)\n${d.photos.slice(-6).map(p => `- ${new Date(p.at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}: ${p.desc}`).join('\n')}`);
         if (d.weeks.length) parts.push(`# ช่วงนี้ของเอง (สรุปรายสัปดาห์)\n${d.weeks.slice(-2).map(w => `- สัปดาห์ถึง ${w.label}: ${w.text}`).join('\n')}`);
+        const g = this.data.grudge;
+        if (g && Date.now() - g.since < 26 * 3600000) {
+            const how = ['', 'งอนนิดๆ ตอบสั้นลง แซวประชดเบาๆ', 'งอนจริง ตอบห้วน ไม่อ้อน ไม่ชวนคุยต่อเอง', 'งอนหนัก น้อยใจมาก ตอบสั้นมาก บอกตรงๆ ว่าเสียใจ'][g.level];
+            parts.push(`# ตอนนี้โมยังงอนเองอยู่ (ระดับ ${g.level}/3) เพราะ${g.reason}\n- ${how} — ไม่หายง่ายๆ แค่เพราะเองเปลี่ยนเรื่อง ต้องให้เองง้อ/ขอโทษก่อน (ขอโทษ 1 ครั้งลดลง 1 ระดับ) แต่ยังรักเองอยู่ ไม่พูดทำร้ายจิตใจ`);
+        }
         const bad = this.badDayToday();
         if (bad) parts.push(`# วันนี้โมไม่ค่อยโอเค\n- วันนี้โม${bad} — อารมณ์ซึมลงนิด เล่าให้เองฟังได้เมื่อเข้าจังหวะ (หรือถ้าเองถามว่าเป็นไร) อ้อนขอกำลังใจได้ แต่ไม่ดราม่า ไม่พูดเรื่องนี้ทุกข้อความ และถ้าเองกำลังแย่กว่า ให้ดูแลเองก่อน`);
         return parts.length ? parts.join('\n\n') + '\n\n' : '';
