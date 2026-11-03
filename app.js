@@ -82,6 +82,12 @@
     const self = new MoSelf();
     window.MoSelfInstance = self;
     chat.self = self;
+    window.MoLLMInstance = llm;
+    // สตอรี่ของโม, เกม & คำถามประจำวัน
+    const stories = new MoStories(llm);
+    window.MoStoriesInstance = stories;
+    const games = new MoGames();
+    chat.games = games;
     // "สถานะหลังบ้านเป็นไง" → โมไล่เช็คระบบตัวเอง
     chat.statusContext = () => ({ llm, sync: window.MoSyncInstance, memory, routines, reminders, self });
 
@@ -100,7 +106,65 @@
     // Make reels accessible globally for chat
     window.MoReels = reels;
     // ดูคลิปที่โมส่งจบ → โมถามว่าเป็นไง (โมรู้เนื้อหาคลิปจริงผ่าน Gemini)
-    reels.onClose = (seconds) => chat.reelWatched(seconds);
+    reels.onClose = (seconds) => {
+        document.getElementById('watch-comments').innerHTML = '';
+        chat.reelWatched(seconds);
+    };
+    // เปิดคลิปไหนก็ได้ → โมดูด้วยกันแล้วคอมเมนต์สด
+    reels.onPlay = (clip) => chat.watchTogether(clip);
+
+    // ======= สตอรี่: วงแหวนรอบรูปโม + แตะเพื่อดู =======
+    const avatarEl = document.getElementById('mo-avatar');
+    const renderStoryRing = () => avatarEl.classList.toggle('has-story', stories.hasUnseen());
+    stories.onChange = renderStoryRing;
+    renderStoryRing();
+    avatarEl.addEventListener('click', () => {
+        if (!stories.open((story, text) => chat.replyToStory(story, text))) chat.showNotification('โมยังไม่ได้ลงสตอรี่วันนี้');
+    });
+    setInterval(() => stories.maybePost(), 10 * 60000);
+    setTimeout(() => stories.maybePost(), 20000);
+
+    // ======= เกม =======
+    const gamesMenu = document.getElementById('games-menu');
+    gamesMenu.innerHTML = Object.entries(MO_GAMES).map(([id, g]) => `<button data-game="${id}">${g.emoji} ${g.name}</button>`).join('');
+    document.getElementById('btn-games').addEventListener('click', (e) => {
+        e.stopPropagation();
+        gamesMenu.classList.toggle('hidden');
+    });
+    gamesMenu.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-game]');
+        if (!btn) return;
+        gamesMenu.classList.add('hidden');
+        chat.startGame(btn.dataset.game);
+    });
+    document.addEventListener('click', (e) => { if (!gamesMenu.contains(e.target)) gamesMenu.classList.add('hidden'); });
+
+    // ======= ข้อความเสียง: กดไมค์ = อัด, กดอีกที = ส่ง =======
+    const micBtn = document.getElementById('btn-mic');
+    let micTimer = null;
+    const stopMic = async () => {
+        clearInterval(micTimer);
+        micBtn.classList.remove('recording');
+        chat.input.placeholder = 'พิมพ์ข้อความ...';
+        const rec = await MoVoice.stop();
+        if (rec) chat.sendUserVoice(rec.blob, rec.duration);
+        else chat.showNotification('สั้นไปนิด กดค้างพูดให้นานกว่านี้หน่อย');
+    };
+    MoVoice.onAutoStop = stopMic;
+    if (!MoVoice.supported()) micBtn.classList.add('hidden');
+    micBtn.addEventListener('click', async () => {
+        if (MoVoice.recorder) return stopMic();
+        try {
+            await MoVoice.start();
+        } catch (e) {
+            return chat.showNotification('เปิดไมค์ไม่ได้ ลองอนุญาตไมโครโฟนก่อนนะ');
+        }
+        micBtn.classList.add('recording');
+        const t0 = Date.now();
+        micTimer = setInterval(() => {
+            chat.input.placeholder = `🔴 กำลังอัด ${Math.round((Date.now() - t0) / 1000)} วิ — กดไมค์อีกทีเพื่อส่ง`;
+        }, 250);
+    });
 
     // ชีวิตประจำวันของโม (บ้าน มือถือ กระเป๋าเงิน)
     const life = new MoLife();
@@ -269,6 +333,14 @@
         mind.decide(`เงียบกันไปนาน + อารมณ์${mind.emotion().label} → ทักไปก่อน`);
         nextGapMs = randomGap();
 
+        // วันละครั้ง: คำถามประจำวัน
+        const daily = games.takeDailyQuestion();
+        if (daily) {
+            chat.sendProactiveMessage('ถึงเวลาคำถามประจำวันที่โมชอบถาม',
+                `ถามคำถามประจำวันนี้แบบโม อยากรู้จริง (เรียบเรียงใหม่ให้เป็นภาษาโม): "${daily}" แล้วบอกคำตอบของโมเองสั้นๆ ด้วย หรือบอกว่าจะเฉลยของโมหลังเองตอบ`);
+            return;
+        }
+
         const silentMin = Math.round((Date.now() - lastActivity()) / 60000);
         const roll = Math.random();
         if (roll < 0.05) {
@@ -367,6 +439,8 @@
         if (has('mo_followups_v1')) routines.followUps = routines.loadFollowUps();
         if (has('mo_self_v1')) self.data = self.load();
         if (has('mo_profile_v1')) MoConfig.reloadProfile();
+        if (has('mo_stories_v1')) { stories.data = stories.load(); renderStoryRing(); }
+        if (has('mo_games_v1')) games.data = games.load();
         // คีย์ AI จากเครื่องอื่นในบัญชีเดียวกัน → มือถือไม่ต้องกรอกเอง
         if (has('mo_device_keys_v1')) {
             // เครื่องที่มีไฟล์คีย์: อย่าให้ของจากเครื่องอื่นทับ → ส่งของที่ครบกลับขึ้นไป
@@ -553,14 +627,47 @@
         // Facts (Long-term)
         const factsEl = document.getElementById('memory-facts');
         const profile = window.MO_PROFILE || {};
-        const allFacts = [...summary.facts, ...(profile.topics || []).flatMap(t => t.facts)];
-        if (allFacts.length > 0) {
-            factsEl.innerHTML = allFacts.map(f =>
-                `<div class="memory-item">💭 ${f}</div>`
-            ).join('');
+        const escM = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const aiFacts = memory.data.longTerm.aiFacts || [];
+        const fixedFacts = [...summary.facts.filter(f => !aiFacts.includes(f)), ...(profile.topics || []).flatMap(t => t.facts)];
+        const editable = (list, kind) => list.map((f, i) => `<div class="memory-item memory-edit">
+                <span>💭 ${escM(f)}</span>
+                <span class="memory-edit-actions"><button data-edit="${kind}:${i}" title="แก้">✏️</button><button data-del="${kind}:${i}" title="ลบ">&times;</button></span>
+            </div>`).join('');
+        if (aiFacts.length || fixedFacts.length) {
+            factsEl.innerHTML = editable(aiFacts, 'fact') + fixedFacts.map(f => `<div class="memory-item">📌 ${escM(f)}</div>`).join('');
         } else {
             factsEl.innerHTML = '<div class="memory-item" style="opacity:0.5">ยังไม่มีข้อมูลระยะยาวที่บันทึกไว้</div>';
         }
+
+        // ตัวตนของโม & มุกของเรา (แก้/ลบได้)
+        const selfEl = document.getElementById('memory-self');
+        selfEl.innerHTML = (editable(self.data.opinions, 'opinion') + editable(self.data.jokes, 'joke'))
+            || '<div class="memory-item" style="opacity:0.5">ยังไม่มี คุยกันไปเรื่อยๆ เดี๋ยวโมจำเอง</div>';
+
+        // แก้/ลบความจำ: fact = เรื่องของเอง, opinion/joke = ของโม
+        const lists = {
+            fact: () => memory.data.longTerm.aiFacts || (memory.data.longTerm.aiFacts = []),
+            opinion: () => self.data.opinions,
+            joke: () => self.data.jokes,
+        };
+        const saveList = kind => (kind === 'fact' ? memory.save() : self.save());
+        [factsEl, selfEl].forEach(el => el.querySelectorAll('[data-edit],[data-del]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const [kind, idx] = (btn.dataset.edit || btn.dataset.del).split(':');
+                const list = lists[kind]();
+                if (btn.dataset.del) {
+                    if (!confirm(`ให้โมลืมเรื่องนี้?\n"${list[idx]}"`)) return;
+                    list.splice(Number(idx), 1);
+                } else {
+                    const next = prompt('แก้ความจำนี้', list[idx]);
+                    if (next === null || !next.trim()) return;
+                    list[idx] = next.trim().slice(0, 120);
+                }
+                saveList(kind);
+                updateMemoryDisplay();
+            });
+        }));
 
         // Episodic Events
         const eventsEl = document.getElementById('memory-events');

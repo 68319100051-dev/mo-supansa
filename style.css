@@ -2773,3 +2773,247 @@ button.mind-region-chip {
 .message-reel.watched .reel-play-btn {
     background: rgba(0, 0, 0, 0.45);
 }
+
+/* 🎙️ ปุ่มไมค์ */
+.mic-btn.recording {
+    color: #fff;
+    background: #ef4444;
+    animation: statusPulse 1.2s ease-in-out infinite;
+}
+
+/* 📸 วงแหวนสตอรี่รอบรูปโม */
+.avatar-wrapper {
+    cursor: pointer;
+}
+
+.avatar-wrapper.has-story .avatar-img {
+    border: 2px solid transparent;
+    background: linear-gradient(#fff, #fff) padding-box, linear-gradient(45deg, #f9ce34, #ee2a7b, #6228d7) border-box;
+    padding: 2px;
+}
+
+.story-viewer {
+    position: fixed;
+    inset: 0;
+    z-index: 400;
+    display: flex;
+    flex-direction: column;
+    background: #000;
+}
+
+.story-viewer.hidden {
+    display: none;
+}
+
+.story-card {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 24px;
+    color: #fff;
+    text-align: center;
+    user-select: none;
+}
+
+.story-bars {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    display: flex;
+    gap: 4px;
+}
+
+.story-bars span {
+    flex: 1;
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.35);
+}
+
+.story-bars span.done {
+    background: #fff;
+}
+
+.story-bars span.active {
+    background: linear-gradient(90deg, #fff 50%, rgba(255, 255, 255, 0.35) 50%);
+    background-size: 200% 100%;
+    animation: storyProgress 6s linear forwards;
+}
+
+@keyframes storyProgress {
+    from { background-position: 100% 0; }
+    to { background-position: 0 0; }
+}
+
+.story-head {
+    position: absolute;
+    top: 22px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+}
+
+.story-head img {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.story-time {
+    opacity: 0.75;
+}
+
+.story-close {
+    margin-left: auto;
+    border: none;
+    background: none;
+    color: #fff;
+    font-size: 1.8rem;
+    cursor: pointer;
+}
+
+.story-emoji {
+    font-size: 5rem;
+    line-height: 1;
+}
+
+.story-text {
+    max-width: 320px;
+    font-family: var(--font-display);
+    font-size: 1.4rem;
+    font-weight: 500;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+.story-reply {
+    padding: 12px 16px 20px;
+    background: #000;
+}
+
+.story-reply input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: var(--radius-full);
+    background: transparent;
+    color: #fff;
+    font: inherit;
+    outline: none;
+}
+
+/* 🎮 เมนูเกม */
+.games-menu {
+    position: fixed;
+    left: 12px;
+    bottom: 140px;
+    z-index: 300;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    box-shadow: 0 8px 24px rgba(240, 77, 133, 0.2);
+}
+
+.games-menu.hidden {
+    display: none;
+}
+
+.games-menu button {
+    padding: 10px 14px;
+    border: none;
+    border-radius: var(--radius-sm, 10px);
+    background: none;
+    font: inherit;
+    font-size: 0.9rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.games-menu button:hover {
+    background: var(--pink-50);
+}
+
+/* 🎬 ดูด้วยกัน: คอมเมนต์สดของโม */
+.clip-player-box {
+    position: relative;
+}
+
+.watch-comments {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    pointer-events: none;
+}
+
+.watch-comment {
+    align-self: flex-start;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 85%;
+    padding: 6px 12px 6px 6px;
+    border-radius: var(--radius-full);
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 0.85rem;
+    animation: watchIn 0.35s ease-out;
+}
+
+.watch-comment img {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+@keyframes watchIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+}
+
+/* ✏️ แก้/ลบความจำ */
+.memory-edit {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.memory-edit-actions {
+    display: flex;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+.memory-edit-actions button {
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(240, 77, 133, 0.08);
+    color: var(--text-pink);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.mind-edit {
+    display: inline-flex;
+    gap: 2px;
+    margin-left: auto;
+    flex-shrink: 0;
+}

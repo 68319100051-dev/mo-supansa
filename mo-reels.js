@@ -86,7 +86,8 @@ class MoReelsManager {
         this.playerFrame = document.getElementById('clip-player-frame');
         this.playerTitle = document.getElementById('clip-player-title');
         this.storageKey = 'mo_clips_v1';
-        this.onClose = null;   // (secondsWatched) => void — ตั้งจาก mo-chat.js
+        this.onClose = null;   // (secondsWatched) => void — ตั้งจาก app.js
+        this.onPlay = null;    // (clip) => void — ดูด้วยกัน (โมคอมเมนต์สด)
         this.sentKey = 'mo_clips_sent_v1';
 
         this.reels = [
@@ -240,6 +241,7 @@ class MoReelsManager {
         }
         this.player.classList.remove('hidden');
         this.playStarted = Date.now();
+        if (this.onPlay) this.onPlay(clip);
     }
 
     closePlayer() {

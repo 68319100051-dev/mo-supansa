@@ -291,8 +291,13 @@ class MoMindUI {
         const c = m.state.chem;
         const summary = this.src.memory.getSummary();
         const profile = window.MO_PROFILE || {};
-        const facts = [...summary.facts, ...(profile.topics || []).flatMap(t => t.facts)];
+        const aiFacts = summary.longTerm.aiFacts || [];
+        const fixed = [...summary.facts.filter(f => !aiFacts.includes(f)), ...(profile.topics || []).flatMap(t => t.facts)];
         const events = (summary.events || []).slice().reverse().slice(0, 12);
+        // ความจำที่แก้/ลบได้ (เรื่องของเอง ที่ AI จดไว้ + ตัวตนของโม + มุกของเรา)
+        const editable = (list, kind) => list.map((f, i) => `<span>${this.esc(f)}</span><span class="mind-edit"><button class="mind-x" data-edit="${kind}:${i}" title="แก้">✏️</button><button class="mind-x" data-forget="${kind}:${i}" title="ลืม">&times;</button></span>`);
+        const self = window.MoSelfInstance;
+        const selfItems = self ? [...editable(self.data.opinions, 'opinion'), ...editable(self.data.jokes, 'joke')] : [];
 
         const chem = Object.entries(MO_CHEMICALS).map(([k, chemDef]) => `
             <div class="mind-chem-row">
@@ -304,7 +309,8 @@ class MoMindUI {
 
         return this.section('สารเคมีในสมองตอนนี้', chem)
             + this.section('24 ชั่วโมงที่ผ่านมา', this.chartHTML())
-            + this.section(`ความทรงจำระยะยาว (${facts.length})`, this.list(facts.map(f => this.esc(f)), 'ยังไม่มีความทรงจำระยะยาว'))
+            + this.section(`ความทรงจำระยะยาว (${aiFacts.length + fixed.length})`, this.list([...editable(aiFacts, 'fact'), ...fixed.map(f => `📌 ${this.esc(f)}`)], 'ยังไม่มีความทรงจำระยะยาว'))
+            + this.section('ตัวตนของโม & มุกของเรา', this.list(selfItems, 'ยังไม่มี คุยกันไปเรื่อยๆ เดี๋ยวโมจำเอง'))
             + this.section('เหตุการณ์สำคัญ', this.list(events.map(e => `<b>${this.esc(e.title)}</b><small>${this.esc(e.date)}</small>`), 'ยังไม่มีเหตุการณ์สำคัญ'));
     }
 
@@ -390,6 +396,29 @@ class MoMindUI {
     }
 
     bindDetail(box) {
+        // แก้/ลบความจำ: fact = เรื่องของเอง, opinion/joke = ของโม
+        const mem = this.src.memory;
+        const self = window.MoSelfInstance;
+        const lists = {
+            fact: () => mem.data.longTerm.aiFacts || (mem.data.longTerm.aiFacts = []),
+            opinion: () => self.data.opinions,
+            joke: () => self.data.jokes,
+        };
+        box.querySelectorAll('[data-edit],[data-forget]').forEach(btn => btn.addEventListener('click', () => {
+            const [kind, idx] = (btn.dataset.edit || btn.dataset.forget).split(':');
+            const list = lists[kind]();
+            if (btn.dataset.forget) {
+                if (!confirm(`ให้โมลืมเรื่องนี้?
+"${list[idx]}"`)) return;
+                list.splice(Number(idx), 1);
+            } else {
+                const next = prompt('แก้ความจำนี้', list[idx]);
+                if (next === null || !next.trim()) return;
+                list[idx] = next.trim().slice(0, 120);
+            }
+            kind === 'fact' ? mem.save() : self.save();
+            this.renderDetail();
+        }));
         box.querySelectorAll('[data-reminder]').forEach(btn => btn.addEventListener('click', () => {
             this.src.reminders.remove(btn.dataset.reminder);
             this.renderDetail();

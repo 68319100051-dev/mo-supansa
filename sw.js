@@ -5,12 +5,13 @@
    - Push จากหลังบ้าน (ไม่มี payload) → ถาม /api/push/inbox ว่าโมพูดอะไร แล้วเด้งแจ้งเตือน
    ============================================ */
 
-const CACHE = 'mo-app-v2';
+const CACHE = 'mo-app-v4';
 const SHELL = [
     './', 'index.html', 'style.css', 'manifest.json', 'mo_avatar.jpg', 'icons/icon-192.png', 'icons/icon-512.png',
     'mo-config.js', 'mo-sync.js', 'mo-llm.js', 'mo-brain.js', 'mo-brain3d.js', 'mo-memory.js', 'mo-chat.js',
     'mo-call.js', 'mo-reels.js', 'mo-life.js', 'mo-mind.js', 'mo-mind-ui.js', 'mo-reminders.js',
-    'mo-routines.js', 'mo-self.js', 'mo-status.js', 'mo-diary.js', 'app.js',
+    'mo-routines.js', 'mo-self.js', 'mo-status.js', 'mo-voice.js', 'mo-stories.js', 'mo-games.js', 'mo-recall.js',
+    'mo-diary.js', 'app.js',
 ];
 
 self.addEventListener('install', (event) => {
@@ -29,7 +30,8 @@ self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
     if (event.request.method !== 'GET' || url.origin !== location.origin || url.pathname.endsWith('mo-keys.local.js')) return;
     event.respondWith(
-        fetch(event.request)
+        // no-cache = ถามเซิร์ฟเวอร์ทุกครั้งว่าไฟล์เปลี่ยนไหม (ไม่ใช้ของเก่าใน HTTP cache)
+        fetch(event.request, { cache: 'no-cache' })
             .then(res => {
                 if (res.ok) {
                     const copy = res.clone();

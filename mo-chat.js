@@ -173,7 +173,14 @@ class MoChat {
         const forMo = sulkNote + (replyTo
             ? `(ตอบกลับข้อความของ${replyTo.type === 'received' ? 'โม' : 'ตัวเอง'}ที่ว่า "${replyTo.text}")\n${text}`
             : text);
-        this.queueReply(note => this.moRespond(note + forMo).then(() => this.maybeLearn()));
+        const gameNote = this.games ? this.games.noteFor(text) : '';
+        this.queueReply(async note => {
+            // นึกเรื่องเก่าที่ความหมายใกล้กัน (ไม่เกิน ~2 วิ)
+            const recall = window.MoRecall
+                ? await Promise.race([MoRecall.noteFor(text, this.messages), new Promise(r => setTimeout(() => r(''), 2500))])
+                : '';
+            return this.moRespond(note + recall + gameNote + forMo).then(() => this.maybeLearn());
+        });
     }
 
     /**
@@ -256,6 +263,7 @@ class MoChat {
             // ตัวตนของโม + มุกของเรา, สรุปรายสัปดาห์ (ทำจริงสัปดาห์ละครั้ง)
             .then(() => this.self && this.self.learn(this.llmService, this.messages, this.memory.getUserName()))
             .then(() => this.self && this.self.weeklySummary(this.llmService, this.messages, this.memory.getUserName()))
+            .then(() => window.MoRecall && MoRecall.index(this.messages, this.memory.getUserName()))
             .catch(err => console.warn('self learn failed:', err.message))
             .finally(() => { this.learning = false; });
     }
@@ -794,6 +802,75 @@ class MoChat {
         return `[ข้อความระบบ: เองยังไม่ได้เปิดดูคลิป "${msg.extra && msg.extra.title}" ที่โมส่งไป — ถ้าเข้าจังหวะ แซวหรืองอนนิดๆ ว่าไม่ดูคลิปเค้า (ไม่ต้องทุกครั้ง)]\n`;
     }
 
+    /**
+     * เองส่งข้อความเสียง → โมฟังเสียงจริง (Gemini) ตอบตามน้ำเสียง แล้วถอดความเก็บไว้
+     */
+    async sendUserVoice(blob, duration) {
+        const mediaId = 'myvoice_' + Date.now();
+        await window.MoMediaStore.put(mediaId, blob);
+        this.addMessage('sent', '', 'voice', { mediaId, duration, text: '' });
+        this.memory.incrementMessages();
+        this.memory.updateLastChat();
+        this.awaitingReply = false;
+        const dataUrl = await MoVoice.blobToDataUrl(blob);
+        const sulk = this.sulkNote();
+        this.queueReply(note => this.mediaReply(
+            `${note}${sulk}[ข้อความระบบ: เองส่งข้อความเสียง ${duration} วิ — ฟังเสียงแล้วตอบแบบโมตามเรื่องที่พูด และจับน้ำเสียง/อารมณ์ด้วย (เหนื่อย ดีใจ ง่วง ฯลฯ) จะตอบกลับเป็นเสียงด้วย [เสียง] ก็ได้ แล้วใส่ [ถอดเสียง: สิ่งที่เองพูดแบบคำต่อคำ] ไว้บรรทัดสุดท้าย]`,
+            dataUrl, ['ฟังไม่ค่อยชัดอ่ะ พิมพ์มาหน่อยได้มั้ย 🥺', 'เสียงเองน่ารักดีนะ 555 แต่เน็ตเค้ากากฟังไม่ทัน']));
+    }
+
+    /**
+     * ตอบกลับสตอรี่ของโม (แสดงเหมือนตอบกลับข้อความ)
+     */
+    replyToStory(story, text) {
+        this.replyTo = { id: story.id, type: 'received', text: `📸 สตอรี่: ${story.emoji} ${story.text}` };
+        this.input.value = text;
+        this.sendMessage();
+    }
+
+    /**
+     * เริ่มเกมกับโม: โมเป็นฝ่ายเปิดเกม
+     */
+    startGame(id) {
+        if (!this.games || this.isTyping) return;
+        const game = this.games.start(id);
+        this.addSystemMessage(`${game.emoji} เล่น ${game.name} กับโม`);
+        this.mind && this.mind.decide(`เองชวนเล่น ${game.name}`);
+        this.queueReply(note => this.moRespond(`${note}[ข้อความระบบ: เองชวนเล่นเกม "${game.name}" — กติกา: ${game.rules} — ตื่นเต้นที่ได้เล่น อธิบายกติกาสั้นๆ 1 บรรทัดแล้วเริ่มเลย โมเป็นฝ่ายเริ่ม]`));
+    }
+
+    /**
+     * ดูคลิปด้วยกัน: โมดูคลิปเดียวกัน (Gemini) แล้วพิมพ์คอมเมนต์สดลอยบนคลิป
+     */
+    async watchTogether(clip) {
+        const box = document.getElementById('watch-comments');
+        box.innerHTML = '';
+        if (clip.kind !== 'youtube' || !this.llmService || !this.llmService.isReady()) return;
+        const token = this._watchToken = Date.now();
+        this._watchCache = this._watchCache || {};
+        let lines = this._watchCache[clip.id];
+        if (!lines) {
+            try {
+                const reply = await this.llmService.generateResponse(
+                    `[ข้อความระบบ: ตอนนี้โมกับเองกำลังเปิดคลิป "${clip.title}" ดูพร้อมกัน — ดูคลิปแล้วเขียนคอมเมนต์สดแบบพิมพ์ระหว่างดู 3 บรรทัด เรียงตามเวลาในคลิป บรรทัดละไม่เกิน 8 คำ พูดถึงฉากจริงในคลิป ขำ/กรี๊ด/แซวได้ ไม่ใส่แท็กใดๆ]`,
+                    this.messages, this.brain.personality, this.memory.getSummary(),
+                    { youtube: `https://www.youtube.com/watch?v=${clip.yt}` });
+                lines = reply.replace(/\*[^*\n]+\*/g, '').split('\n').map(s => s.replace(/^[-•\d.\s]+/, '').trim()).filter(Boolean).slice(0, 3);
+                this._watchCache[clip.id] = lines;
+            } catch (e) {
+                return;
+            }
+        }
+        lines.forEach((line, i) => setTimeout(() => {
+            if (this._watchToken !== token || document.getElementById('clip-player').classList.contains('hidden')) return;
+            const el = document.createElement('div');
+            el.className = 'watch-comment';
+            el.innerHTML = '<img src="mo_avatar.jpg" alt="">';
+            el.appendChild(document.createTextNode(line));
+            box.appendChild(el);
+        }, 2500 + i * 4500));
+    }
+
     sendMoClip(topic = '') {
         if (!window.MoReels) return;
         const clip = window.MoReels.pickClip(topic);
@@ -901,6 +978,21 @@ class MoChat {
         // (AI บางทีเลียนแบบรูปแบบในประวัติแชทเป็น [ส่งคลิป: ...] → รับทั้งสองแบบ)
         response = response.replace(/\[\s*(?:ส่ง)?คลิป\s*:?\s*([^\]]*)\]/g, (_, topic) => {
             clipTopic = topic.trim();
+            return '';
+        });
+
+        // [ถอดเสียง: ...] = สิ่งที่เองพูดในข้อความเสียงล่าสุด → เก็บไว้ (ค้นหา/ความจำ/AI รอบหน้าเห็น)
+        response = response.replace(/\[\s*ถอดเสียง\s*:?\s*([^\]]*)\]/g, (_, said) => {
+            const voice = [...this.messages].reverse().find(m => m.type === 'sent' && m.format === 'voice');
+            if (voice && said.trim() && !voice.extra.text) {
+                voice.extra.text = said.trim().slice(0, 500);
+                voice.text = voice.extra.text;
+                this.saveHistory();
+                this.memory.extractFacts(voice.extra.text);
+                if (this.routines) this.routines.learn(voice.extra.text);
+                const t = this.container.querySelector(`.message[data-id="${CSS.escape(String(voice.id))}"] .voice-transcript`);
+                if (t) t.lastChild.textContent = voice.extra.text;
+            }
             return '';
         });
 
