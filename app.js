@@ -344,11 +344,32 @@
         if (has('mo_routines_v1')) routines.routines = routines.load();
         if (has('mo_followups_v1')) routines.followUps = routines.loadFollowUps();
         if (has('mo_self_v1')) self.data = self.load();
+        if (has('mo_profile_v1')) MoConfig.reloadProfile();
         if (has('mo_clips_v1')) {
             reels.reels = [...reels.reels.filter(r => r.from === 'mo'), ...reels.loadUserClips()];
             reels.renderReels();
         }
     };
+
+    // เครื่องที่มี mo-keys.local.js → ส่งโปรไฟล์ขึ้นซิงก์ให้มือถือรู้ด้วย
+    MoConfig.shareProfile();
+
+    // เครื่องใหม่ (เช่นมือถือที่เปิดจากโฮส): กรอก Supabase เองครั้งแรก
+    document.getElementById('sync-url').value = window.MO_KEYS.supabaseUrl || '';
+    document.getElementById('sync-anon').value = window.MO_KEYS.supabaseAnonKey || '';
+    document.getElementById('sync-server').open = !sync.client;
+    document.getElementById('btn-sync-server').addEventListener('click', () => {
+        const url = document.getElementById('sync-url').value.trim();
+        const anon = document.getElementById('sync-anon').value.trim();
+        if (!/^https:\/\/.+/.test(url) || !anon) return chat.showNotification('ใส่ URL (https://...) กับ key ให้ครบก่อนนะ');
+        let secret = /^sb_secret_/.test(anon);
+        try { secret = secret || /service_role/.test(atob(anon.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); } catch (e) {}
+        if (secret) {
+            return chat.showNotification('อันนี้ service_role key ห้ามใช้นะ ใช้ anon/publishable แทน');
+        }
+        MoConfig.saveKeys({ supabaseUrl: url, supabaseAnonKey: anon });
+        location.reload();
+    });
 
     const syncModal = document.getElementById('sync-modal');
     const syncStatus = document.getElementById('sync-status');
@@ -584,6 +605,7 @@
         llmProvider.value = cfg.provider || 'gemini';
         updateModelOptions(llmProvider.value, cfg.model);
         llmApiKey.value = cfg.apiKey || '';
+        document.getElementById('llm-groq-key').value = (window.MO_KEYS && window.MO_KEYS.groq) || '';
         llmStatusMsg.textContent = '';
         llmStatusMsg.className = 'llm-status-msg';
     }
@@ -643,6 +665,7 @@
                 model: llmModel.value,
                 apiKey: llmApiKey.value.trim()
             });
+            MoConfig.saveKeys({ gemini: llmApiKey.value.trim(), groq: document.getElementById('llm-groq-key').value.trim() });
             llmStatusMsg.textContent = '✅ บันทึกการตั้งค่าเรียบร้อยแล้ว';
             llmStatusMsg.className = 'llm-status-msg success';
             setTimeout(() => {
@@ -837,4 +860,9 @@
     console.log('🧠 Brain:', brain);
     console.log('💾 Memory:', memory.getSummary());
 
+
+    // ======= ติดตั้งเป็นแอป: service worker (ต้องเปิดผ่าน https หรือ localhost) =======
+    if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+        navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW register failed:', err.message));
+    }
 })();

@@ -2730,3 +2730,15 @@ button.mind-region-chip {
     float: left;
     margin-left: 8px;
 }
+
+/* ☁️ ตั้งค่าเซิร์ฟเวอร์ซิงก์ (เครื่องใหม่) */
+.sync-server {
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+}
+
+.sync-server summary {
+    cursor: pointer;
+    color: var(--text-pink);
+    margin-bottom: 8px;
+}

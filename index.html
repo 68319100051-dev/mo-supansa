@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>โม 💕 - Mo Supansa</title>
     <meta name="description" content="แชทกับโม แฟนสาว AI สุดน่ารัก">
+    <!-- ติดตั้งเป็นแอป (PWA) -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#f04d85">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="โม">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -291,6 +300,20 @@
             <div class="settings-body">
                 <p class="settings-desc">ล็อกอินบัญชีเดียวกันในมือถือและคอม แชท ความทรงจำ ชีวิต และสมองของโมจะตรงกันทุกเครื่อง</p>
                 <p class="llm-status-msg" id="sync-status"></p>
+                <details class="sync-server" id="sync-server">
+                    <summary>ตั้งค่าเซิร์ฟเวอร์ Supabase (ครั้งแรกของเครื่องนี้)</summary>
+                    <div class="setting-item">
+                        <label for="sync-url">Supabase URL:</label>
+                        <input type="url" id="sync-url" class="setting-input" placeholder="https://xxxx.supabase.co" autocomplete="off">
+                    </div>
+                    <div class="setting-item">
+                        <label for="sync-anon">Publishable / anon key (ห้ามใช้ service_role):</label>
+                        <input type="password" id="sync-anon" class="setting-input" autocomplete="off">
+                    </div>
+                    <div class="settings-actions">
+                        <button class="btn-primary" id="btn-sync-server">บันทึกแล้วโหลดใหม่</button>
+                    </div>
+                </details>
                 <div id="sync-login">
                     <div class="setting-item">
                         <label for="sync-email">อีเมล:</label>
@@ -434,6 +457,12 @@
                     <small class="setting-hint">คีย์จะถูกบันทึกไว้ใน Browser ของคุณเท่านั้น ปลอดภัย 100%</small>
                 </div>
 
+                <div class="setting-item">
+                    <label for="llm-groq-key">Groq API Key (สมองสำรอง ไม่ใส่ก็ได้):</label>
+                    <input type="password" id="llm-groq-key" class="setting-input" placeholder="gsk_..." autocomplete="off">
+                    <small class="setting-hint">เก็บในเครื่องนี้เท่านั้น ไม่ซิงก์ ไม่อัปขึ้นโฮส</small>
+                </div>
+
                 <div class="settings-actions">
                     <button class="btn-primary" id="btn-save-settings">บันทึกการตั้งค่า</button>
                     <button class="btn-secondary" id="btn-test-llm">ทดสอบเชื่อมต่อ</button>
@@ -455,6 +484,7 @@
     </div>
 
     <script src="mo-keys.local.js"></script>
+    <script src="mo-config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
     <script src="mo-sync.js"></script>
     <script src="mo-llm.js"></script>
