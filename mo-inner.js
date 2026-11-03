@@ -75,12 +75,18 @@ class MoInner {
             const chat = dayMsgs.slice(-50).map(m => `${m.type === 'sent' ? userName : 'โม'}: ${m.text}`).join('\n');
             const mood = window.MoMindInstance ? window.MoMindInstance.emotion().label : '';
             const goals = this.data.goals.map((g, i) => `${i}. ${g.title} (${g.progress}%) ล่าสุด: ${g.note || '-'}`).join('\n');
+            const psyche = window.MoPsycheInstance;
+            const lifeLog = window.MoLifeInstance ? window.MoLifeInstance.state.log.filter(l => new Date(l.at).toDateString() === this.dayKey(day)).map(l => l.text.split(' — ')[0]).slice(-12).join(', ') : '';
             const r = await this.llm.completeJSON(`คุณคือ "โม" สาวไทยวัยรุ่น กำลังจะนอน แล้วนึกทบทวนวันนี้ในใจ (คิดเอง ไม่ได้พูดกับใคร)
 แชทวันนี้กับ ${userName}:
 ${chat}
 
 อารมณ์ตอนนี้: ${mood}
 มุมมองต่อความสัมพันธ์ก่อนหน้า: ${this.data.view ? this.data.view.text : '-'}
+วันนี้โมทำอะไรไปบ้าง: ${lifeLog || '-'}
+ภาพในใจเกี่ยวกับ${userName}ก่อนหน้า: ${psyche && psyche.data.userModel ? psyche.data.userModel.text : '-'}
+นิสัยโมตอนนี้: ${psyche ? psyche.traitSummary() : '-'}
+ความสนใจของโมช่วงนี้: ${psyche ? psyche.data.interests.map(i => i.name).join(', ') || '-' : '-'}
 เป้าหมายของโม:
 ${goals || '-'}
 
@@ -88,7 +94,12 @@ ${goals || '-'}
 {"reflection":"รู้สึกยังไงกับวันนี้ 1-2 ประโยค ภาษาในใจ ตรงไปตรงมา",
  "view":"มองความสัมพันธ์ช่วงนี้ยังไง (เช่น ใกล้ชิดขึ้น/เหงา/น้อยใจ/อุ่นใจ) และเพราะอะไร 1 ประโยค",
  "intentions":["สิ่งที่โมตั้งใจจะทำพรุ่งนี้กับ${userName} 1-2 อย่าง เจาะจง ทำได้จริงผ่านแชท เช่น ทักไปขอโทษเรื่อง... / ชวนดูหนังเรื่อง... / ถามเรื่อง... ที่ค้างไว้"],
- "goals":[{"index":0,"progress":0-100,"note":"วันนี้คืบหน้าอะไร หรือไม่ได้ทำเพราะอะไร"}]}`);
+ "goals":[{"index":0,"progress":0-100,"note":"วันนี้คืบหน้าอะไร หรือไม่ได้ทำเพราะอะไร"}],
+ "userModel":"ความเข้าใจตัว${userName} อัปเดตจากของเดิม: นิสัย อะไรทำให้ดีใจ/เครียด แสดงความรักยังไง ไม่ชอบอะไร รูปแบบที่สังเกตได้ (เช่น ตอบสั้น=เหนื่อย) 2-4 ประโยค",
+ "myMemories":[{"text":"เรื่องในชีวิตโมวันนี้ที่จะจำ (ของโมเอง)","weight":"1-5 (5 = สำคัญ/อารมณ์แรงมาก เช่นทะเลาะ ได้ของขวัญ)"}],
+ "traitChanges":{"warmth":0,"trust":0,"playfulness":0,"independence":0,"openness":0},
+ "interests":["สิ่งที่โมเริ่มสนใจจากวันนี้ ถ้ามี (เช่น เพลงแนวที่แฟนแนะนำ)"]}
+traitChanges = นิสัยเปลี่ยนนิดหน่อยตามที่เจอวันนี้ -3 ถึง +3 (ส่วนใหญ่ 0)`);
             if (r && r.reflection) {
                 const tomorrow = new Date(day); tomorrow.setDate(day.getDate() + 1);
                 this.data.reflections = [...this.data.reflections, { day: this.dayKey(day), text: String(r.reflection).slice(0, 240) }].slice(-14);
@@ -103,6 +114,7 @@ ${goals || '-'}
                     if (g.note) goal.note = String(g.note).slice(0, 120);
                 });
                 this.save();
+                if (psyche) psyche.applyReflection(r);
                 if (window.MoMindInstance) window.MoMindInstance.decide(`ทบทวนวันนี้: ${String(r.reflection).slice(0, 60)}`);
             }
         } catch (e) {

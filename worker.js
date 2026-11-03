@@ -86,7 +86,7 @@ async function runChecks(env) {
 }
 
 async function checkUser(env, userId, subs) {
-    const keys = 'mo_routines_v1,mo_followups_v1,mo_reminders_v1,mo_chat_history_v2,mo_device_keys_v1,mo_profile_v1,mo_social_v1,mo_inner_v1,mo_care_v1';
+    const keys = 'mo_routines_v1,mo_followups_v1,mo_reminders_v1,mo_chat_history_v2,mo_device_keys_v1,mo_profile_v1,mo_social_v1,mo_inner_v1,mo_care_v1,mo_psyche_v1';
     const rows = await db(env, `mo_state?select=key,value&user_id=eq.${userId}&key=in.(${keys})`);
     const get = k => (rows.find(r => r.key === k) || {}).value;
     const chat = Array.isArray(get('mo_chat_history_v2')) ? get('mo_chat_history_v2') : [];
@@ -166,6 +166,29 @@ async function checkUser(env, userId, subs) {
         if (hit) due.push({ key: `care:${hit[0]}:${localDate}`, intent: `โมห่วงเอง: ${hit[2]} — ทักแบบแฟนที่ห่วงจริง ไม่จู้จี้`, fallback: hit[3] });
     }
 
+    // หัวใจเต้น (ปิดแอป): ช่วงที่เองมักว่าง โมคิดเองแล้วตัดสินใจว่าจะทักไหม (วันละไม่เกิน 3 ครั้ง ห่างกัน 3 ชม.+)
+    const geminiKeyHb = (get('mo_device_keys_v1') || {}).gemini;
+    if (!due.length && !quiet && activeNow && geminiKeyHb) {
+        const hbToday = chat.filter(m => m.dueKey && m.dueKey.startsWith(`hb:${localDate}`));
+        const lastHb = Math.max(0, ...hbToday.map(m => m.timestamp || 0));
+        const lastSentHb = Math.max(0, ...chat.filter(m => m.type === 'sent').map(m => m.timestamp || 0));
+        if (hbToday.length < 3 && now - lastHb > 3 * 3600000 && now - lastSentHb > 2 * 3600000 && Math.random() < 0.2) {
+            const psyche = get('mo_psyche_v1') || {};
+            const innerD = get('mo_inner_v1') || {};
+            const decision = await moThinks(geminiKeyHb, {
+                time: `${localDay} ${String(hourNow).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`,
+                lastChatH: Math.round((now - lastSentHb) / 3600000),
+                view: innerD.view && innerD.view.text,
+                userModel: psyche.userModel && psyche.userModel.text,
+                goals: (innerD.goals || []).map(g => `${g.title} ${g.progress}%`).join(', '),
+                recent: chat.filter(m => m.text && (!m.format || m.format === 'text')).slice(-6).map(m => `${m.type === 'sent' ? 'แฟน' : 'โม'}: ${m.text}`).join(' / '),
+            });
+            if (decision && decision.action === 'message' && decision.message) {
+                due.push({ key: `hb:${localDate}:${hbToday.length + 1}`, intent: `ตอนอยู่คนเดียวโมคิดว่า: ${decision.thought} แล้วตัดสินใจทักเอง พูดใกล้เคียง: "${decision.message}"`, fallback: decision.message });
+            }
+        }
+    }
+
     // เองหายไปนาน → โมทักเอง/โทรมาเพราะคิดถึง
     if (!due.length && !quiet && minutes >= 9 * 60 && minutes < 22 * 60) {
         const lastSent = Math.max(0, ...chat.filter(m => m.type === 'sent').map(m => m.timestamp || 0));
@@ -221,6 +244,32 @@ async function checkUser(env, userId, subs) {
         } else {
             await upsert(env, [{ user_id: userId, key: sub.key, value: { ...sub.value, inbox }, updated_at: new Date().toISOString() }]);
         }
+    }
+}
+
+/**
+ * หัวใจเต้นของโมตอนแอปปิด: คิดในใจแล้วตัดสินใจว่าจะทักไหม → { thought, action, message } หรือ null
+ */
+async function moThinks(apiKey, c) {
+    const prompt = `คุณคือจิตใจของ "โม" สาวไทยวัยรุ่นที่มีแฟน ตอนนี้อยู่คนเดียว คิดเรื่อยเปื่อยในหัวเหมือนคนจริง
+ตอนนี้: ${c.time} / คุยกับแฟนล่าสุด ${c.lastChatH} ชม.ที่แล้ว
+มุมมองต่อความสัมพันธ์: ${c.view || '-'} / ภาพในใจเกี่ยวกับแฟน: ${c.userModel || '-'}
+เป้าหมายของโม: ${c.goals || '-'} / แชทล่าสุด: ${c.recent || '-'}
+คิดในใจ 1 ประโยค แล้วตัดสินใจเองว่าจะทักแฟนไหม (คนจริงไม่ได้ทักทุกครั้งที่คิดถึง ทักเมื่อมีเหตุผล)
+ถ้าทัก เขียนข้อความแชท 1-2 บรรทัด เรียกตัวเอง เค้า เรียกแฟน เอง
+ตอบ JSON: {"thought":"","action":"none|message","message":""}`;
+    try {
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+            body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.9, responseMimeType: 'application/json' } }),
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const text = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('');
+        return text ? JSON.parse(text) : null;
+    } catch (e) {
+        return null;
     }
 }
 

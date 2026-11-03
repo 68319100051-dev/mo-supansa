@@ -222,6 +222,12 @@ class MoLife {
             return this.makeActivity(MO_SPECIAL.wish, ts, null, { wish: s.wish.item }, s.wish.cost);
         }
 
+        // โมอยากทำอะไรเอง (จากหัวใจเต้น) → ทำอันนั้นถ้าเวลาเหมาะ
+        if (s.nextWish) {
+            const want = MO_ACTIVITIES.find(a => a.id === s.nextWish && h >= a.hours[0] && h < a.hours[1] && !(a.cost && s.wallet < a.cost));
+            s.nextWish = null;
+            if (want) return this.makeActivity(want, ts);
+        }
         const candidates = MO_ACTIVITIES.filter(a => {
             if (a.id === prevId) return false;
             if (h < a.hours[0] || h >= a.hours[1]) return false;

@@ -397,8 +397,17 @@ class MoMindUI {
                 <div class="mind-chem-track"><div class="mind-chem-fill" style="width:${gl.progress}%;background:#ffd166"></div></div><span class="mind-chem-val">${gl.progress}%</span></div>`).join('')) : '',
             inner.reflections.length ? this.section('🌙 ทบทวนก่อนนอน', this.list(inner.reflections.slice(-5).reverse().map(r => `<b>${this.esc(r.day)}</b><span>${this.esc(r.text)}</span>`), '')) : '',
         ].join('') : '';
+        const ps = window.MoPsycheInstance && window.MoPsycheInstance;
+        const psycheHTML = ps ? [
+            ps.data.beats.length ? this.section('🫀 ตอนอยู่คนเดียวโมคิดว่า', this.list(ps.data.beats.slice(-5).reverse().map(b => `<time>${this.fmt(b.at)}</time> ${this.esc(b.feeling ? `(${b.feeling}) ` : '')}${this.esc(b.thought)} <small>→ ${({ none: 'ไม่ได้ทำอะไร', message: 'ทักเอง', story: 'ลงสตอรี่', activity: 'ไปทำอย่างอื่น' })[b.action] || this.esc(b.action || '')}</small>`), '')) : '',
+            ps.data.userModel ? this.section('🧠 ภาพในใจของโมเกี่ยวกับเอง', `<p class="mind-text">${this.esc(ps.data.userModel.text)}</p>`) : '',
+            this.section('🌱 นิสัยโม (เปลี่ยนไปตามประสบการณ์)', Object.entries(MO_TRAITS).map(([k, name]) => `<div class="mind-chem-row"><span class="mind-chem-name">${name}</span>
+                <div class="mind-chem-track"><div class="mind-chem-fill" style="width:${ps.data.traits[k]}%;background:#ff7eb6"></div></div><span class="mind-chem-val">${ps.data.traits[k]}</span></div>`).join('')),
+            ps.data.interests.length ? this.section('🔍 ความสนใจช่วงนี้', this.list(ps.data.interests.map(i => `${this.esc(i.name)} <small>${i.strength}%</small>`), '')) : '',
+            ps.data.autobio.length ? this.section('📖 ความจำชีวิตโมเอง (เรื่องเล็กค่อยๆ เลือน)', this.list(ps.recall('', 8).map(m => `${'★'.repeat(m.weight)} ${this.esc(m.text)} <small>${Math.max(0, Math.round((Date.now() - m.at) / 86400000))} วันก่อน</small>`), '')) : '',
+        ].join('') : '';
         return this.section('ตอนนี้โมคิดอะไรอยู่', `<div class="mind-now">${now.map(t => `<div>${t}</div>`).join('')}</div>`)
-            + innerHTML
+            + psycheHTML + innerHTML
             + this.section('ความคิดล่าสุด', thoughts.length
             ? `<div class="mind-thoughts">${thoughts.map(th => `<div class="mind-thought"><time>${this.fmt(th.t)}</time><span class="mind-thought-region">${MO_REGIONS[th.region] ? MO_REGIONS[th.region].name : th.region}</span><span>${this.esc(th.text)}</span></div>`).join('')}</div>`
             : '<p class="mind-note">ยังไม่มีความคิดที่บันทึกไว้ ลองคุยกับโมดู</p>');

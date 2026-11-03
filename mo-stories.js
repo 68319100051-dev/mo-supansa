@@ -53,9 +53,9 @@ class MoStories {
     /**
      * เรียกทุกไม่กี่นาที: ห่างจากสตอรี่ล่าสุดเกิน 5 ชม. + ช่วงกลางวัน → บางทีโมลงสตอรี่ใหม่
      */
-    async maybePost() {
+    async maybePost(force = false) {
         const h = new Date().getHours();
-        if (h < 9 || h > 22 || Date.now() - this.data.lastAt < 5 * 3600000 || Math.random() > 0.25) return;
+        if (h < 9 || h > 22 || Date.now() - this.data.lastAt < (force ? 2 : 5) * 3600000 || (!force && Math.random() > 0.25)) return;
         if (!this.llm || !this.llm.isReady() || this.posting) return;
         this.posting = true;
         try {

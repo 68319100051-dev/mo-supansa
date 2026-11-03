@@ -97,6 +97,9 @@
     const reflectTick = () => inner.maybeReflect(chat.messages, memory.getUserName());
     setInterval(reflectTick, 10 * 60000);
     setTimeout(reflectTick, 45000);
+    // จิตใจของโม: ภาพในใจเกี่ยวกับเอง, ความจำชีวิตตัวเอง, นิสัยที่เปลี่ยนไป, ความสนใจ, หัวใจเต้น
+    const psyche = new MoPsyche(llm);
+    window.MoPsycheInstance = psyche;
     // โมห่วงเอง: สังเกตจากแชท แล้วถามไถ่ตามจังหวะ
     const care = new MoCare();
     window.MoCareInstance = care;
@@ -562,6 +565,7 @@
         if (has('mo_social_v1')) social.data = social.load();
         if (has('mo_care_v1')) care.data = care.load();
         if (has('mo_inner_v1')) inner.data = inner.load();
+        if (has('mo_psyche_v1')) psyche.data = psyche.load();
         // คีย์ AI จากเครื่องอื่นในบัญชีเดียวกัน → มือถือไม่ต้องกรอกเอง
         if (has('mo_device_keys_v1')) {
             // เครื่องที่มีไฟล์คีย์: อย่าให้ของจากเครื่องอื่นทับ → ส่งของที่ครบกลับขึ้นไป
@@ -1290,4 +1294,44 @@
     }
     // แอป Android (Capacitor): แตะแจ้งเตือนสายเข้าตอนแอปเปิดอยู่
     window.addEventListener('mo-native-call', (e) => callFromPush(e.detail && e.detail.answer));
+
+    // ======= หัวใจเต้น: ทุก ~1.5 ชม. โมคิดเองตอนไม่มีใครคุย แล้วตัดสินใจเอง =======
+    async function heartbeat() {
+        if (isQuietHours() || chat.isTyping || call.getCallStatus()) return;
+        const lastSent = [...chat.messages].reverse().find(m => m.type === 'sent');
+        if (lastSent && Date.now() - lastSent.timestamp < 20 * 60000) return;   // กำลังคุยกันอยู่ ไม่ต้องคิดแยก
+        const cur = life.state.current;
+        const r = await psyche.beat({
+            timeText: llm.timeContext(),
+            life: cur ? `${cur.label} (${cur.room === 'out' ? cur.place || 'ข้างนอก' : 'ที่บ้าน'})` : '',
+            lastChatMin: lastSent ? Math.round((Date.now() - lastSent.timestamp) / 60000) : null,
+            emotion: mind.emotion().label,
+            view: inner.data.view && inner.data.view.text,
+            goals: inner.data.goals.map(g => `${g.title} ${g.progress}%`).join(', '),
+            intentions: inner.data.intentions.filter(x => !x.done && x.day === new Date().toDateString()).map(x => x.text).join(', '),
+            concerns: care.concerns().map(c => c.ask.split(' ถาม')[0]).join(', '),
+        });
+        if (!r) return;
+        mind.decide(`💭 (คิดคนเดียว) ${r.thought}`);
+        if (r.action === 'message' && r.message && canReachOut() && !chat.awaitingReply) {
+            chat.sendProactiveMessage(`ตอนอยู่คนเดียวโมคิดว่า: ${r.thought} แล้วตัดสินใจทักไปหาเอง`,
+                `พูดตามที่คิดจริงๆ ใกล้เคียงข้อความนี้: "${r.message}" ปรับให้เป็นธรรมชาติ 1-2 บรรทัด`);
+        } else if (r.action === 'story') {
+            stories.maybePost(true);
+        } else if (r.action === 'activity' && r.activity) {
+            life.state.nextWish = r.activity;
+            life.save();
+        }
+    }
+    setInterval(heartbeat, 20 * 60000);
+    setTimeout(heartbeat, 5 * 60000);
+
+    // ======= ระดับความเป็นตัวของตัวเอง (หน้าตั้งค่า) =======
+    const autonomySel = document.getElementById('autonomy-level');
+    autonomySel.value = String(psyche.data.autonomy);
+    autonomySel.addEventListener('change', () => {
+        psyche.data.autonomy = Number(autonomySel.value);
+        psyche.save();
+        mind.decide(`ปรับความเป็นตัวของตัวเองเป็นระดับ ${psyche.data.autonomy}`);
+    });
 })();
