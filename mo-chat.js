@@ -213,6 +213,21 @@ class MoChat {
             return;
         }
 
+        // ขอให้เตือนแต่อ่านเวลาไม่ออก → ให้ AI ช่วยอ่าน (อ่านไม่ได้ก็คุยปกติ)
+        if (this.reminders && /เตือน/.test(text) && this.llmService && this.llmService.isReady()) {
+            this.queueReply(async note => {
+                this.showTyping();
+                const r = await this.reminders.parseWithAI(text, this.llmService);
+                if (r) {
+                    this.hideTyping();
+                    this.addMessage('received', this.reminders.confirmMessage(r));
+                    return;
+                }
+                return this.moRespond(note + sulkNote + text);
+            });
+            return;
+        }
+
         // Mo thinks and responds — บอกโมด้วยว่าตอบกลับข้อความไหน
         const forMo = sulkNote + (replyTo
             ? `(ตอบกลับข้อความของ${replyTo.type === 'received' ? 'โม' : 'ตัวเอง'}ที่ว่า "${replyTo.text}")\n${text}`
@@ -853,6 +868,61 @@ class MoChat {
         return `[ข้อความระบบ: เองยังไม่ได้เปิดดูคลิป "${msg.extra && msg.extra.title}" ที่โมส่งไป — ถ้าเข้าจังหวะ แซวหรืองอนนิดๆ ว่าไม่ดูคลิปเค้า (ไม่ต้องทุกครั้ง)]\n`;
     }
 
+    // =============================================
+    //  เสียง & สั่น เมื่อโมส่งข้อความ (แบบแอปแชทจริง)
+    // =============================================
+
+    alertsOn() {
+        try { return localStorage.getItem('mo_alerts_v1') !== 'off'; } catch (e) { return true; }
+    }
+
+    /**
+     * เสียงสั้นๆ สร้างเอง (ไม่ต้องมีไฟล์): 'receive' = ติ๊งสองโน้ต, 'send' = ฟิ้วเบาๆ
+     */
+    playTone(kind) {
+        if (!this.alertsOn()) return;
+        try {
+            const Ctx = window.AudioContext || window.webkitAudioContext;
+            this._audioCtx = this._audioCtx || new Ctx();
+            const ctx = this._audioCtx;
+            if (ctx.state === 'suspended') ctx.resume();
+            const notes = kind === 'send' ? [[660, 0, 0.06, 0.05]] : [[880, 0, 0.09, 0.12], [1320, 0.1, 0.12, 0.1]];
+            notes.forEach(([freq, at, dur, vol]) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0, ctx.currentTime + at);
+                gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + at + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + dur);
+                osc.connect(gain).connect(ctx.destination);
+                osc.start(ctx.currentTime + at);
+                osc.stop(ctx.currentTime + at + dur + 0.02);
+            });
+        } catch (e) {}
+    }
+
+    /**
+     * โมส่งข้อความมา: เปิดแอปอยู่ → ติ๊ง + สั่น / ย่อแอปไว้ → แจ้งเตือนของระบบ (เด้ง + สั่น + เสียงเครื่อง)
+     * หลายฟองติดกัน → เตือนครั้งเดียว
+     */
+    alert(message) {
+        if (!this.alertsOn() || Date.now() - (this._lastAlert || 0) < 2500) return;
+        this._lastAlert = Date.now();
+        const body = message.format === 'sticker' ? `ส่งสติกเกอร์ ${message.text}` : (this.snippetOf ? this.snippetOf(message) : message.text) || 'ส่งข้อความมา';
+        if (document.visibilityState === 'hidden') {
+            if ('Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker) {
+                navigator.serviceWorker.ready.then(reg => reg.showNotification('โม 💕', {
+                    body: String(body).slice(0, 140), icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',
+                    tag: 'mo-chat', renotify: true, vibrate: [120, 60, 120],
+                })).catch(() => {});
+            }
+            return;
+        }
+        this.playTone('receive');
+        try { if (navigator.vibrate) navigator.vibrate([60, 40, 60]); } catch (e) {}
+    }
+
     sendSong(song) {
         this.mind && this.mind.act(`แชร์เพลง ${song.artist} - ${song.title}`);
         this.addMessage('received', '', 'song', { ...song, ...MoSongs.links(song.artist, song.title) });
@@ -1385,6 +1455,8 @@ ${moToday.length ? `ที่โมพูดไปแล้ววันนี้
         this.renderMessage(message);
         this.scrollToBottom();
         this.saveHistory();
+        if (type === 'received') this.alert(message);
+        else if (type === 'sent') this.playTone('send');
 
         return message;
     }

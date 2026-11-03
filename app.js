@@ -1173,4 +1173,17 @@
     msgInput.addEventListener('input', syncHasText);
     document.getElementById('btn-send').addEventListener('click', () => setTimeout(syncHasText, 0));
     msgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') setTimeout(syncHasText, 0); });
+
+    // ======= เสียง & สั่น: เปิด/ปิดในหน้าตั้งค่า (ปิดแล้วจำไว้ในเครื่องนี้) =======
+    const alertsToggle = document.getElementById('alerts-toggle');
+    alertsToggle.checked = chat.alertsOn();
+    alertsToggle.addEventListener('change', () => {
+        try { localStorage.setItem('mo_alerts_v1', alertsToggle.checked ? 'on' : 'off'); } catch (e) {}
+        if (alertsToggle.checked) chat.playTone('receive');
+    });
+    // ขอสิทธิ์แจ้งเตือนครั้งแรกที่แตะหน้าจอ (ย่อแอปไว้แล้วโมทักจะเด้ง) — มือถือบังคับต้องมาจากการแตะ
+    document.addEventListener('pointerdown', function askOnce() {
+        document.removeEventListener('pointerdown', askOnce);
+        if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+    });
 })();
