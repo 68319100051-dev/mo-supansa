@@ -171,6 +171,8 @@ class MoLLMService {
         if (m.format === 'song' && m.extra) return { type: m.type, text: `[ส่งเพลง: ${m.extra.artist} - ${m.extra.title}${m.extra.listened ? ' (เองกดฟังแล้ว)' : ''}]` };
         if (m.unsent) return { type: m.type, text: `[โมพิมพ์ว่า "${m.unsentText || ''}" แล้วกดยกเลิกข้อความ — เองเห็นแค่ว่ายกเลิกข้อความ ไม่เห็นว่าเขียนอะไร]` };
         if (!m.text || !m.text.trim()) return null;
+        // ฟอง "*คำที่แก้" ของระบบพิมพ์ผิด → ไม่ส่งให้ AI (กัน AI เลียนแบบพิมพ์ผิดเอง)
+        if (m.type === 'received' && /^\*[^\s*]{1,20}$/.test(m.text.trim())) return null;
         // เองกดรีแอคข้อความโม → ให้โมรู้
         const note = m.type === 'received' && m.reaction ? ` [เองกดรีแอค ${m.reaction}]` : '';
         return { type: m.type, text: m.text.trim() + note };
@@ -209,7 +211,10 @@ class MoLLMService {
 - แยกเป็นหลายข้อความสั้นๆ เสมอ: 1 บรรทัด = 1 ฟองแชท ปกติ 2-3 บรรทัด เรื่องซึ้ง/จริงจัง 3-5 บรรทัด
 - แต่ละบรรทัดสั้น ไม่เกิน ~15 คำ ห้ามเขียนเป็นย่อหน้ายาว
 - ท่าทาง *...* (เช่น *ลูบหัวเบาๆ* *ดึงเข้ามากอด*) ใช้นานๆ ครั้ง เฉพาะตอนอ้อนหรือปลอบ ไม่เกิน 1 ครั้งต่อคำตอบ ส่วนใหญ่ไม่ต้องมี
-- สรรพนามห้ามใช้ แก มึง กู
+- สรรพนามห้ามใช้ แก มึง กู เธอ คุณ (เรียกอีกฝ่ายว่า "เอง" หรือชื่อเท่านั้น)
+- ห้ามแกล้งพิมพ์ผิด ห้ามส่ง *คำ เพื่อแก้คำเอง (ระบบทำให้เองแล้ว) ไม่ใส่ ? ท้ายประโยค (คนไทยแชทไม่ค่อยใส่)
+- ถ้าเองตอบงงๆ สั้นๆ (ห๊ะ อะไร ยังไง งง) = เองไม่เข้าใจที่โมเพิ่งพูด → อธิบายสิ่งที่เพิ่งพูดใหม่ให้ชัดในประโยคเดียว ห้ามเปลี่ยนเรื่องหรือถามคำถามกว้างๆ
+- พูดให้เป็นเรื่องเดียวกันทั้งคำตอบ ต่อจากที่คุยอยู่จริง ไม่พูดประโยคซึ้งลอยๆ ที่ไม่เกี่ยวกับบทสนทนา
 - ทุกครั้งมีอารมณ์ร่วม (ตื่นเต้น แซว งอน ขำ อ้อน ซึ้ง) หรือความเห็นโม หรือถามต่อ ห้ามตอบห้วนคำเดียวไร้อารมณ์ ห้ามทวนคำ
 - ภาษาพิมพ์ ป่ะ มั้ย อ่ะ ละ ไรอะ นะ ลากเสียงได้ ไม่ใส่ ! จุด อิโมจิใช้น้อย
 - ชวนทำอะไร → ตอบรับสนุกๆ แซวกลับ / โดนติว่าตอบแปลก → งอนนิดๆ แล้วคุยต่อ
@@ -425,7 +430,14 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
     getProviders(hasImage) {
         const providers = [];
         const hasGeminiKey = this.config.enabled && this.config.provider !== 'openai' && this.config.apiKey && this.config.apiKey.trim().length > 5;
-        // Gemini Flash-Lite: ฟรี เร็ว ภาษาไทยดีที่สุดในตัวฟรีที่ลอง และดูรูปได้ (โควตาแยกจาก model หลัก)
+        // แชท: ใช้ model หลัก (ฉลาดกว่า ตอบเป็นเรื่องเป็นราว) ก่อน — โควตาหมด/ล่ม → Flash-Lite → Groq
+        if (hasGeminiKey && this.config.model && this.config.model !== this.liteModel) {
+            providers.push({
+                name: `gemini:${this.config.model}`,
+                call: args => this.callGemini(...args, this.config.model)
+            });
+        }
+        // Gemini Flash-Lite: ฟรี เร็ว ดูรูปได้ (โควตาแยกจาก model หลัก) — สำรองตัวแรก
         if (hasGeminiKey) {
             providers.push({
                 name: `gemini:${this.liteModel}`,
@@ -448,8 +460,8 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
                 });
             }
         }
-        // ตัวที่ตั้งไว้ในหน้าตั้งค่า (Gemini/OpenAI) เป็นตัวสำรอง และเป็นตัวเดียวที่ดูรูปได้
-        if (this.config.enabled && this.config.apiKey && this.config.apiKey.trim().length > 5) {
+        // OpenAI ที่ตั้งไว้ในหน้าตั้งค่า (Gemini หลักใส่ไว้ข้างบนแล้ว)
+        if (this.config.enabled && this.config.provider === 'openai' && this.config.apiKey && this.config.apiKey.trim().length > 5) {
             providers.push({
                 name: this.config.provider,
                 call: args => this.config.provider === 'openai' ? this.callOpenAI(...args) : this.callGemini(...args)
