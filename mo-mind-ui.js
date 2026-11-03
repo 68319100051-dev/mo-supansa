@@ -254,7 +254,7 @@ class MoMindUI {
         chips.querySelectorAll('.mind-region-chip').forEach(btn => btn.addEventListener('click', () => this.select(btn.dataset.region)));
 
         // ส่วนที่ข้อมูลเปลี่ยนตลอด: อัปเดตรายละเอียดด้วย
-        if (this.selected === 'frontal' || this.selected === 'limbic') this.renderDetail(true);
+        if (this.selected === 'frontal') this.renderDetail(true);
     }
 
     // =============================================
@@ -286,18 +286,29 @@ class MoMindUI {
             : `<p class="mind-note">${empty}</p>`;
     }
 
+    /**
+     * หน้าความทรงจำ: แยกหมวด + ค้นหา + บอกให้โมจำเอง + แก้/ลบได้
+     */
     detail_limbic() {
         const m = this.mind;
         const c = m.state.chem;
         const summary = this.src.memory.getSummary();
         const profile = window.MO_PROFILE || {};
         const aiFacts = summary.longTerm.aiFacts || [];
-        const fixed = [...summary.facts.filter(f => !aiFacts.includes(f)), ...(profile.topics || []).flatMap(t => t.facts)];
+        const fixed = summary.facts.filter(f => !aiFacts.includes(f));
+        const topics = (profile.topics || []).flatMap(t => t.facts.map(f => `${t.title}: ${f}`));
         const events = (summary.events || []).slice().reverse().slice(0, 12);
-        // ความจำที่แก้/ลบได้ (เรื่องของเอง ที่ AI จดไว้ + ตัวตนของโม + มุกของเรา)
-        const editable = (list, kind) => list.map((f, i) => `<span>${this.esc(f)}</span><span class="mind-edit"><button class="mind-x" data-edit="${kind}:${i}" title="แก้">✏️</button><button class="mind-x" data-forget="${kind}:${i}" title="ลืม">&times;</button></span>`);
         const self = window.MoSelfInstance;
-        const selfItems = self ? [...editable(self.data.opinions, 'opinion'), ...editable(self.data.jokes, 'joke')] : [];
+        const care = window.MoCareInstance;
+        const editable = (list, kind) => list.map((f, i) => `<span>${this.esc(f)}</span><span class="mind-edit"><button class="mind-x" data-edit="${kind}:${i}" title="แก้">✏️</button><button class="mind-x" data-forget="${kind}:${i}" title="ลืม">&times;</button></span>`);
+        const group = (icon, title, items, empty, open = false) => `<details class="mind-group" ${open ? 'open' : ''}>
+            <summary>${icon} ${title} <small>${items.length}</small></summary>${this.list(items, empty)}</details>`;
+
+        const total = aiFacts.length + fixed.length + topics.length + (self ? self.data.opinions.length + self.data.jokes.length : 0);
+        const concerns = care ? care.concerns().map(x => `💗 ${this.esc(x.ask.split(' ถาม')[0])}${care.askedToday(x.id) ? ' <small>(ถามแล้ววันนี้)</small>' : ''}`) : [];
+        const g = self && self.data.grudge;
+        const weeks = self ? self.data.weeks.slice().reverse().map(w => `<b>สัปดาห์ถึง ${this.esc(w.label)}</b><span>${this.esc(w.text)}</span>`) : [];
+        const gifts = window.MoGifts && this.src.life ? window.MoGifts.owned(this.src.life).map(x => `${x.emoji} ${this.esc(x.name)} <small>${this.esc(x.note)}</small>`) : [];
 
         const chem = Object.entries(MO_CHEMICALS).map(([k, chemDef]) => `
             <div class="mind-chem-row">
@@ -307,11 +318,21 @@ class MoMindUI {
                 <span class="mind-chem-val">${Math.round(c[k])}</span>
             </div>`).join('');
 
-        return this.section('สารเคมีในสมองตอนนี้', chem)
-            + this.section('24 ชั่วโมงที่ผ่านมา', this.chartHTML())
-            + this.section(`ความทรงจำระยะยาว (${aiFacts.length + fixed.length})`, this.list([...editable(aiFacts, 'fact'), ...fixed.map(f => `📌 ${this.esc(f)}`)], 'ยังไม่มีความทรงจำระยะยาว'))
-            + this.section('ตัวตนของโม & มุกของเรา', this.list(selfItems, 'ยังไม่มี คุยกันไปเรื่อยๆ เดี๋ยวโมจำเอง'))
-            + this.section('เหตุการณ์สำคัญ', this.list(events.map(e => `<b>${this.esc(e.title)}</b><small>${this.esc(e.date)}</small>`), 'ยังไม่มีเหตุการณ์สำคัญ'));
+        return `<div class="mind-memory-head">
+                <div><b>${total}</b><span>เรื่องที่โมจำได้</span></div>
+                <button class="mind-add" id="mind-add-memory">➕ บอกให้โมจำ</button>
+            </div>
+            <input type="search" class="mind-search" id="mind-search" placeholder="🔎 ค้นหาในความทรงจำ..." autocomplete="off">
+            ${g ? `<p class="mind-grudge">😤 โมยังงอนอยู่ ระดับ ${g.level}/3 — ${this.esc(g.reason)} <small>(พิมพ์ขอโทษเพื่อง้อ)</small></p>` : ''}
+            ${group('💕', 'เรื่องของเอง', editable(aiFacts, 'fact').concat(fixed.map(f => `📌 ${this.esc(f)}`)), 'ยังไม่มี คุยกับโมไปเรื่อยๆ โมจะจดเอง', true)}
+            ${group('💗', 'เรื่องที่โมห่วงอยู่ตอนนี้', concerns, 'ตอนนี้ไม่มีเรื่องให้ห่วง เองสบายดี 😊', concerns.length > 0)}
+            ${group('📖', 'ที่โมรู้มาตั้งแต่แรก', topics.map(t => this.esc(t)), 'ยังไม่มีโปรไฟล์ (ตั้งใน mo-keys.local.js)')}
+            ${group('🪞', 'ตัวตนของโม (ความชอบ/ความเห็นที่เคยบอก)', self ? editable(self.data.opinions, 'opinion') : [], 'ยังไม่มี')}
+            ${group('😆', 'มุก & ชื่อเรียกของเรา', self ? editable(self.data.jokes, 'joke') : [], 'ยังไม่มี')}
+            ${group('📅', 'สัปดาห์ที่ผ่านมา', weeks, 'จะสรุปให้เมื่อคุยกันครบสัปดาห์')}
+            ${group('🎁', 'ของขวัญที่เองให้', gifts, 'ยังไม่มี ไปร้านของขวัญที่บ้านโมได้')}
+            ${group('📜', 'เหตุการณ์สำคัญ', events.map(e => `<b>${this.esc(e.title)}</b><small>${this.esc(e.date)}</small>`), 'ยังไม่มีเหตุการณ์สำคัญ')}
+            <details class="mind-group"><summary>🧪 สารเคมีในสมองตอนนี้</summary>${chem}${this.chartHTML()}</details>`;
     }
 
     chartHTML() {
@@ -340,13 +361,35 @@ class MoMindUI {
         return this.section('สรุปเรื่องที่คุยกันมา', summary.chatSummary
                 ? `<p class="mind-text">${this.esc(summary.chatSummary)}</p>`
                 : '<p class="mind-note">ยังไม่มีบทสรุป (จะสรุปเมื่อคุยกันยาวขึ้น)</p>')
+            + (window.MoSocialInstance && window.MoSocialInstance.active().length ? this.section('👭 เรื่องในชีวิตโมช่วงนี้', this.list(window.MoSocialInstance.active().map(a =>
+                `<b>${this.esc(a.who)}: ${this.esc(a.title)}</b><span>${a.beats.slice(0, a.step + 1).map(x => this.esc(x)).join(' → ')}</span>`), '')) : '')
+            + `<p class="mind-note" id="mind-recall-count">🔎 กำลังนับความจำตามความหมาย...</p>`
             + this.section('📔 ไดอารี่ของโม', (diary.writing.size ? '<p class="mind-note">✍️ โมกำลังเขียนไดอารี่...</p>' : '')
                 + this.list(entries.map(e => `<b>${this.esc(diary.formatDate(e.key))}</b><span>${this.esc(e.text)}</span>`), 'ยังไม่มีไดอารี่ คุยกับโมก่อนนะ'));
     }
 
     detail_frontal() {
         const thoughts = this.mind.state.thoughts.slice(-25).reverse();
-        return this.section('ความคิดล่าสุด', thoughts.length
+        const e = this.mind.emotion();
+        const self = window.MoSelfInstance;
+        const care = window.MoCareInstance;
+        const social = window.MoSocialInstance;
+        const life = this.src.life && this.src.life.state.current;
+        const next = this.src.reminders.getPending()[0];
+        const arc = social && social.active()[0];
+        const worry = care && care.concerns()[0];
+        const g = self && self.data.grudge;
+        const now = [
+            `${e.emoji} รู้สึก<b>${this.esc(e.label)}</b>`,
+            life ? `${life.emoji} กำลัง${this.esc(life.label)}` : '',
+            g ? `😤 ยังงอนเองอยู่ (${g.level}/3) เพราะ${this.esc(g.reason)}` : '',
+            worry ? `💗 ห่วงว่า${this.esc(worry.ask.split(' ถาม')[0])}` : '',
+            arc ? `👭 คิดเรื่อง${this.esc(arc.who)}: ${this.esc(arc.beats[arc.step])}` : '',
+            next ? `⏰ รอเตือน${this.esc(next.text)} ${this.src.reminders.formatTime(next.dueAt)}` : '',
+            self && self.badDayToday() ? `🥺 วันนี้โม${this.esc(self.badDayToday())}` : '',
+        ].filter(Boolean);
+        return this.section('ตอนนี้โมคิดอะไรอยู่', `<div class="mind-now">${now.map(t => `<div>${t}</div>`).join('')}</div>`)
+            + this.section('ความคิดล่าสุด', thoughts.length
             ? `<div class="mind-thoughts">${thoughts.map(th => `<div class="mind-thought"><time>${this.fmt(th.t)}</time><span class="mind-thought-region">${MO_REGIONS[th.region] ? MO_REGIONS[th.region].name : th.region}</span><span>${this.esc(th.text)}</span></div>`).join('')}</div>`
             : '<p class="mind-note">ยังไม่มีความคิดที่บันทึกไว้ ลองคุยกับโมดู</p>');
     }
@@ -366,8 +409,12 @@ class MoMindUI {
 
     detail_occipital() {
         const seen = this.src.chat.messages.filter(m => m.format === 'image' || (m.format === 'reel' && m.extra)).slice(-18).reverse();
-        if (!seen.length) return '<p class="mind-note">โมยังไม่เคยเห็นรูปหรือคลิปเลย ลองส่งให้ดูสิ</p>';
-        return `<div class="mind-seen">${seen.map(m => {
+        const photos = window.MoSelfInstance ? window.MoSelfInstance.data.photos.slice().reverse() : [];
+        const stories = window.MoStoriesInstance ? window.MoStoriesInstance.active() : [];
+        const extra = (photos.length ? this.section('📷 รูปที่โมจำได้ว่าเองส่งมา', this.list(photos.map(p => `${this.esc(p.desc)} <small>${new Date(p.at).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</small>`), '')) : '')
+            + (stories.length ? this.section('📸 สตอรี่ที่โมลงวันนี้', this.list(stories.map(st => `${st.emoji} ${this.esc(st.text)}`), '')) : '');
+        if (!seen.length) return extra + '<p class="mind-note">โมยังไม่เคยเห็นรูปหรือคลิปเลย ลองส่งให้ดูสิ</p>';
+        return extra + `<div class="mind-seen">${seen.map(m => {
             const src = m.format === 'image' ? m.text : m.extra.thumbnail;
             const label = m.format === 'image' ? (m.type === 'sent' ? 'รูปจากเอง' : 'รูป') : (m.type === 'sent' ? '🎬 คลิปจากเอง' : '🎬 ' + m.extra.title);
             return `<button class="mind-seen-item" data-msg="${m.id}"><img src="${this.esc(src)}" alt="" loading="lazy"><span>${this.esc(label)}</span></button>`;
@@ -381,7 +428,12 @@ class MoMindUI {
             [s.daysKnown, 'วันที่รู้จักกัน'], [s.stats.currentStreak, 'คุยติดกัน (วัน)'],
             [s.level, 'เลเวลความสัมพันธ์'], [s.status, 'สถานะ'],
         ];
-        return `<div class="mind-stats">${stats.map(([v, l]) => `<div class="mind-stat"><b>${this.esc(v)}</b><span>${l}</span></div>`).join('')}</div>`;
+        const llm = window.MoLLMInstance;
+        const usage = Object.entries(llm && llm.usageToday ? llm.usageToday() : {});
+        const gifts = window.MoGifts && this.src.life ? window.MoGifts.owned(this.src.life).length : 0;
+        stats.push([gifts, 'ของขวัญที่ให้โม']);
+        return `<div class="mind-stats">${stats.map(([v, l]) => `<div class="mind-stat"><b>${this.esc(v)}</b><span>${l}</span></div>`).join('')}</div>`
+            + this.section('📊 สมอง AI ที่ใช้วันนี้ (เครื่องนี้)', this.list(usage.map(([name, u]) => `${this.esc(name)} <small>${u.calls} ครั้ง${u.tokens ? ` · ~${Math.round(u.tokens / 1000)}k token` : ''}</small>`), 'วันนี้ยังไม่ได้ใช้'));
     }
 
     detail_brainstem() {
@@ -396,6 +448,32 @@ class MoMindUI {
     }
 
     bindDetail(box) {
+        // ค้นหาในความทรงจำ: กรองทุกหมวด และกางหมวดที่เจอ
+        const search = box.querySelector('#mind-search');
+        if (search) search.addEventListener('input', () => {
+            const q = search.value.trim().toLowerCase();
+            box.querySelectorAll('.mind-group').forEach(gr => {
+                let hits = 0;
+                gr.querySelectorAll('.mind-item').forEach(it => {
+                    const ok = !q || it.textContent.toLowerCase().includes(q);
+                    it.style.display = ok ? '' : 'none';
+                    if (ok) hits++;
+                });
+                if (q) gr.open = hits > 0;
+            });
+        });
+        const add = box.querySelector('#mind-add-memory');
+        if (add) add.addEventListener('click', () => {
+            const fact = prompt('อยากให้โมจำเรื่องอะไรเกี่ยวกับเอง?', '');
+            if (!fact || !fact.trim()) return;
+            const lt = this.src.memory.data.longTerm;
+            lt.aiFacts = [...(lt.aiFacts || []), fact.trim().slice(0, 120)].slice(-40);
+            this.src.memory.save();
+            this.mind.decide(`จำไว้แล้ว: ${fact.trim().slice(0, 40)}`);
+            this.renderDetail();
+        });
+        const rc = box.querySelector('#mind-recall-count');
+        if (rc && window.MoRecall) MoRecall.all().then(v => { rc.textContent = `🔎 ความจำตามความหมาย: ${v.length} ข้อความ (นึกเรื่องเก่าที่เกี่ยวข้องได้แม้ใช้คนละคำ)`; }).catch(() => rc.remove());
         // แก้/ลบความจำ: fact = เรื่องของเอง, opinion/joke = ของโม
         const mem = this.src.memory;
         const self = window.MoSelfInstance;

@@ -3411,3 +3411,89 @@ button.mind-region-chip {
     font-weight: 600;
     line-height: 1.4;
 }
+
+/* 🧠 หน้าความทรงจำใหม่ */
+.mind-memory-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 6px 0 10px;
+}
+
+.mind-memory-head b {
+    display: block;
+    font-size: 1.6rem;
+    line-height: 1;
+}
+
+.mind-memory-head span {
+    font-size: 0.75rem;
+    opacity: 0.75;
+}
+
+.mind-add {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #f04d85, #a97aff);
+    color: #fff;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.mind-search {
+    width: 100%;
+    margin-bottom: 10px;
+    padding: 9px 14px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: inherit;
+    font: inherit;
+    font-size: 0.85rem;
+    outline: none;
+}
+
+.mind-group {
+    margin-bottom: 8px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 4px 10px;
+}
+
+.mind-group summary {
+    padding: 8px 0;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+}
+
+.mind-group summary small {
+    float: right;
+    opacity: 0.6;
+    font-weight: 500;
+}
+
+.mind-grudge {
+    margin-bottom: 10px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: rgba(255, 107, 107, 0.15);
+    font-size: 0.82rem;
+}
+
+.mind-now {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.mind-now div {
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 0.85rem;
+}
