@@ -3090,3 +3090,59 @@ button.mind-region-chip {
     flex-shrink: 0;
     background: #ef4444;
 }
+
+/* ➕ ถาดปุ่มเสริมเหนือแถบพิมพ์ */
+.input-area {
+    position: relative;
+}
+
+.input-tray {
+    position: absolute;
+    left: 10px;
+    bottom: calc(100% + 8px);
+    z-index: 50;
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+    border-radius: var(--radius-md);
+    background: var(--bg-secondary);
+    box-shadow: 0 8px 24px rgba(240, 77, 133, 0.18);
+    opacity: 0;
+    transform: translateY(6px);
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.input-area.tray-open .input-tray {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+}
+
+.input-tray .input-icon-btn {
+    width: 44px;
+    height: 44px;
+    background: var(--pink-50);
+    color: var(--pink-500);
+}
+
+.more-btn svg {
+    transition: transform 0.15s ease;
+}
+
+.input-area.tray-open .more-btn {
+    color: var(--pink-500);
+}
+
+.input-area.tray-open .more-btn svg {
+    transform: rotate(45deg);
+}
+
+/* มีข้อความในช่องพิมพ์ → ซ่อนไมค์ ให้ช่องพิมพ์กว้างขึ้น */
+.input-area.has-text .mic-btn:not(.recording) {
+    display: none;
+}
+
+.input-wrapper {
+    min-width: 0;
+}

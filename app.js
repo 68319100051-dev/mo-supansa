@@ -1114,4 +1114,23 @@
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
         navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW register failed:', err.message));
     }
+
+    // ======= แถบพิมพ์: ปุ่มเสริมอยู่ในถาด + / ไมค์โชว์เฉพาะตอนช่องพิมพ์ว่าง (แบบ LINE) =======
+    const inputArea = document.querySelector('.input-area');
+    const moreBtn = document.getElementById('btn-more');
+    const setTray = open => {
+        inputArea.classList.toggle('tray-open', open);
+        moreBtn.setAttribute('aria-expanded', String(open));
+    };
+    moreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        setTray(!inputArea.classList.contains('tray-open'));
+    });
+    document.getElementById('input-tray').addEventListener('click', () => setTray(false));
+    document.addEventListener('click', (e) => { if (!inputArea.contains(e.target)) setTray(false); });
+    const msgInput = document.getElementById('message-input');
+    const syncHasText = () => inputArea.classList.toggle('has-text', msgInput.value.trim().length > 0);
+    msgInput.addEventListener('input', syncHasText);
+    document.getElementById('btn-send').addEventListener('click', () => setTimeout(syncHasText, 0));
+    msgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') setTimeout(syncHasText, 0); });
 })();

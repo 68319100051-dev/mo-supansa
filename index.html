@@ -172,6 +172,11 @@
         <!-- Input Area -->
         <footer class="input-area">
             <div class="input-actions-left">
+                <button class="input-icon-btn more-btn" id="btn-more" title="เพิ่มเติม" aria-expanded="false">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <!-- ถาดปุ่มเสริม: กด + เพื่อเปิด -->
+                <div class="input-tray" id="input-tray">
                 <button class="input-icon-btn input-emoji-btn" id="btn-games" title="เล่นเกมกับโม">🎮</button>
                 <button class="input-icon-btn" id="btn-sticker" title="สติกเกอร์">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -195,6 +200,7 @@
                         <polyline points="21 15 16 10 5 21"/>
                     </svg>
                 </button>
+                </div>
             </div>
             <input type="file" id="image-input" accept="image/*,video/*" hidden>
             <input type="file" id="camera-input" accept="image/*" capture="environment" hidden>
