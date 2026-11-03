@@ -2742,3 +2742,34 @@ button.mind-region-chip {
     color: var(--text-pink);
     margin-bottom: 8px;
 }
+
+/* 🎬 คลิปในแชท: ป้าย Shorts + ดูแล้ว */
+.reel-badge,
+.reel-seen {
+    position: absolute;
+    top: 8px;
+    z-index: 1;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: white;
+    background: rgba(0, 0, 0, 0.55);
+}
+
+.reel-badge {
+    left: 8px;
+}
+
+.reel-seen {
+    right: 8px;
+    display: none;
+}
+
+.message-reel.watched .reel-seen {
+    display: block;
+}
+
+.message-reel.watched .reel-play-btn {
+    background: rgba(0, 0, 0, 0.45);
+}

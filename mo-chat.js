@@ -123,7 +123,7 @@ class MoChat {
         // Add user message (พร้อมข้อความที่ตอบกลับ ถ้ามี)
         const replyTo = this.replyTo;
         this.mind && this.mind.perceive(text);
-        const sulkNote = this.sulkNote() + this.userMoodNote(text);
+        const sulkNote = this.sulkNote() + this.userMoodNote(text) + this.unwatchedReelNote();
         this.awaitingReply = false;
 
         // ลิงก์ YouTube → ส่งเป็นคลิปให้โมดู
@@ -518,7 +518,10 @@ class MoChat {
             const reel = e.target.closest('.reel-preview');
             if (reel && window.MoReels) {
                 const msg = this.messages.find(m => String(m.id) === reel.closest('.message').dataset.id);
-                if (msg && msg.extra) window.MoReels.play(msg.extra);
+                if (msg && msg.extra) {
+                    this.watchingReel = msg;
+                    window.MoReels.play(msg.extra);
+                }
             }
         });
     }
@@ -759,6 +762,38 @@ class MoChat {
     /**
      * โมส่งคลิปจากคลัง (เลือกตามหมวด)
      */
+    /**
+     * เองเปิดดูคลิปที่โมส่ง (ดูนานพอ) → ติดป้าย "ดูแล้ว" แล้วโมรีแอคถึงฉากในคลิปจริงๆ
+     */
+    reelWatched(seconds) {
+        const msg = this.watchingReel;
+        this.watchingReel = null;
+        if (!msg || msg.type !== 'received' || msg.watched || seconds < 4) return;
+        msg.watched = true;
+        this.saveHistory();
+        const el = this.container.querySelector(`.message[data-id="${CSS.escape(String(msg.id))}"] .message-reel`);
+        if (el) el.classList.add('watched');
+        this.mind && this.mind.perceive('ดูคลิปที่ส่งให้แล้ว');
+        const clip = msg.extra;
+        const media = clip.kind === 'youtube' ? { youtube: `https://www.youtube.com/watch?v=${clip.yt}` } : null;
+        this.queueReply(note => this.mediaReply(
+            `${note}[ข้อความระบบ: เองเพิ่งเปิดดูคลิป "${clip.title}" ที่โมส่งไป ดูไป ${Math.round(seconds)} วิ — โมถามแบบลุ้นว่าเป็นไง ขำมั้ย/น่ารักมั้ย พูดถึงฉากหรือมุกในคลิปจริงๆ สั้นๆ 1-2 บรรทัด เหมือนเพื่อนที่ส่งคลิปแล้วรอดูรีแอค]`,
+            media, ['ดูจบยังง 555', 'เป็นไงๆ ขำป่ะ', 'น่ารักป่ะ บอกแล้ว']));
+    }
+
+    /**
+     * คลิปที่โมส่งแล้วเองยังไม่เปิด (และพิมพ์อย่างอื่นมาแทน) → บอก AI ให้แซวได้ ครั้งเดียวต่อคลิป
+     */
+    unwatchedReelNote() {
+        const since = Date.now() - 2 * 3600000;
+        const msg = [...this.messages].reverse().find(m => m.type === 'received' && m.format === 'reel' && m.timestamp > since);
+        if (!msg || msg.watched || msg.nudged) return '';
+        const repliedAfter = this.messages.some(m => m.type === 'sent' && m.timestamp > msg.timestamp);
+        if (!repliedAfter) return '';
+        msg.nudged = true;
+        return `[ข้อความระบบ: เองยังไม่ได้เปิดดูคลิป "${msg.extra && msg.extra.title}" ที่โมส่งไป — ถ้าเข้าจังหวะ แซวหรืองอนนิดๆ ว่าไม่ดูคลิปเค้า (ไม่ต้องทุกครั้ง)]\n`;
+    }
+
     sendMoClip(topic = '') {
         if (!window.MoReels) return;
         const clip = window.MoReels.pickClip(topic);
@@ -1160,9 +1195,11 @@ ${moToday.length ? `ที่โมพูดไปแล้ววันนี้
         } else if (msg.format === 'reel' && msg.extra) {
             const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
             bubbleContent = `
-                <div class="message-bubble message-reel">
+                <div class="message-bubble message-reel${msg.watched ? ' watched' : ''}">
                     <div class="reel-preview">
-                        <img src="${esc(msg.extra.thumbnail)}" alt="">
+                        <img src="${esc(msg.extra.thumbnail)}" alt="" loading="lazy">
+                        <span class="reel-badge">▶ Shorts</span>
+                        <span class="reel-seen">ดูแล้ว</span>
                         <div class="reel-play-btn">
                             <svg viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                         </div>

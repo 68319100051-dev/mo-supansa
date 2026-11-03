@@ -86,6 +86,7 @@ class MoReelsManager {
         this.playerFrame = document.getElementById('clip-player-frame');
         this.playerTitle = document.getElementById('clip-player-title');
         this.storageKey = 'mo_clips_v1';
+        this.onClose = null;   // (secondsWatched) => void — ตั้งจาก mo-chat.js
         this.sentKey = 'mo_clips_sent_v1';
 
         this.reels = [
@@ -238,6 +239,7 @@ class MoReelsManager {
             this.playerFrame.innerHTML = '<p class="clip-player-missing">คลิปเก่านี้เปิดไม่ได้แล้ว 🥺</p>';
         }
         this.player.classList.remove('hidden');
+        this.playStarted = Date.now();
     }
 
     closePlayer() {
@@ -245,6 +247,9 @@ class MoReelsManager {
         if (video && video.src.startsWith('blob:')) URL.revokeObjectURL(video.src);
         this.playerFrame.innerHTML = '';
         this.player.classList.add('hidden');
+        const seconds = this.playStarted ? (Date.now() - this.playStarted) / 1000 : 0;
+        this.playStarted = null;
+        if (this.onClose) this.onClose(seconds);
     }
 
     /**

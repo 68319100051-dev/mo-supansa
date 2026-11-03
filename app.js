@@ -99,6 +99,8 @@
 
     // Make reels accessible globally for chat
     window.MoReels = reels;
+    // ดูคลิปที่โมส่งจบ → โมถามว่าเป็นไง (โมรู้เนื้อหาคลิปจริงผ่าน Gemini)
+    reels.onClose = (seconds) => chat.reelWatched(seconds);
 
     // ชีวิตประจำวันของโม (บ้าน มือถือ กระเป๋าเงิน)
     const life = new MoLife();
