@@ -3497,3 +3497,92 @@ button.mind-region-chip {
     background: rgba(255, 255, 255, 0.06);
     font-size: 0.85rem;
 }
+
+/* 📹 วิดีโอคอล */
+.call-where {
+    margin: -4px 0 8px;
+    font-size: 0.8rem;
+    opacity: 0.7;
+}
+
+.call-action-btn.camera-toggle {
+    display: none;
+}
+
+.call-screen.video-mode .call-action-btn.camera-toggle {
+    display: flex;
+}
+
+.call-screen.video-mode .call-content {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding-bottom: 36px;
+}
+
+.call-screen.video-mode .call-avatar-large {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    z-index: -1;
+}
+
+.call-screen.video-mode .call-avatar-large img {
+    animation: moBreath 7s ease-in-out infinite;
+    transform-origin: 50% 40%;
+}
+
+.call-screen.video-mode .call-avatar-large::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0.25), transparent 30%, transparent 55%, rgba(0, 0, 0, 0.75));
+}
+
+/* โมพูดอยู่ → หน้าขยับเบาๆ + ขอบเรืองแสง */
+.call-screen.video-mode.speaking .call-avatar-large img {
+    animation: moBreath 7s ease-in-out infinite, moTalk 0.32s ease-in-out infinite;
+}
+
+.call-screen.speaking:not(.video-mode) .call-avatar-large {
+    box-shadow: 0 0 0 6px rgba(248, 117, 165, 0.35), 0 0 30px rgba(248, 117, 165, 0.6);
+}
+
+@keyframes moBreath {
+    0%, 100% { transform: scale(1.04) translateY(0); }
+    50% { transform: scale(1.08) translateY(-6px); }
+}
+
+@keyframes moTalk {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.08); translate: 0 -2px; }
+}
+
+#self-view {
+    position: absolute;
+    top: 18px;
+    right: 14px;
+    z-index: 3;
+    width: 108px;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    border-radius: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.6);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    transform: scaleX(-1);
+    background: #222;
+}
+
+#self-view.off {
+    opacity: 0.25;
+}
+
+.call-screen:not(.video-mode) #self-view {
+    display: none;
+}

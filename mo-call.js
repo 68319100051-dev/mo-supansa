@@ -37,7 +37,8 @@ class MoCall {
     init() {
         // User initiates call
         document.getElementById('btn-call').addEventListener('click', () => this.startOutgoingCall());
-        document.getElementById('btn-video').addEventListener('click', () => this.startOutgoingCall());
+        document.getElementById('btn-video').addEventListener('click', () => this.startOutgoingCall({ video: true }));
+        document.getElementById('btn-camera-toggle').addEventListener('click', () => this.toggleCamera());
 
         // End call
         document.getElementById('btn-end-call').addEventListener('click', () => this.endCall());
@@ -100,6 +101,10 @@ class MoCall {
     startOutgoingCall(opts = {}) {
         if (this.isInCall) return;
 
+        // วิดีโอคอล: เห็นหน้าเองมุมจอ + โมมองเห็นเองผ่านกล้อง
+        this.videoMode = Boolean(opts.video);
+        this.callScreen.classList.toggle('video-mode', this.videoMode);
+        if (this.videoMode) this.startCamera();
         this.callScreen.classList.remove('hidden');
         this.setStatus(opts.urgent ? '🚨 กำลังโทรด่วน...' : 'กำลังโทร...');
         this.callTimer.classList.add('hidden');
@@ -140,6 +145,61 @@ class MoCall {
     /**
      * Accept incoming call
      */
+    // =============================================
+    //  วิดีโอคอล: กล้องหน้า + ภาพให้โมดู
+    // =============================================
+
+    async startCamera() {
+        try {
+            this.camStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 640 } }, audio: false });
+            let v = document.getElementById('self-view');
+            if (!v) {
+                v = document.createElement('video');
+                v.id = 'self-view';
+                v.autoplay = true;
+                v.muted = true;
+                v.playsInline = true;
+                this.callScreen.appendChild(v);
+            }
+            v.srcObject = this.camStream;
+            v.classList.remove('off');
+        } catch (e) {
+            this.showTranscript('เปิดกล้องไม่ได้ (ลองอนุญาตกล้องก่อนนะ) — คุยแบบเสียงไปก่อน');
+        }
+    }
+
+    stopCamera() {
+        if (this.camStream) this.camStream.getTracks().forEach(t => t.stop());
+        this.camStream = null;
+        const v = document.getElementById('self-view');
+        if (v) v.srcObject = null;
+    }
+
+    toggleCamera() {
+        if (!this.videoMode) return;
+        const v = document.getElementById('self-view');
+        if (this.camStream) {
+            this.stopCamera();
+            if (v) v.classList.add('off');
+        } else {
+            this.startCamera();
+        }
+    }
+
+    /**
+     * ภาพจากกล้องตอนนี้ (JPEG เล็กๆ) ให้โมดูว่าเห็นอะไร — ไม่มีกล้อง → null
+     */
+    captureFrame() {
+        const v = document.getElementById('self-view');
+        if (!this.videoMode || !this.camStream || !v || !v.videoWidth) return null;
+        const w = 384;
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = Math.round(v.videoHeight * (w / v.videoWidth));
+        canvas.getContext('2d').drawImage(v, 0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL('image/jpeg', 0.7);
+    }
+
     /**
      * เสียงเรียกเข้า (สร้างเอง) + สั่นเป็นจังหวะ จนกว่าจะรับ/ปฏิเสธ
      */
@@ -347,7 +407,8 @@ class MoCall {
                 if (this._speakToken !== token || !this.isInCall) return;
                 const audio = new Audio(URL.createObjectURL(blob));
                 this._audio = audio;
-                audio.onended = audio.onerror = () => { URL.revokeObjectURL(audio.src); this._audio = null; done(); };
+                this.callScreen.classList.add('speaking');
+                audio.onended = audio.onerror = () => { URL.revokeObjectURL(audio.src); this._audio = null; this.callScreen.classList.remove('speaking'); done(); };
                 audio.play().catch(() => this.speakBrowser(text, done));
             }).catch(() => this.speakBrowser(text, done));
             return;
@@ -367,8 +428,8 @@ class MoCall {
         if (thaiVoice) utter.voice = thaiVoice;
         utter.pitch = 1.2;
         utter.rate = 1.05;
-        utter.onend = done;
-        utter.onerror = done;
+        this.callScreen.classList.add('speaking');
+        utter.onend = utter.onerror = () => { this.callScreen.classList.remove('speaking'); done(); };
         speechSynthesis.cancel();
         speechSynthesis.speak(utter);
     }
@@ -427,6 +488,9 @@ class MoCall {
      */
     endCall() {
         this.isInCall = false;
+        this.stopCamera();
+        this.videoMode = false;
+        this.callScreen.classList.remove('video-mode', 'speaking');
         this.urgentNote = null;
         if (this._audio) { this._audio.pause(); this._audio = null; }
         // ยกเลิกการต่อสายที่ยังค้างอยู่ (กรณีวางสายก่อนโมรับ)

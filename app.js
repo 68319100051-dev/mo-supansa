@@ -130,11 +130,25 @@
         memory.extractFacts(text);
         // โทรด่วน: บอกโมว่านี่เป็นเรื่องด่วน (จนกว่าจะวางสาย)
         const note = call.urgentNote ? `[ข้อความระบบ: นี่คือสายด่วน${call.urgentNote}— โมจริงจัง ตั้งใจฟัง ถามว่าเกิดอะไรขึ้น ช่วยคิด ไม่เล่นมุก]\n` : '';
+        // วิดีโอคอล: แนบภาพจากกล้องให้โมเห็นเอง (เห็นหน้า สีหน้า ที่ที่อยู่)
+        const frame = call.videoMode && call.captureFrame();
+        if (frame && llm.isReady()) {
+            try {
+                const cur = life.state.current;
+                const reply = await llm.generateResponse(`${note}[ข้อความระบบ: กำลังวิดีโอคอลกัน รูปที่แนบคือสิ่งที่โมเห็นจากกล้องของเองตอนนี้ พูดถึงสิ่งที่เห็นได้เป็นธรรมชาติเมื่อเข้าจังหวะ (สีหน้า ทรงผม เสื้อ ที่ที่อยู่ แสง) ไม่ต้องบรรยายทุกครั้ง โมอยู่${cur ? (cur.room === 'out' ? cur.place || 'ข้างนอก' : 'ที่บ้าน') : 'ที่บ้าน'} ตอบสั้นๆ แบบคุยโทรศัพท์ 1-2 ประโยค]\n${text}`,
+                    chat.messages, brain.personality, memory.getSummary(), frame);
+                return brain.sanitizeResponse(reply, 'chat') || reply;
+            } catch (e) {
+                console.warn('video reply failed', e.message);
+            }
+        }
         return brain.generateResponse(note + text, memory, chat.messages, llm);
     });
 
     // ======= โทรหาโม: รับตามสถานการณ์จริง / โทรด่วน = รับแน่นอน =======
-    call.canAnswer = ({ urgent }) => {
+    call.canAnswer = ({ urgent, video }) => {
+        const cur = life.state.current;
+        document.getElementById('call-where').textContent = cur ? `${cur.emoji} ${cur.room === 'out' ? cur.place || 'ข้างนอก' : MO_ROOMS[cur.room] ? MO_ROOMS[cur.room].name : ''}` : '';
         if (!urgent) return life.answerCall();
         const { wasAsleep } = life.interruptUrgent();
         mind.decide(wasAsleep ? 'สะดุ้งตื่นเพราะเองโทรมาด่วน' : 'ทิ้งทุกอย่างมารับสายด่วน');
