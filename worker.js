@@ -28,6 +28,9 @@ export default {
             const rows = await db(env, `mo_state?select=value&key=like.push_sub:*&value->>endpoint=eq.${encodeURIComponent(endpoint)}`);
             return json((rows[0] && rows[0].value.inbox) || {});
         }
+        // ลิงก์ของขวัญ: หน้าเดียวกับแอป แต่ชื่อ/ไอคอน/ตัวอย่างลิงก์ (LINE, Messenger) เป็นกลางๆ ไม่บอกว่าเป็นโม
+        if (url.pathname === '/gift/') return Response.redirect(`${url.origin}/gift${url.search}`, 301);
+        if (url.pathname === '/gift') return giftPage(request, env, url);
         if (url.pathname.startsWith('/api/gift/')) {
             return handleGift(request, env, url, ctx).catch(err => json({ error: String(err.message || err).slice(0, 200) }, 500));
         }
@@ -39,6 +42,33 @@ export default {
         ctx.waitUntil(runChecks(env));
     },
 };
+
+const GIFT_TITLE = '💌 มีจดหมายมาถึง';
+const GIFT_DESC = 'มีคนฝากของไว้ให้ เปิดดูสิ';
+const GIFT_ICON = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💌</text></svg>";
+
+async function giftPage(request, env, url) {
+    // ขอ "/" (ไม่ใช่ /index.html ซึ่ง assets จะ redirect กลับมา "/")
+    const page = await env.ASSETS.fetch(new Request(`${url.origin}/`, { headers: request.headers }));
+    const drop = { element: el => el.remove() };
+    return new HTMLRewriter()
+        .on('title', { element: el => el.setInnerContent(GIFT_TITLE) })
+        .on('meta[name="description"]', { element: el => el.setAttribute('content', GIFT_DESC) })
+        .on('meta[name="apple-mobile-web-app-title"]', { element: el => el.setAttribute('content', '💌') })
+        .on('link[rel="manifest"]', drop)
+        .on('link[rel="apple-touch-icon"]', drop)
+        .on('link[rel="icon"]', drop)
+        .on('head', {
+            element: el => el.append(
+                `<link rel="icon" href="${GIFT_ICON}">`
+                + `<meta property="og:title" content="${GIFT_TITLE}">`
+                + `<meta property="og:description" content="${GIFT_DESC}">`
+                + '<meta property="og:type" content="website">'
+                + '<meta name="twitter:card" content="summary">',
+                { html: true }),
+        })
+        .transform(new Response(page.body, { status: page.status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } }));
+}
 
 function json(data, status = 200) {
     return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });

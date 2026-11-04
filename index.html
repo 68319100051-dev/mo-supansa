@@ -6,7 +6,7 @@
     <title>โม 💕 - Mo Supansa</title>
     <script>
         // ลิงก์ของขวัญ (?gift): ซ่อนหน้าโม/ชื่อในหน้าโหลด ก่อนใส่รหัส
-        try { if (/[?&]gift/.test(location.search) || localStorage.getItem('mo_guest')) { document.documentElement.classList.add('guest'); document.title = '💌'; } } catch (e) {}
+        try { if (/[?&]gift/.test(location.search) || location.pathname === '/gift' || localStorage.getItem('mo_guest')) { document.documentElement.classList.add('guest'); document.title = '💌'; } } catch (e) {}
     </script>
     <meta name="description" content="แชทกับโม แฟนสาว AI สุดน่ารัก">
     <!-- ติดตั้งเป็นแอป (PWA) -->

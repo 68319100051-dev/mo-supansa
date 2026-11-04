@@ -22,7 +22,7 @@
         history.replaceState(null, '', '/?gift');
     }
     let saved = read('mo_guest');
-    const wantGift = new URLSearchParams(location.search).has('gift') || !!saved;
+    const wantGift = new URLSearchParams(location.search).has('gift') || location.pathname === '/gift' || !!saved;
     if (!wantGift) return loadApp();
 
     document.documentElement.classList.add('guest');
