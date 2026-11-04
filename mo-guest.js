@@ -16,6 +16,11 @@
     const read = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
     const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
 
+    // ทดสอบในเครื่อง (scripts/gift-preview.mjs): ?gift&reset = ล้างแล้วเริ่มใหม่ตั้งแต่ใส่รหัส
+    if (location.hostname === 'localhost' && new URLSearchParams(location.search).has('reset')) {
+        try { localStorage.clear(); } catch (e) {}
+        history.replaceState(null, '', '/?gift');
+    }
     let saved = read('mo_guest');
     const wantGift = new URLSearchParams(location.search).has('gift') || !!saved;
     if (!wantGift) return loadApp();
