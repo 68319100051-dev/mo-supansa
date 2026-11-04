@@ -126,6 +126,13 @@ const MoHouseView = {
         g += B(8, 2.2, 5.5, 3.4, 1.15, 0.08, asleep ? '#c9b6e4' : '#d8d8e0'); // ผ้าห่ม
         g += B(5, 0.1, 4.8, 1.7, 0.9, 1.1, '#f0e6da');                  // โต๊ะทำงาน
         g += B(5.4, 0.25, 5.9, 0.9, 0.55, 0.06, '#7a7f8a');             // โน้ตบุ๊ก
+        // สมุดไดอารี่ของโมบนโต๊ะ (แตะเพื่ออ่าน)
+        {
+            const [nx, ny] = this.iso(6.35, 0.75, 5.95);
+            g += `<g class="hv-diary" data-open="diary" role="button" aria-label="อ่านไดอารี่ของโม">
+                <circle cx="${nx}" cy="${ny - 4}" r="16" fill="rgba(240,77,133,0.18)" class="hv-diary-glow"/>
+                <text x="${nx}" y="${ny}" class="hv-gift" style="font-size:17px">📔</text></g>`;
+        }
         g += B(6.9, 0.1, 4.8, 0.9, 0.8, 2.6, '#e8ddd0');                // ตู้เสื้อผ้า
         // ระเบียง
         g += this.poly([[4, 0, 4.8], [4, 4, 4.8], [4, 4, 8.4], [4, 0, 8.4]], 'rgba(255,255,255,0.35)', 'stroke="#fff"'); // กระจกกั้น

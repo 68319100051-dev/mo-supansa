@@ -3875,3 +3875,248 @@ button.mind-region-chip {
     padding: 8px 12px;
     font-size: 0.85rem;
 }
+
+/* ===== หน้าสมอง: โทนเดียวกับแอป (ชมพูสว่าง) — เหลือโฮโลแกรมไว้ในการ์ดสมองเท่านั้น ===== */
+.mind-screen {
+    --holo: var(--pink-500);
+    --holo-dim: rgba(240, 77, 133, 0.35);
+    --holo-faint: rgba(240, 77, 133, 0.1);
+    --holo-text: var(--text-primary);
+    background: linear-gradient(180deg, #fff5f8 0%, #fde4ef 100%);
+    color: var(--text-primary);
+}
+
+.mind-screen .mind-header {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(240, 77, 133, 0.1);
+    color: var(--text-primary);
+}
+
+.mind-screen .mind-header h2 {
+    color: var(--text-primary);
+    text-shadow: none;
+}
+
+/* การ์ดสมอง 3D: กรอบมนเงาชมพู พื้นมืดไว้ให้โฮโลแกรมสวย */
+.mind-screen .mind-hero {
+    flex-shrink: 0;
+    margin: 12px 12px 0;
+    padding-bottom: 12px;
+    border-radius: 22px;
+    overflow: hidden;
+    background: radial-gradient(ellipse at 50% 30%, #3a1c4a, #1b0f2e 70%);
+    box-shadow: 0 12px 30px rgba(160, 27, 64, 0.25);
+}
+
+.mind-screen .mind-tap-hint {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.mind-screen .mind-emotion {
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--text-primary);
+    border: none;
+    box-shadow: var(--shadow-sm);
+}
+
+.mind-screen .mind-gauge-track {
+    stroke: var(--pink-100);
+}
+
+.mind-screen .mind-gauge-fill {
+    stroke: var(--pink-500);
+}
+
+.mind-screen .mind-gauge text {
+    fill: var(--text-primary);
+}
+
+.mind-screen .mind-regions {
+    padding: 0 12px;
+}
+
+.mind-screen .mind-region-chip {
+    background: #fff;
+    border: 1px solid var(--pink-100);
+    color: var(--text-primary);
+    box-shadow: var(--shadow-sm);
+}
+
+.mind-screen .mind-region-chip span {
+    color: var(--text-secondary);
+}
+
+.mind-screen .mind-region-chip i {
+    background: var(--pink-400);
+}
+
+.mind-screen .mind-region-chip.selected {
+    border-color: var(--pink-400);
+    background: var(--pink-50);
+    box-shadow: 0 0 0 2px rgba(240, 77, 133, 0.25);
+}
+
+.mind-screen .mind-panel {
+    margin: 12px;
+    background: #fff;
+    border: none;
+    border-radius: 20px;
+    box-shadow: 0 6px 20px rgba(240, 77, 133, 0.1);
+    color: var(--text-primary);
+}
+
+.mind-screen .mind-panel h3,
+.mind-screen .mind-section h4 {
+    color: var(--pink-600);
+    text-shadow: none;
+}
+
+.mind-screen .mind-note,
+.mind-screen .mind-item small,
+.mind-screen .mind-text small,
+.mind-screen .mind-chem-name small,
+.mind-screen .mind-thought time {
+    color: var(--text-secondary);
+}
+
+.mind-screen .mind-item,
+.mind-screen .mind-thought,
+.mind-screen .mind-now div,
+.mind-screen .mind-stat {
+    background: var(--pink-50);
+    border: none;
+    color: var(--text-primary);
+}
+
+.mind-screen .mind-group {
+    background: #fff;
+    border: 1px solid var(--pink-100);
+}
+
+.mind-screen .mind-search {
+    background: var(--pink-50);
+    border: 1px solid var(--pink-100);
+    color: var(--text-primary);
+}
+
+.mind-screen .mind-chem-track {
+    background: var(--pink-50);
+}
+
+.mind-screen .mind-chart text {
+    fill: var(--text-secondary);
+}
+
+.mind-screen .mind-grid {
+    stroke: var(--pink-100);
+}
+
+.mind-screen .mind-x {
+    background: #fff;
+    color: var(--pink-500);
+    border: 1px solid var(--pink-100);
+}
+
+.mind-screen .mind-thought-region {
+    color: var(--pink-500);
+}
+
+.mind-screen .mind-grudge {
+    background: #fff1f1;
+    color: #b42318;
+}
+
+.mind-screen .mind-clear {
+    margin: 4px 12px 24px;
+    background: #fff;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+/* 📔 สมุดไดอารี่ */
+.hv-diary {
+    cursor: pointer;
+}
+
+.hv-diary-glow {
+    animation: statusPulse 2s ease-in-out infinite;
+}
+
+.diary-book {
+    position: fixed;
+    inset: 0;
+    z-index: 460;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 18px;
+    background: rgba(60, 20, 40, 0.35);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.diary-book.hidden {
+    display: none;
+}
+
+.diary-cover {
+    width: min(100%, 420px);
+    max-height: 84vh;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 16px 10px 22px;
+    border-radius: 8px 22px 22px 8px;
+    background: #fffaf2;
+    border-left: 10px solid #e07a9a;
+    box-shadow: 0 20px 50px rgba(60, 20, 40, 0.35);
+    animation: watchIn 0.25s ease-out;
+}
+
+.diary-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.diary-head strong {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+}
+
+.diary-sub {
+    margin: 2px 0 10px;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.diary-pages {
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.diary-page {
+    padding: 10px 0 12px;
+    border-bottom: 1px dashed #f0c9d6;
+    background-image: repeating-linear-gradient(transparent 0 27px, rgba(240, 77, 133, 0.08) 27px 28px);
+}
+
+.diary-page h4 {
+    margin-bottom: 4px;
+    color: var(--pink-600);
+    font-size: 0.85rem;
+}
+
+.diary-page p {
+    line-height: 28px;
+    font-size: 0.95rem;
+    white-space: pre-wrap;
+}
+
+.diary-writing,
+.diary-empty {
+    padding: 14px 0;
+    color: var(--text-secondary);
+    font-size: 0.88rem;
+}

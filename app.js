@@ -1273,6 +1273,9 @@
                     `<div class="house-log-item"><time>${fmt(l.at)}</time><span>${l.emoji}</span><span>${esc(l.text)}</span></div>`).join('')}</div>
             </div>`;
         document.getElementById('house-transfer').addEventListener('click', openTransfer);
+        // แตะสมุดบนโต๊ะ → อ่านไดอารี่ของโม
+        const diaryEl = document.querySelector('.hv-diary');
+        if (diaryEl) diaryEl.addEventListener('click', openDiaryBook);
         const watchBtn = document.getElementById('house-watch-game');
         if (watchBtn) watchBtn.addEventListener('click', () => {
             houseScreen.classList.add('hidden');
@@ -1499,4 +1502,23 @@
     // ======= แท็บล่าง: ปิดหน้าคลิป/บ้าน → ไฮไลต์กลับไปที่แชท =======
     const backToChatTab = () => document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.tab === 'chat'));
     ['close-reels', 'close-house'].forEach(id => { const b = document.getElementById(id); if (b) b.addEventListener('click', backToChatTab); });
+
+    // ======= สมุดไดอารี่ของโม (อยู่บนโต๊ะในบ้าน) =======
+    function openDiaryBook() {
+        const book = document.getElementById('diary-book');
+        const pages = book.querySelector('.diary-pages');
+        const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const render = () => {
+            const entries = diary.getEntries();
+            pages.innerHTML = (diary.writing.size ? '<p class="diary-writing">✍️ โมกำลังเขียนอยู่...</p>' : '')
+                + (entries.length
+                    ? entries.map(e => `<article class="diary-page"><h4>${esc(diary.formatDate(e.key))}</h4><p>${esc(e.text)}</p></article>`).join('')
+                    : '<p class="diary-empty">ยังไม่มีไดอารี่เลย คุยกับโมก่อนนะ เดี๋ยวโมเขียนเอง</p>');
+        };
+        diary.update(chat.messages, render);
+        render();
+        book.classList.remove('hidden');
+        mind.decide('เองเปิดอ่านไดอารี่ของเค้า 🙈');
+    }
+    document.getElementById('diary-book-close').addEventListener('click', () => document.getElementById('diary-book').classList.add('hidden'));
 })();

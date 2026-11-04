@@ -364,8 +364,7 @@ class MoMindUI {
             + (window.MoSocialInstance && window.MoSocialInstance.active().length ? this.section('👭 เรื่องในชีวิตโมช่วงนี้', this.list(window.MoSocialInstance.active().map(a =>
                 `<b>${this.esc(a.who)}: ${this.esc(a.title)}</b><span>${a.beats.slice(0, a.step + 1).map(x => this.esc(x)).join(' → ')}</span>`), '')) : '')
             + `<p class="mind-note" id="mind-recall-count">🔎 กำลังนับความจำตามความหมาย...</p>`
-            + this.section('📔 ไดอารี่ของโม', (diary.writing.size ? '<p class="mind-note">✍️ โมกำลังเขียนไดอารี่...</p>' : '')
-                + this.list(entries.map(e => `<b>${this.esc(diary.formatDate(e.key))}</b><span>${this.esc(e.text)}</span>`), 'ยังไม่มีไดอารี่ คุยกับโมก่อนนะ'));
+            + '<p class="mind-note">📔 ไดอารี่ของโมย้ายไปวางบนโต๊ะในบ้านโมแล้ว (แท็บ 🏠 บ้านโม → แตะสมุดบนโต๊ะ)</p>';
     }
 
     detail_frontal() {
