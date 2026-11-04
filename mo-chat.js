@@ -187,6 +187,7 @@ class MoChat {
         this.memory.extractFacts(text);
         // โมสังเกตเรื่องที่ควรห่วง (ป่วย กินข้าว นอนดึก เครียด ออกไปข้างนอก)
         if (this.care) this.care.observe(text);
+        if (window.MoQuestsInstance) window.MoQuestsInstance.observe(text);
         // กิจวัตรประจำ (เช่น เข้างาน 8 โมงทุกวัน) → โมจำและวางแผนทักเองเบื้องหลัง
         if (this.routines) this.routines.learn(text).then(added => {
             if (added && added.length && this.mind) this.mind.decide(`จำกิจวัตรของเอง: ${added.map(r => r.what).join(', ')}`);

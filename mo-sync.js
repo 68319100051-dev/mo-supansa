@@ -9,7 +9,7 @@
 const MO_SYNC_KEYS = [
     'mo_chat_history_v2', 'mo_memory_v2', 'mo_stats_v2', 'mo_memory_settings_v2',
     'mo_life_v1', 'mo_mind_v1', 'mo_diary_v1', 'mo_reminders_v1',
-    'mo_clips_v1', 'mo_clips_sent_v1', 'mo_special_days_v1', 'mo_routines_v1', 'mo_followups_v1', 'mo_self_v1', 'mo_profile_v1', 'mo_device_keys_v1', 'mo_stories_v1', 'mo_games_v1', 'mo_social_v1', 'mo_care_v1', 'mo_inner_v1', 'mo_psyche_v1', 'mo_home_v1',
+    'mo_clips_v1', 'mo_clips_sent_v1', 'mo_special_days_v1', 'mo_routines_v1', 'mo_followups_v1', 'mo_self_v1', 'mo_profile_v1', 'mo_device_keys_v1', 'mo_stories_v1', 'mo_games_v1', 'mo_social_v1', 'mo_care_v1', 'mo_inner_v1', 'mo_psyche_v1', 'mo_home_v1', 'mo_quests_v1',
 ];
 const MO_CHAT_KEY = 'mo_chat_history_v2';
 const MO_DELETED = { __deleted: true };

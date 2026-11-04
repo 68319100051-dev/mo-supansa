@@ -185,7 +185,8 @@ const MoHouseView = {
                 <text x="316" y="47" class="hv-out-s">${this.esc((c.place || 'ข้างนอก').slice(0, 14))}</text></g>`;
         } else {
             const spot = (this.spots[opts.spot] || this.centers[c.room] || this.centers.bedroom);
-            g += this.avatar(...spot, asleep);
+            const [mx, my] = this.iso(...spot);
+            g += `<g class="hv-mo" data-sx="${mx.toFixed(1)}" data-sy="${my.toFixed(1)}" data-up="${spot[2] >= 4 ? 1 : 0}">${this.avatar(...spot, asleep)}</g>`;
         }
 
         // ---- ป้ายห้อง ----
@@ -204,6 +205,12 @@ const MoHouseView = {
             </defs>
             ${g}
         </svg>`;
+    },
+
+    /** จุดบนจอของบันได (ล่าง/บน) ให้โมเดินขึ้นลง */
+    stairs() {
+        const [bx, by] = this.iso(11.4, 8.2, 0), [tx, ty] = this.iso(11.4, 4.1, 4.8);
+        return { bottom: { x: bx, y: by }, top: { x: tx, y: ty } };
     },
 
     /** แตะได้: ห่อของด้วย <g data-obj> + วงแสงให้รู้ว่ากดได้ */
@@ -251,6 +258,7 @@ const MoHouseView = {
         ['#e76f51', '#2a9d8f', '#e9c46a', '#8ab6d6', '#f4a6c1', '#6d597a'].forEach((col, i) => {
             g += B(0.08, 3.3 + (i % 3) * 0.42, 0.9 + Math.floor(i / 3) * 0.75, 0.42, 0.3, 0.6, col);
         });
+        g += this.tap('album', 0.3, 3.9, 2.45, emo(0.3, 3.9, 2.45, '📸', 13), 'อัลบั้มของเรา');
         // พรมลาย + โต๊ะกลาง + ของว่าง
         g += this.flat(1.7, 5.3, 0.012, 2.8, 2.8, night ? 'rgba(160,140,170,0.6)' : 'rgba(240,77,133,0.13)');
         g += B(1.9, 6.1, 0, 0.9, 1.2, 0.45, '#9b6b4a');

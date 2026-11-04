@@ -130,10 +130,12 @@ class MoHome {
         const days = new Set((messages || []).filter(m => m.type === 'sent').map(m => new Date(m.timestamp).toDateString())).size;
         const lastSent = [...(messages || [])].reverse().find(m => m.type === 'sent');
         const gone = lastSent ? (Date.now() - lastSent.timestamp) / 86400000 : 0;
-        const stage = [...MO_PLANT_STAGES].reverse().find(s => days >= s.days);
-        const next = MO_PLANT_STAGES.find(s => s.days > days);
+        const bonus = this.getBonus ? this.getBonus() : 0;   // วันที่ทำภารกิจครบ = โตเร็วขึ้น
+        const grown = days + bonus;
+        const stage = [...MO_PLANT_STAGES].reverse().find(s => grown >= s.days);
+        const next = MO_PLANT_STAGES.find(s => s.days > grown);
         const wilted = this.data.plant.water < 15 || gone > 3;
-        return { ...stage, days, next, wilted, water: this.data.plant.water, emoji: wilted ? '🥀' : stage.emoji };
+        return { ...stage, days: grown, next, wilted, water: this.data.plant.water, emoji: wilted ? '🥀' : stage.emoji };
     }
 
     // =============================================

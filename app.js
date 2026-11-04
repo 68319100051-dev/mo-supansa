@@ -280,6 +280,19 @@
     const home = new MoHome(reminders);
     home.getMessages = () => chat.messages;
     window.MoHomeInstance = home;
+    // ภารกิจรายวันทำด้วยกัน: ครบ = ต้นไม้ได้น้ำ แมวดีใจ โมชม
+    const quests = new MoQuests();
+    window.MoQuestsInstance = quests;
+    home.getBonus = () => (quests.data.history || []).length;
+    quests.onAllDone = streak => {
+        home.water();
+        home.data.pet.love = Math.min(100, home.data.pet.love + 15);
+        home.petLog(`🎉 ทำภารกิจครบ! สตรีค ${streak} วัน`);
+        home.save();
+        mind.reward(20);
+        chat.showNotification(`🎉 ภารกิจวันนี้ครบแล้ว! สตรีค ${streak} วัน`);
+        chat.queueReply(note => chat.moRespond(`${note}[ข้อความระบบ: เองทำภารกิจวันนี้ครบทุกข้อแล้ว (สตรีค ${streak} วัน) ต้นไม้ของเราได้น้ำ น้องแมวดีใจ — ชมแบบภูมิใจสั้นๆ]`));
+    };
     window.MoLifeInstance = life;
     chat.life = life;
     life.dailyAllowance();
@@ -1260,6 +1273,14 @@
                 ${MoHouseView.render(life, { night, spot, phoneRoom, home: homeOpts, rain: window.MoWeather && window.MoWeather.isRaining(), gifts: MoGifts.owned(life), festival: MoFestivals.upcoming() })}
             </div>
             <div class="house-card">
+                <h3>✅ ภารกิจวันนี้ <small>🔥 สตรีค ${quests.data.streak} วัน • ดีสุด ${quests.data.best}</small></h3>
+                <div class="quest-list">${quests.today().map(q => `<button class="quest ${q.n >= q.goal ? 'done' : ''}" data-quest="${q.id}">
+                    <span class="quest-emoji">${q.n >= q.goal ? '✅' : q.emoji}</span>
+                    <span class="quest-title">${esc(q.title)}${q.goal > 1 ? `<i style="width:${Math.round(q.n / q.goal * 100)}%"></i>` : ''}</span>
+                    <small>${q.n}/${q.goal}</small></button>`).join('')}</div>
+                <p class="house-hint">แตะเพื่อติ๊ก หรือพิมพ์เล่าในแชทก็ได้ (เช่น "ดื่มน้ำแล้ว") • ครบทุกข้อ ต้นไม้โตเร็วขึ้น 🌱</p>
+            </div>
+            <div class="house-card">
                 <h3>🏡 ในบ้านตอนนี้</h3>
                 <div class="house-log">
                     <div class="house-log-item"><time></time><span>🐈</span><span><b>${esc(home.data.pet.name)}</b> ${petMood.emoji} ${petMood.label}</span></div>
@@ -1300,6 +1321,12 @@
         const diaryEl = document.querySelector('.hv-diary');
         if (diaryEl) diaryEl.addEventListener('click', openDiaryBook);
         document.querySelectorAll('.hv-obj').forEach(el => el.addEventListener('click', () => openHomeSheet(el.dataset.obj)));
+        document.querySelectorAll('[data-quest]').forEach(b => b.addEventListener('click', () => {
+            quests.bump(b.dataset.quest);
+            mind.think('frontal', `ภารกิจ: ${MO_QUEST_POOL.find(q => q.id === b.dataset.quest).title}`);
+            renderHouse();
+        }));
+        walkMo(document.querySelector('#house-content .house-view'));
         const watchBtn = document.getElementById('house-watch-game');
         if (watchBtn) watchBtn.addEventListener('click', () => {
             houseScreen.classList.add('hidden');
@@ -1558,6 +1585,66 @@
         chat.queueReply(note => chat.moRespond(`${note}[ข้อความระบบ: ${systemNote}]`));
     }
 
+    // ======= โมเดินในบ้าน: ย้ายที่ = เดินจากจุดเดิมไปจุดใหม่ (ต่างชั้น = เดินผ่านบันได) =======
+    let lastMoPos = null;
+    function walkMo(svg) {
+        const g = svg && svg.querySelector('.hv-mo');
+        if (!g) { lastMoPos = null; return; }
+        const cur = { x: +g.dataset.sx, y: +g.dataset.sy, up: g.dataset.up === '1' };
+        const prev = lastMoPos;
+        lastMoPos = cur;
+        if (!prev || (Math.abs(prev.x - cur.x) < 2 && Math.abs(prev.y - cur.y) < 2) || !g.animate) return;
+        const st = MoHouseView.stairs();
+        const path = [prev, ...(prev.up === cur.up ? [] : prev.up ? [st.top, st.bottom] : [st.bottom, st.top]), cur];
+        const frames = path.map(p => ({ transform: `translate(${(p.x - cur.x).toFixed(1)}px, ${(p.y - cur.y).toFixed(1)}px)` }));
+        g.classList.add('walking');
+        g.animate(frames, { duration: 1100 * (path.length - 1), easing: 'ease-in-out' }).onfinish = () => g.classList.remove('walking');
+    }
+
+    // ======= อัลบั้มของเรา: ไทม์ไลน์ความทรงจำที่ทำด้วยกัน =======
+    function albumHTML() {
+        const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const items = [];
+        const msgs = chat.messages;
+        const first = msgs.find(m => m.type === 'sent');
+        if (first) items.push({ at: first.timestamp, emoji: '💬', title: 'วันแรกที่เราคุยกัน', text: String(first.format === 'text' || !first.format ? first.text : '').slice(0, 60) });
+        msgs.filter(m => m.format === 'image' && /^data:image|^https?:/.test(m.text || '')).slice(-24).forEach(m =>
+            items.push({ at: m.timestamp, emoji: '📷', title: m.type === 'sent' ? 'รูปที่เองส่งมา' : 'รูปที่โมส่งให้', img: m.text }));
+        (life.state.gifts || []).forEach(gf => {
+            const def = MO_GIFTS.find(x => x.id === gf.id);
+            if (def && gf.at) items.push({ at: gf.at, emoji: def.emoji, title: `ให้${def.name}กับโม`, text: def.note });
+        });
+        try {
+            (memory.getSummary().events || []).forEach(e => {
+                const at = Date.parse(e.date) || e.at;
+                if (at) items.push({ at, emoji: '📜', title: e.title });
+            });
+        } catch (e) {}
+        home.data.events.forEach(ev => {
+            const at = Date.parse(ev.date);
+            if (at && at <= Date.now()) items.push({ at, emoji: ev.emoji, title: ev.title, text: 'จากปฏิทินของเรา' });
+        });
+        (quests.data.history || []).filter(h => [3, 7, 14, 30, 60, 100].includes(h.streak)).forEach(h =>
+            items.push({ at: Date.parse(h.day), emoji: '🔥', title: `ทำภารกิจครบติดกัน ${h.streak} วัน` }));
+        const known = memory.getDaysKnown();
+        [7, 30, 100, 365].filter(n => n <= known && first).forEach(n =>
+            items.push({ at: first.timestamp + n * 86400000, emoji: '💞', title: `รู้จักกันครบ ${n} วัน` }));
+        items.push({ at: home.data.pet.born, emoji: '🐈', title: `${home.data.pet.name} มาอยู่บ้านเรา` });
+
+        if (items.length <= 1) return '<p class="diary-empty">อัลบั้มยังว่างอยู่ ส่งรูป ให้ของขวัญ หรือจดวันสำคัญไว้ เดี๋ยวโมเก็บให้ 💕</p>';
+        items.sort((a, b) => b.at - a.at);
+        let month = '';
+        return items.map(it => {
+            const d = new Date(it.at);
+            const m = d.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+            const head = m !== month ? `<h4 class="album-month">${(month = m)}</h4>` : '';
+            return `${head}<div class="album-item">
+                <div class="album-dot">${it.emoji}</div>
+                <div class="album-body"><b>${esc(it.title)}</b><small>${d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}</small>
+                ${it.img ? `<img src="${esc(it.img)}" alt="" loading="lazy">` : ''}${it.text ? `<p>${esc(it.text)}</p>` : ''}</div></div>`;
+        }).join('');
+    }
+
     function openHomeSheet(obj) {
         const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         const fmt = ts => new Date(ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
@@ -1670,6 +1757,9 @@
             body.querySelectorAll('[data-tv]').forEach(b => b.addEventListener('click', () => tellMo(b.dataset.tv === 'movie'
                 ? 'เองชวนโมดูหนังด้วยกันที่ทีวีห้องนั่งเล่น — เสนอหนัง 1 เรื่องที่โมอยากดู ถามเองว่าโอเคมั้ย'
                 : `เองถามว่าโมดูอะไรอยู่ที่ทีวี (ตอนนี้โม${c.label || 'ว่างๆ'}) — ตอบตามจริงสั้นๆ`)));
+        } else if (obj === 'album') {
+            title.textContent = '📸 อัลบั้มของเรา';
+            body.innerHTML = albumHTML();
         } else {
             return;
         }
