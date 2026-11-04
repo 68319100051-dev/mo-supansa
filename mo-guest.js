@@ -159,7 +159,9 @@
     async function ending() {
         if (document.querySelector('.gg-ending')) return;
         const g = saved.gift || {};
+        // คลิปตอน ปวช.3 เป็นพื้นหลังจางๆ (หลังบ้านส่งให้เฉพาะคนที่มีรหัส / ไม่มีคลิปก็แค่ไม่โชว์)
         const el = $(`<div class="gg-ending">
+            <video class="gg-end-video" src="/api/gift/video?t=${encodeURIComponent(saved.token)}" muted loop playsinline autoplay preload="auto"></video>
             <div class="gg-end-lines"></div>
             <button class="gg-bye" type="button">${esc(g.byeLabel || 'บ้ายบายย 👋')}</button>
             <p class="gg-end-last"></p>
@@ -168,6 +170,12 @@
         document.body.appendChild(el);
         void el.offsetWidth;
         el.classList.add('dark');
+        const vid = el.querySelector('.gg-end-video');
+        vid.addEventListener('error', () => vid.remove());
+        vid.addEventListener('playing', () => vid.classList.add('on'));
+        const tryPlay = () => vid.isConnected && vid.play && vid.play().catch(() => {});
+        tryPlay();
+        el.addEventListener('click', tryPlay, { once: true });   // บางเครื่องต้องแตะก่อนถึงเล่น
         Sound.music();
         await wait(4200);
         const box = el.querySelector('.gg-end-lines');

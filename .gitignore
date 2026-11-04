@@ -1,6 +1,7 @@
 # API keys และเรื่องราวส่วนตัว (ใช้ mo-keys.example.js เป็นแม่แบบ)
 mo-keys.local.js
 mo-gift.local.js
+mo-gift-ending.local.mp4
 
 # ตั้งค่าเฉพาะเครื่อง
 .claude/

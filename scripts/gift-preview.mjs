@@ -3,7 +3,7 @@
 // - AI ตอบจริง: ใช้ Gemini key จาก mo-keys.local.js (คีย์อยู่ฝั่งเซิร์ฟเวอร์นี้ ไม่ส่งไปที่หน้าเว็บ)
 // - ข้อมูลโม = ว่างเปล่า (ไม่ดึงจาก Supabase) / เริ่มใหม่: http://localhost:8766/?gift&reset
 import http from 'node:http';
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, statSync, createReadStream } from 'node:fs';
 import { extname, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
@@ -43,6 +43,19 @@ http.createServer(async (req, res) => {
             return send(res, 200, { keys: {}, gift: open, mode: 'owner' });
         }
         if (route === 'event') { console.log('📝', j.type, j.n ?? ''); return send(res, 200, { ok: true }); }
+        if (route === 'video') {   // คลิปฉากจบจากไฟล์ส่วนตัว (รองรับ Range เหมือนของจริง — iPhone ต้องใช้)
+            const file = GIFT.endingVideo && join(ROOT, GIFT.endingVideo);
+            if (!url.searchParams.get('t') || !file || !existsSync(file)) return send(res, 404, {});
+            const size = statSync(file).size;
+            const m = /bytes=(\d*)-(\d*)/.exec(req.headers.range || '');
+            const start = m && m[1] ? Number(m[1]) : 0;
+            const end = m && m[2] ? Number(m[2]) : size - 1;
+            res.writeHead(m ? 206 : 200, {
+                'content-type': 'video/mp4', 'accept-ranges': 'bytes', 'content-length': end - start + 1,
+                ...(m ? { 'content-range': `bytes ${start}-${end}/${size}` } : {}),
+            });
+            return createReadStream(file, { start, end }).pipe(res);
+        }
         if (route === 'ai') {
             if (!KEY) return send(res, 200, { candidates: [{ content: { parts: [{ text: 'ว่าไงงง (ไม่มี Gemini key ในเครื่อง ตอบแทนไว้ก่อน)' }] } }] });
             if (!/^models\/[\w.-]+(:(generateContent|batchEmbedContents))?$/.test(j.path || '')) return send(res, 400, {});
@@ -64,7 +77,7 @@ http.createServer(async (req, res) => {
     const rel = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname);
     const p = join(ROOT, rel);
     // เหมือนเว็บจริง: ไม่เสิร์ฟไฟล์ส่วนตัว
-    if (!p.startsWith(ROOT) || /mo-(keys|gift)\.local\.js$/.test(rel) || !existsSync(p) || statSync(p).isDirectory()) { res.writeHead(404); return res.end(); }
+    if (!p.startsWith(ROOT) || /\.local\.\w+$/.test(rel) || !existsSync(p) || statSync(p).isDirectory()) { res.writeHead(404); return res.end(); }
     res.writeHead(200, { 'content-type': TYPES[extname(p)] || 'application/octet-stream', 'cache-control': 'no-store' });
     res.end(readFileSync(p));
 }).listen(PORT, () => console.log(`💌 เปิด http://localhost:${PORT}/?gift  (เริ่มใหม่: ?gift&reset)  AI: ${KEY ? 'Gemini จริง' : 'ข้อความจำลอง'}`));

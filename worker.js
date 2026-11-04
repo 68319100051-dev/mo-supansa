@@ -490,7 +490,9 @@ async function giftToken(env, payload) {
 }
 
 async function giftAuth(env, request) {
-    const [body, sig] = (request.headers.get('authorization') || '').replace(/^Bearer /, '').split('.');
+    // วิดีโอ (<video src>) ส่ง header เองไม่ได้ → รับ token จาก ?t= ด้วย
+    const raw = (request.headers.get('authorization') || '').replace(/^Bearer /, '') || new URL(request.url).searchParams.get('t') || '';
+    const [body, sig] = raw.split('.');
     if (!body || !sig || sig !== await giftSign(env, body)) return null;
     try {
         const p = JSON.parse(new TextDecoder().decode(b64u.decode(body)));
@@ -541,6 +543,22 @@ async function handleGift(request, env, url) {
 
     const auth = await giftAuth(env, request);
     if (!auth) return json({ error: 'ต้องใส่รหัสก่อน' }, 401);
+
+    // คลิปฉากจบ: อ่านจากที่เก็บไฟล์ของเจ้าของ ส่งต่อทีละช่วง (Range — iPhone ต้องใช้)
+    if (route === 'video') {
+        const range = request.headers.get('range');
+        const res = await fetch(`${env.SUPABASE_URL}/storage/v1/object/mo-media/${auth.u}/gift-ending.mp4`, {
+            headers: {
+                apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+                ...(env.SUPABASE_SERVICE_ROLE_KEY.startsWith('sb_') ? {} : { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` }),
+                ...(range ? { range } : {}),
+            },
+        });
+        if (!res.ok && res.status !== 206) return json({ error: 'ไม่มีคลิป' }, 404);
+        const headers = { 'content-type': 'video/mp4', 'accept-ranges': 'bytes', 'cache-control': 'private, max-age=3600' };
+        for (const h of ['content-length', 'content-range']) if (res.headers.get(h)) headers[h] = res.headers.get(h);
+        return new Response(res.body, { status: res.status, headers });
+    }
 
     if (route === 'state') {
         const rows = await db(env, `mo_state?select=key,value&user_id=eq.${auth.u}&key=in.(${GIFT_KEYS.join(',')})`);

@@ -860,11 +860,25 @@
         await sync.signOut();
         renderSync();
     });
-    sync.start().then(renderSync);
+    sync.start().then(() => { renderSync(); uploadGiftVideo(); });
     // แอคเคานต์ของขวัญ: รหัส + จดหมายจากไฟล์ส่วนตัว mo-gift.local.js → ซิงก์ขึ้นแถวของเรา (หลังบ้านส่งให้คนที่ใส่รหัสถูก)
     if (window.MO_GIFT && !window.MO_GUEST) {
         const giftJson = JSON.stringify(window.MO_GIFT);
         if (localStorage.getItem('mo_gift_v1') !== giftJson) localStorage.setItem('mo_gift_v1', giftJson);
+    }
+    // คลิปฉากจบ (ไฟล์ส่วนตัวในเครื่องนี้) → อัปขึ้นที่เก็บไฟล์ของเรา (อ่านได้ผ่านหลังบ้านเมื่อใส่รหัสถูกเท่านั้น)
+    async function uploadGiftVideo() {
+        const file = window.MO_GIFT && window.MO_GIFT.endingVideo;
+        if (!file || window.MO_GUEST || !sync.client || !sync.user) return;
+        const res = await fetch(file, { cache: 'no-store' }).catch(() => null);
+        if (!res || !res.ok) return;
+        const blob = await res.blob();
+        const mark = `${file}:${blob.size}`;
+        if (localStorage.getItem('mo_gift_video') === mark) return;
+        const { error } = await sync.client.storage.from('mo-media')
+            .upload(`${sync.user.id}/gift-ending.mp4`, blob, { upsert: true, contentType: 'video/mp4' });
+        if (error) console.warn('gift video upload failed:', error.message);
+        else localStorage.setItem('mo_gift_video', mark);
     }
 
     function openMemoryPanel() {
