@@ -133,7 +133,7 @@
             if (n >= limit) { showLimit(); return false; }
             localStorage.setItem('mo_guest_sent', String(n + 1));
             event('messages', n + 1);
-            if (n + 1 >= limit) setTimeout(showLimit, 9000);
+            if (n + 1 >= limit) setTimeout(showLimit, 15000);   // รอโมตอบข้อความสุดท้ายก่อน
             return true;
         };
     }
@@ -147,9 +147,73 @@
             <p>${esc((saved.gift && saved.gift.limitMsg) || 'ใช้ได้แค่นี้แหละ')}</p>
             <button class="gg-btn" type="button">โอเคค 💗</button></div></div>`);
         document.body.appendChild(el);
-        el.querySelector('button').onclick = () => el.remove();
+        el.querySelector('button').onclick = () => { Sound.init(); Sound.tap(); el.remove(); ending(); };
         const input = document.getElementById('message-input');
         if (input) { input.disabled = true; input.placeholder = 'หมดโควต้าแล้ว 🫣'; }
+    }
+
+    // =============================================
+    //  ฉากจบ: จอค่อยๆ มืด → ข้อความทีละบรรทัด (ข้ามไม่ได้) → ปุ่มบ้ายบายหนี 4 รอบ
+    // =============================================
+    async function ending() {
+        if (document.querySelector('.gg-ending')) return;
+        const g = saved.gift || {};
+        const el = $(`<div class="gg-ending">
+            <div class="gg-end-lines"></div>
+            <button class="gg-bye" type="button">${esc(g.byeLabel || 'บ้ายบายย 👋')}</button>
+            <p class="gg-end-last"></p>
+            <div class="gg-end-heart">💗</div>
+        </div>`);
+        document.body.appendChild(el);
+        void el.offsetWidth;
+        el.classList.add('dark');
+        Sound.music();
+        await wait(4200);
+        const box = el.querySelector('.gg-end-lines');
+        for (const line of g.ending || []) {
+            const p = document.createElement('p');
+            p.textContent = line;
+            box.appendChild(p);
+            void p.offsetWidth;
+            p.classList.add('in');
+            Sound.tone(523 + Math.random() * 200, 0.6, 'sine', 0.025);
+            await wait(Math.min(4200, 1600 + line.length * 70));
+        }
+        await wait(1200);
+        const bye = el.querySelector('.gg-bye');
+        bye.classList.add('show');
+        let dodges = 0;
+        bye.onclick = async () => {
+            if (dodges < 4) {   // หนีไปที่อื่น 4 รอบ
+                dodges++;
+                Sound.pop();
+                const w = bye.offsetWidth, h = bye.offsetHeight;
+                bye.style.left = `${16 + Math.random() * (innerWidth - w - 32)}px`;
+                bye.style.top = `${70 + Math.random() * (innerHeight - h - 140)}px`;
+                bye.style.transform = `rotate(${Math.random() * 30 - 15}deg)`;
+                return;
+            }
+            bye.classList.remove('show');
+            bye.disabled = true;
+            const last = el.querySelector('.gg-end-last');
+            last.textContent = g.byeLast || 'ไปแล้วนะ';
+            last.classList.add('in');
+            event('bye');
+            await wait(3500);
+            Sound.stopMusic();
+            el.classList.add('gone');
+        };
+    }
+
+    /** หลังแนะนำแอป: บอกให้เล่นให้ครบโควต้า */
+    function playNote(text) {
+        if (!text) return;
+        const el = $(`<div class="gg-overlay gg-dim"><div class="gg-card gg-pop">
+            <div class="gg-mascot small">${mascotSVG}</div>
+            <p>${esc(text)}</p>
+            <button class="gg-btn" type="button">โอเค ลุยย 💬</button></div></div>`);
+        document.body.appendChild(el);
+        el.querySelector('button').onclick = () => { Sound.tap(); el.remove(); document.getElementById('message-input')?.focus(); };
     }
 
     // =============================================
@@ -303,41 +367,88 @@
         el.remove();
     }
 
+    /** แต่งข้อความ: 5555 เด้งๆ / อีโมจิกระดึ๊บ / คำพูดในเครื่องหมายคำพูดเป็นลายมือ */
+    function decorate(text) {
+        return esc(text)
+            .replace(/\n/g, '<br>')
+            .replace(/(5{4,})/g, '<span class="gg-laugh">$1</span>')
+            .replace(/(\p{Extended_Pictographic}️?)/gu, '<span class="gg-emo">$1</span>')
+            .replace(/^"(.+)"$/, '<span class="gg-quote">"$1"</span>');
+    }
+
+    /** ระเบิดหัวใจ/คอนเฟตติ ณ จุดหนึ่งบนจอ */
+    function burst(x, y, n = 16, chars = ['💗', '✨', '🌸', '💖', '⭐']) {
+        for (let i = 0; i < n; i++) {
+            const s = document.createElement('i');
+            s.className = 'gg-burst';
+            s.textContent = chars[i % chars.length];
+            const a = Math.random() * Math.PI * 2, d = 60 + Math.random() * 110;
+            s.style.cssText = `left:${x}px;top:${y}px;--dx:${Math.cos(a) * d}px;--dy:${Math.sin(a) * d - 40}px;--r:${Math.random() * 360 - 180}deg`;
+            document.body.appendChild(s);
+            setTimeout(() => s.remove(), 1400);
+        }
+    }
+
     function reader(gift, host) {
         return new Promise(resolve => {
             const sections = gift.letter || [];
+            const doodles = ['🌸', '✨', '💌', '🌷', '⭐', '🍀', '💗'];
             const el = $(`<div class="gg-reader">
+                <div class="gg-progress"><i></i><span>🐾</span></div>
+                <div class="gg-petals">${'<i></i>'.repeat(14)}</div>
                 <article class="gg-sheet">
+                    <div class="gg-tape"></div>
                     ${sections.map((s, i) => `<section data-i="${i}">
-                        ${s.title ? `<h3 class="gg-p">${esc(s.title)}</h3>` : ''}
-                        ${s.paras.map(p => `<p class="gg-p">${esc(p).replace(/\n/g, '<br>')}</p>`).join('')}
-                    </section>`).join('<div class="gg-divider">✦ ✦ ✦</div>')}
+                        ${s.title ? `<h3 class="gg-p gg-title"><span>${esc(s.title)}</span><b class="gg-doodle">${doodles[i % doodles.length]}</b></h3>` : ''}
+                        ${s.paras.map(p => `<p class="gg-p">${decorate(p)}</p>`).join('')}
+                    </section>`).join('<div class="gg-divider gg-p">✦ ✦ ✦</div>')}
                     <div class="gg-end gg-p"><button class="gg-btn big" type="button">จบแล่วว พร้อมเล่นได้เรยยยย 🎉</button></div>
                 </article>
                 <div class="gg-peeker">${mascotSVG}<div class="gg-tease"></div></div>
             </div>`);
             host.appendChild(el);
-            requestAnimationFrame(() => el.classList.add('show'));
+            void el.offsetWidth;   // ให้ transition เริ่มจากสถานะแรก (rAF ไม่ทำงานตอนแท็บอยู่เบื้องหลัง)
+            setTimeout(() => el.classList.add('show'), 30);
             const tease = el.querySelector('.gg-tease'), peeker = el.querySelector('.gg-peeker');
+            const bar = el.querySelector('.gg-progress i'), paw = el.querySelector('.gg-progress span');
+            el.addEventListener('scroll', () => {
+                const k = Math.min(1, el.scrollTop / Math.max(1, el.scrollHeight - el.clientHeight));
+                bar.style.width = `${k * 100}%`;
+                paw.style.left = `calc(${k * 100}% - 10px)`;
+            }, { passive: true });
             let teaseTimer;
             const say = text => {
                 if (!text) return;
                 Sound.pop();
                 tease.textContent = text;
+                peeker.classList.remove('show');
+                void peeker.offsetWidth;
                 peeker.classList.add('show');
                 clearTimeout(teaseTimer);
-                teaseTimer = setTimeout(() => peeker.classList.remove('show'), 3200);
+                teaseTimer = setTimeout(() => peeker.classList.remove('show'), 3400);
             };
             const told = new Set();
             const io = new IntersectionObserver(entries => entries.forEach(e => {
                 if (!e.isIntersecting) return;
                 e.target.classList.add('in');
+                if (e.target.classList.contains('gg-title')) Sound.tone(1318, 0.18, 'triangle', 0.04);
                 const sec = e.target.closest('section');
                 if (sec && !told.has(sec.dataset.i)) { told.add(sec.dataset.i); say(sections[sec.dataset.i].tease); }
-                if (e.target.classList.contains('gg-end') && !told.has('end')) { told.add('end'); say(gift.endTease); event('letter_done'); }
+                if (e.target.classList.contains('gg-end') && !told.has('end')) {
+                    told.add('end');
+                    say(gift.endTease);
+                    event('letter_done');
+                    const r = e.target.getBoundingClientRect();
+                    burst(r.left + r.width / 2, r.top, 22);
+                }
             }), { root: el, threshold: 0.25 });
             el.querySelectorAll('.gg-p').forEach(p => io.observe(p));
-            el.querySelector('.gg-end button').onclick = () => { Sound.ok(); io.disconnect(); resolve(); };
+            el.querySelector('.gg-end button').onclick = ev => {
+                Sound.ok();
+                burst(ev.clientX, ev.clientY, 30, ['🎉', '💗', '✨', '🎊', '💖']);
+                io.disconnect();
+                setTimeout(resolve, 700);
+            };
         });
     }
 
@@ -393,7 +504,8 @@
         Object.entries(st.data.keys || {}).filter(([, v]) => !(v && v.__deleted)).forEach(([k, v]) => {
             try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch (e) {}
         });
-        saved = { token: ok.token, mode: ok.mode, gift: { chatLimit: st.data.gift.chatLimit, limitMsg: st.data.gift.limitMsg }, ready: false };
+        const gf = st.data.gift || {};
+        saved = { token: ok.token, mode: ok.mode, gift: { chatLimit: gf.chatLimit, limitMsg: gf.limitMsg, ending: gf.ending, byeLabel: gf.byeLabel, byeLast: gf.byeLast }, ready: false };
         write('mo_guest', saved);
         localStorage.setItem('mo_guest_sent', '0');
         ok.el.remove();
@@ -403,6 +515,7 @@
         write('mo_guest', saved);
         applyRuntime();
         loadApp();
-        tour();
+        await tour();
+        playNote(st.data.gift.playNote);
     })();
 })();

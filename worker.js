@@ -551,7 +551,7 @@ async function handleGift(request, env, url) {
 
     if (route === 'event' && request.method === 'POST') {
         const { type, n } = await request.json().catch(() => ({}));
-        if (auth.m === 'guest' && /^(letter_open|letter_done|tour_done|messages|limit)$/.test(type)) await giftLog(env, auth.u, type, { n });
+        if (auth.m === 'guest' && /^(letter_open|letter_done|tour_done|messages|limit|bye)$/.test(type)) await giftLog(env, auth.u, type, { n });
         return json({ ok: true });
     }
 
