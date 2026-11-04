@@ -218,7 +218,7 @@ class MoLLMService {
         const knownName = !guestNote && memorySummary && memorySummary.longTerm && memorySummary.longTerm.userName;
         const userName = guestNote ? 'อีกฝ่าย' : knownName || 'ไอ้ดื้อ';
         const nameRule = guestNote
-            ? 'เรียก "เอง" อย่างเดียว ห้ามเรียกชื่อคนสร้าง'
+            ? 'เรียกอีกฝ่ายว่า "เอง" อย่างเดียว ห้ามเรียกอีกฝ่ายด้วยชื่อคนสร้าง'
             : knownName
                 ? `เรียก "${knownName}" เป็นหลัก "ไอ้ดื้อ" ไว้แซว`
                 : 'ยังไม่รู้ชื่อ ถ้าจังหวะดีถามชื่อเล่น';
