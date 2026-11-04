@@ -725,7 +725,7 @@ class MoChat {
         const delay = this.life ? this.life.replyDelay() : 0;
         if (delay === 0 && !this.pendingReply) {
             // ถือมือถืออยู่: ส่วนใหญ่ตอบเลย บางทีขึ้น "อ่านแล้ว" ก่อนแล้วค่อยพิมพ์ (กำลังคิด/ทำอย่างอื่นอยู่)
-            if (Math.random() < 0.25) {
+            if (Math.random() < 0.25 && !window.MO_GUEST) {
                 this.mind && this.mind.decide('อ่านแล้ว แต่ขอคิดแป๊บก่อนตอบ');
                 this.markUnread();
                 this.markRead();
