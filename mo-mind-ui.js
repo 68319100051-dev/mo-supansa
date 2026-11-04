@@ -114,18 +114,15 @@ class MoMindUI {
         this.regionEls = {};
         this.sparks = null;
         this.content.innerHTML = `
-            <div class="mind-hero">
-                <div class="mind-3d" id="mind-3d"><div class="mind-3d-loading">กำลังเชื่อมต่อสมอง...</div></div>
-                <p class="mind-tap-hint">แตะส่วนของสมองเพื่อดูความทรงจำ • ลากเพื่อหมุน</p>
-                <div class="mind-emotion" id="mind-emotion"></div>
-            </div>
+            <div class="mind-emotion" id="mind-emotion"></div>
+            <button class="mind-open-brain" id="mind-open-brain">🧠 เปิดสมองของโม — ซูมดูความทรงจำ + รายงานสด ›</button>
             <div class="mind-regions" id="mind-regions"></div>
             <div class="mind-panel mind-detail" id="mind-detail"></div>
             <button class="mind-clear" id="mind-clear">🗑️ ล้างความทรงจำทั้งหมด</button>`;
         document.getElementById('mind-clear').addEventListener('click', () => this.src.onClearMemory && this.src.onClearMemory());
         this.renderLive();
         this.renderDetail();
-        this.mount3D(document.getElementById('mind-3d'));
+        document.getElementById('mind-open-brain').addEventListener('click', () => document.getElementById('nav-brain').click());
     }
 
     select(region) {

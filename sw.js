@@ -5,11 +5,11 @@
    - Push จากหลังบ้าน (ไม่มี payload) → ถาม /api/push/inbox ว่าโมพูดอะไร แล้วเด้งแจ้งเตือน
    ============================================ */
 
-const CACHE = 'mo-app-v15';
+const CACHE = 'mo-app-v16';
 const SHELL = [
     './', 'index.html', 'style.css', 'manifest.json', 'mo_avatar.jpg', 'icons/icon-192.png', 'icons/icon-512.png',
     'mo-config.js', 'mo-sync.js', 'mo-llm.js', 'mo-brain.js', 'mo-brain3d.js', 'mo-memory.js', 'mo-chat.js',
-    'mo-call.js', 'mo-reels.js', 'mo-life.js', 'mo-house-view.js', 'mo-extras.js', 'mo-mind.js', 'mo-mind-ui.js', 'mo-reminders.js',
+    'mo-call.js', 'mo-reels.js', 'mo-life.js', 'mo-house-view.js', 'mo-extras.js', 'mo-mind.js', 'mo-mind-ui.js', 'mo-brain-page.js', 'mo-reminders.js',
     'mo-routines.js', 'mo-self.js', 'mo-status.js', 'mo-voice.js', 'mo-stories.js', 'mo-games.js', 'mo-checkers.js', 'mo-recall.js', 'mo-social.js', 'mo-care.js', 'mo-inner.js', 'mo-psyche.js',
     'mo-diary.js', 'app.js',
 ];

@@ -430,14 +430,89 @@ export class Brain3D {
         // กระแสประสาทเล็กๆ เกิดเองตลอดเวลา (สมองไม่เคยหยุดทำงาน)
         if (Math.random() < 0.06) this.pulse(REGION_KEYS[Math.floor(Math.random() * REGION_KEYS.length)], 1);
         this.updateSparks(dt);
+        if (this.zoomGoal) {
+            const off = this.camera.position.clone().sub(this.controls.target);
+            const d = off.length() + (this.zoomGoal - off.length()) * Math.min(1, dt * 8);
+            this.camera.position.copy(this.controls.target).add(off.setLength(d));
+            if (Math.abs(d - this.zoomGoal) < 0.01) this.zoomGoal = null;
+        }
+        if (this.memPoints) this.memPoints.material.size = 0.06 + 0.015 * Math.sin(t * 3);
         this.controls.update();
+        if (this.onFrame) this.onFrame(dt);
         this.composer.render();
+    }
+
+    // =============================================
+    //  หน้าสมองเต็มจอ: ซูม + ความทรงจำเป็นดวงไฟในสมอง
+    // =============================================
+
+    /** เปิดซูม (หมุนลูกกลิ้ง / บีบนิ้ว) — แตะหรือลากแล้วหยุดหมุนเอง 6 วิ */
+    enableZoom(min = 1.4, max = 6) {
+        const c = this.controls;
+        c.enableZoom = true;
+        c.minDistance = min;
+        c.maxDistance = max;
+        c.zoomSpeed = 0.8;
+        c.addEventListener('start', () => { c.autoRotate = false; this.zoomGoal = null; clearTimeout(this.idleTimer); });
+        c.addEventListener('end', () => { this.idleTimer = setTimeout(() => { c.autoRotate = true; }, 6000); });
+    }
+
+    distance() {
+        return this.camera.position.distanceTo(this.controls.target);
+    }
+
+    /** ซูมเข้า (f < 1) / ออก (f > 1) แบบนุ่มๆ (ค่อยๆ เลื่อนใน frame) */
+    zoomBy(f) {
+        const c = this.controls;
+        this.zoomGoal = THREE.MathUtils.clamp((this.zoomGoal || this.distance()) * f, c.minDistance, c.maxDistance);
+    }
+
+    resetView() {
+        this.camera.position.set(2.75, 0.55, 2.2);
+        this.controls.target.set(0, -0.3, 0);
+        this.controls.autoRotate = true;
+        this.zoomGoal = null;
+    }
+
+    /** วางความทรงจำเป็นดวงไฟชมพูในส่วนของสมองที่เก็บมัน — list: [{ region }] */
+    setMemories(list) {
+        if (this.memPoints) {
+            this.brain.remove(this.memPoints);
+            this.memPoints.geometry.dispose();
+        }
+        this.memPos = list.map((m, i) => {
+            const r = REGION_KEYS.indexOf(m.region);
+            const pool = this.nodes.filter(n => n.r === r);
+            const n = (pool.length ? pool : this.nodes)[(i * 7919) % (pool.length || this.nodes.length)];
+            return n.p.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.06, (Math.random() - 0.5) * 0.06, (Math.random() - 0.5) * 0.06));
+        });
+        const geo = new THREE.BufferGeometry().setFromPoints(this.memPos);
+        this.memPoints = new THREE.Points(geo, new THREE.PointsMaterial({
+            size: 0.06, map: this.dotTexture(), color: 0xff7eb6, transparent: true,
+            depthWrite: false, blending: THREE.AdditiveBlending,
+        }));
+        this.brain.add(this.memPoints);
+    }
+
+    /** ตำแหน่งบนจอของความทรงจำแต่ละดวง → [{ x, y, front }] (px ใน container) */
+    projectMemories() {
+        if (!this.memPos) return [];
+        const w = this.container.clientWidth, h = this.container.clientHeight;
+        const cam = this.camera.position;
+        const center = this.brain.localToWorld(new THREE.Vector3(0, 0, 0));
+        return this.memPos.map(p => {
+            const world = this.brain.localToWorld(p.clone());
+            const front = world.clone().sub(center).normalize().dot(cam.clone().sub(center).normalize());
+            const v = world.project(this.camera);
+            return { x: (v.x + 1) / 2 * w, y: (1 - v.y) / 2 * h, front, near: cam.distanceTo(world) };
+        });
     }
 
     resize() {
         const w = this.container.clientWidth, h = this.container.clientHeight;
         if (!w || !h) return;
         this.camera.aspect = w / h;
+        this.camera.fov = w < h ? THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(19)) * Math.min(1.6, h / w * 0.85))) : 38;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(w, h);
         this.composer.setSize(w, h);

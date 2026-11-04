@@ -288,6 +288,7 @@
     setInterval(() => mind.decay(), 60000);
     // ความทรงจำของโม = สมองโฮโลแกรม (แตะแต่ละส่วนเพื่อดูความทรงจำ) — สร้างหลัง reminders/diary/life พร้อมแล้ว
     let mindUI = null;
+    let brainPage = null;
 
     // ======= Splash Screen =======
     const splashScreen = document.getElementById('splash-screen');
@@ -591,6 +592,7 @@
             navItems.forEach(n => n.classList.remove('active'));
             item.classList.add('active');
 
+            if (tab !== 'brain' && brainPage.open) brainPage.hide();
             switch (tab) {
                 case 'chat':
                     reels.close();
@@ -607,6 +609,12 @@
                     reels.close();
                     houseScreen.classList.add('hidden');
                     break;
+                case 'brain':
+                    reels.close();
+                    closeMemoryPanel();
+                    houseScreen.classList.add('hidden');
+                    if (!brainPage.open) brainPage.show();
+                    break;
                 case 'house':
                     openHouse();
                     reels.close();
@@ -621,6 +629,11 @@
         memory, diary, reminders, life, chat, reels,
         onClearMemory: clearAllMemory,
     });
+    // หน้าสมองเต็มจอ (ซูมดูความทรงจำ + รายงานสด)
+    brainPage = new MoBrainPage(mind, { memory, diary, reminders, life });
+    brainPage.onClose = () => {
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.tab === 'chat'));
+    };
     // ปิดหน้าสมอง → กลับไปแท็บแชท
     mindUI.onClose = () => {
         document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.tab === 'chat'));

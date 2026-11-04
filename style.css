@@ -4120,3 +4120,332 @@ button.mind-region-chip {
     color: var(--text-secondary);
     font-size: 0.88rem;
 }
+
+/* ===== หน้าสมองของโม (เต็มจอ) ===== */
+.mind-open-brain {
+    flex-shrink: 0;
+    margin: 0 12px;
+    padding: 14px 16px;
+    border: none;
+    border-radius: 18px;
+    text-align: left;
+    font: inherit;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, #2a1240, #5b1e5e 60%, #f04d85);
+    box-shadow: 0 8px 22px rgba(160, 27, 64, 0.25);
+    cursor: pointer;
+}
+
+.mind-screen .mind-emotion {
+    margin: 0 12px;
+    flex-shrink: 0;
+}
+
+.brain-page {
+    position: fixed;
+    inset: 0;
+    z-index: 225;
+    display: flex;
+    flex-direction: column;
+    max-width: 480px;
+    margin: 0 auto;
+    overflow-y: auto;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    color: #ffe9f2;
+    background: radial-gradient(ellipse at 50% 18%, #3a1c4a, #140a22 65%);
+}
+
+.brain-page.hidden {
+    display: none;
+}
+
+.brain-head {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+    background: rgba(20, 10, 34, 0.75);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+.brain-head h2 {
+    font-family: var(--font-display);
+    font-size: 1.15rem;
+}
+
+.brain-live {
+    margin-left: 6px;
+    font-size: 0.65rem;
+    color: #ff7eb6;
+    letter-spacing: 1px;
+    animation: statusPulse 1.6s ease-in-out infinite;
+}
+
+.brain-stage {
+    position: relative;
+    flex-shrink: 0;
+    height: min(62vh, 520px);
+    overflow: hidden;
+    touch-action: none;
+}
+
+.brain-3d {
+    position: absolute;
+    inset: 0;
+}
+
+.brain-3d canvas {
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+.brain-labels {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.brain-mem {
+    position: absolute;
+    left: 0;
+    top: 0;
+    max-width: 150px;
+    padding: 4px 9px;
+    border: 1px solid rgba(255, 126, 182, 0.55);
+    border-radius: 12px;
+    font: inherit;
+    font-size: 0.7rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #fff;
+    background: rgba(40, 14, 50, 0.72);
+    box-shadow: 0 0 12px rgba(255, 126, 182, 0.35);
+    opacity: 0;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.brain-hud {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    pointer-events: none;
+}
+
+.brain-hud span {
+    align-self: flex-start;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.brain-zoom {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.brain-zoom button {
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgba(255, 126, 182, 0.5);
+    border-radius: 50%;
+    font-size: 1.2rem;
+    color: #fff;
+    background: rgba(40, 14, 50, 0.7);
+    cursor: pointer;
+}
+
+.brain-hint {
+    position: absolute;
+    bottom: 8px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-size: 0.72rem;
+    color: rgba(255, 233, 242, 0.65);
+    pointer-events: none;
+}
+
+.brain-fail {
+    padding: 40px 20px;
+    text-align: center;
+    font-size: 0.85rem;
+}
+
+.brain-card {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    bottom: 34px;
+    padding: 12px 14px;
+    border-radius: 18px;
+    color: var(--text-primary);
+    background: #fff;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    animation: watchIn 0.2s ease-out;
+}
+
+.brain-card.hidden {
+    display: none;
+}
+
+.brain-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--pink-600);
+}
+
+.brain-card p {
+    margin: 6px 0;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+.brain-card small {
+    color: var(--text-secondary);
+}
+
+.brain-legend {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 10px 12px;
+    flex-shrink: 0;
+    scrollbar-width: none;
+}
+
+.brain-chip {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border: 1px solid rgba(255, 126, 182, 0.35);
+    border-radius: 16px;
+    font: inherit;
+    font-size: 0.75rem;
+    color: #ffe9f2;
+    background: rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+}
+
+.brain-chip b {
+    margin-left: 2px;
+    color: #ff7eb6;
+}
+
+.brain-chip.on {
+    background: #f04d85;
+    border-color: #f04d85;
+}
+
+.brain-chip.on b {
+    color: #fff;
+}
+
+.brain-report {
+    margin: 0 12px;
+    padding: 14px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.brain-report h3 {
+    margin: 4px 0 10px;
+    font-size: 0.9rem;
+    color: #ff9cc5;
+}
+
+.brain-meter {
+    display: grid;
+    grid-template-columns: 112px 1fr 38px;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 0.75rem;
+}
+
+.brain-meter i {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    overflow: hidden;
+}
+
+.brain-meter em {
+    display: block;
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #ff7eb6, #ffd166);
+    transition: width 0.6s;
+}
+
+.brain-meter b {
+    text-align: right;
+    font-weight: 500;
+}
+
+.brain-chems {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 10px 0 14px;
+}
+
+.brain-chems span {
+    padding: 3px 9px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    border: 1px solid var(--c);
+    color: var(--c);
+}
+
+.brain-feed {
+    list-style: none;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.brain-feed li {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    font-size: 0.8rem;
+    animation: watchIn 0.25s ease-out;
+}
+
+.brain-feed time {
+    font-family: monospace;
+    font-size: 0.7rem;
+    color: rgba(255, 233, 242, 0.5);
+}
+
+.brain-feed-region {
+    margin-left: 6px;
+    font-size: 0.7rem;
+    color: #ff9cc5;
+}
+
+.brain-feed p {
+    margin-top: 2px;
+    line-height: 1.45;
+}
+
+.brain-3d.ready .mind-3d-loading {
+    display: none;
+}

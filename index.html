@@ -248,6 +248,12 @@
                 </svg>
                 <span>ความจำ</span>
             </button>
+            <button class="nav-item" data-tab="brain" id="nav-brain">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9.5 3a3 3 0 00-3 3 3 3 0 00-2.5 4.5A3.5 3.5 0 005 17a3 3 0 004.5 3V3z"/><path d="M14.5 3a3 3 0 013 3 3 3 0 012.5 4.5A3.5 3.5 0 0119 17a3 3 0 01-4.5 3V3z"/>
+                </svg>
+                <span>สมอง</span>
+            </button>
             <button class="nav-item" data-tab="house" id="nav-house">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z"/>
@@ -410,6 +416,33 @@
     </div>
 
     <!-- Clip Player -->
+    <!-- หน้าสมองของโม (เต็มจอ) -->
+    <div id="brain-page" class="brain-page hidden">
+        <header class="brain-head">
+            <h2>🧠 สมองของโม <span class="brain-live">● LIVE</span></h2>
+            <button class="close-btn" id="close-brain" title="ปิด">&times;</button>
+        </header>
+        <div class="brain-stage">
+            <div class="brain-3d" id="brain-3d"><div class="mind-3d-loading">กำลังเชื่อมต่อสมอง...</div></div>
+            <div class="brain-labels" id="brain-labels"></div>
+            <div class="brain-hud" id="brain-hud"></div>
+            <div class="brain-zoom">
+                <button id="brain-zoom-in" title="ซูมเข้า">+</button>
+                <button id="brain-zoom-out" title="ซูมออก">−</button>
+                <button id="brain-zoom-reset" title="กลับมุมเดิม">⟲</button>
+            </div>
+            <p class="brain-hint" id="brain-hint"></p>
+            <div class="brain-card hidden" id="brain-card"></div>
+        </div>
+        <div class="brain-legend" id="brain-legend"></div>
+        <section class="brain-report">
+            <h3>📊 สมองทำงานตอนนี้</h3>
+            <div id="brain-meters"></div>
+            <h3>📡 รายงานสด</h3>
+            <ol class="brain-feed" id="brain-feed"></ol>
+        </section>
+    </div>
+
     <!-- สมุดไดอารี่ของโม -->
     <div id="diary-book" class="diary-book hidden">
         <div class="diary-cover">
@@ -607,6 +640,7 @@
     <script src="mo-extras.js"></script>
     <script src="mo-mind.js"></script>
     <script src="mo-mind-ui.js"></script>
+    <script src="mo-brain-page.js"></script>
     <script src="mo-reminders.js"></script>
     <script src="mo-routines.js"></script>
     <script src="mo-self.js"></script>
