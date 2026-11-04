@@ -276,6 +276,10 @@
 
     // ชีวิตประจำวันของโม (บ้าน มือถือ กระเป๋าเงิน)
     const life = new MoLife();
+    // ของในบ้านที่มีชีวิต: แมว ต้นไม้ ปฏิทินของเรา
+    const home = new MoHome(reminders);
+    home.getMessages = () => chat.messages;
+    window.MoHomeInstance = home;
     window.MoLifeInstance = life;
     chat.life = life;
     life.dailyAllowance();
@@ -1207,6 +1211,17 @@
         const bar = (label, value) => `<div class="house-bar"><span>${label}</span>
             <div class="house-bar-track"><div class="house-bar-fill" style="width:${value}%"></div></div><span>${value}</span></div>`;
 
+        home.tick(life);
+        const petMood = home.petMood();
+        const plant = home.plant(chat.messages);
+        const nextEvent = home.upcoming()[0];
+        const homeOpts = {
+            pet: { spot: home.petSpot(life), sleeping: petMood.sleeping, badge: home.data.pet.hunger > 70 ? '💭' : petMood.sleeping ? '💤' : '' },
+            plant, nextEvent,
+            tvOn: ['📺', '🎮'].includes(spot) && c.room !== 'out',
+            laptopOn: spot === '💻' && c.room !== 'out',
+        };
+
         document.getElementById('house-content').innerHTML = `
             <div class="house-card house-now">
                 <img src="mo_avatar.jpg" alt="โม">
@@ -1241,7 +1256,16 @@
             </div>
             <div class="house-card">
                 <h3>แผนผังบ้าน ${night ? '🌙 กลางคืน' : '☀️ กลางวัน'}${window.MoWeather && window.MoWeather.describe() ? ` • ${esc(window.MoWeather.describe())}` : ''}</h3>
-                ${MoHouseView.render(life, { night, spot, phoneRoom, rain: window.MoWeather && window.MoWeather.isRaining(), gifts: MoGifts.owned(life), festival: MoFestivals.upcoming() })}
+                <p class="house-hint">แตะของที่มีวงชมพูได้: 🐈 แมว • 📅 ปฏิทิน • 🌱 ต้นไม้ • 🧲 ตู้เย็น • 📺 ทีวี • 📔 ไดอารี่</p>
+                ${MoHouseView.render(life, { night, spot, phoneRoom, home: homeOpts, rain: window.MoWeather && window.MoWeather.isRaining(), gifts: MoGifts.owned(life), festival: MoFestivals.upcoming() })}
+            </div>
+            <div class="house-card">
+                <h3>🏡 ในบ้านตอนนี้</h3>
+                <div class="house-log">
+                    <div class="house-log-item"><time></time><span>🐈</span><span><b>${esc(home.data.pet.name)}</b> ${petMood.emoji} ${petMood.label}</span></div>
+                    <div class="house-log-item"><time></time><span>${plant.emoji}</span><span>ต้นไม้ของเรา: ${plant.wilted ? 'เหี่ยวแล้ว รีบรดน้ำ!' : plant.name} • คุยกันมา ${plant.days} วัน${plant.next && !plant.wilted ? ` (อีก ${plant.next.days - plant.days} วัน${plant.next.name})` : ''}</span></div>
+                    <div class="house-log-item"><time></time><span>📅</span><span>${nextEvent ? `${esc(nextEvent.title)} — ${nextEvent.daysLeft === 0 ? 'วันนี้!' : `อีก ${nextEvent.daysLeft} วัน`}` : 'ยังไม่มีวันสำคัญ แตะปฏิทินบนผนังเพื่อเพิ่ม'}</span></div>
+                </div>
             </div>
             <div class="house-card">
                 <h3>🎁 ร้านของขวัญ <small>เงินเรา ฿${s.userWallet.toLocaleString()}</small></h3>
@@ -1275,6 +1299,7 @@
         // แตะสมุดบนโต๊ะ → อ่านไดอารี่ของโม
         const diaryEl = document.querySelector('.hv-diary');
         if (diaryEl) diaryEl.addEventListener('click', openDiaryBook);
+        document.querySelectorAll('.hv-obj').forEach(el => el.addEventListener('click', () => openHomeSheet(el.dataset.obj)));
         const watchBtn = document.getElementById('house-watch-game');
         if (watchBtn) watchBtn.addEventListener('click', () => {
             houseScreen.classList.add('hidden');
@@ -1520,4 +1545,134 @@
         mind.decide('เองเปิดอ่านไดอารี่ของเค้า 🙈');
     }
     document.getElementById('diary-book-close').addEventListener('click', () => document.getElementById('diary-book').classList.add('hidden'));
+
+    // ======= ของในบ้านที่แตะได้ (แมว / ปฏิทิน / ต้นไม้ / ตู้เย็น / ทีวี) =======
+    const homeSheet = document.getElementById('home-sheet');
+    document.getElementById('home-sheet-close').addEventListener('click', () => homeSheet.classList.add('hidden'));
+
+    /** เล่าให้โมรู้ว่าเองทำอะไรในบ้าน → โมตอบในแชท */
+    function tellMo(systemNote) {
+        homeSheet.classList.add('hidden');
+        houseScreen.classList.add('hidden');
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n.dataset.tab === 'chat'));
+        chat.queueReply(note => chat.moRespond(`${note}[ข้อความระบบ: ${systemNote}]`));
+    }
+
+    function openHomeSheet(obj) {
+        const esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const fmt = ts => new Date(ts).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+        const bar = (label, value) => `<div class="house-bar"><span>${label}</span>
+            <div class="house-bar-track"><div class="house-bar-fill" style="width:${value}%"></div></div><span>${value}</span></div>`;
+        const title = document.getElementById('home-sheet-title');
+        const body = document.getElementById('home-sheet-body');
+        const rerender = () => { openHomeSheet(obj); renderHouse(); };
+        home.tick(life);
+
+        if (obj === 'pet') {
+            const p = home.data.pet;
+            const mood = home.petMood();
+            title.textContent = `🐈 ${p.name}`;
+            body.innerHTML = `<p class="diary-sub">${mood.emoji} ${mood.label} • อยู่บ้านมา ${Math.max(1, Math.round((Date.now() - p.born) / 86400000))} วัน</p>
+                <div class="home-stats">${bar('อิ่ม', 100 - p.hunger)}${bar('รักเรา', p.love)}${bar('สะอาด', p.clean)}</div>
+                <div class="home-actions">
+                    <button class="btn-primary" data-act="feed">🐟 ให้อาหาร</button>
+                    <button class="btn-secondary" data-act="play">🧶 เล่นด้วย</button>
+                    <button class="btn-secondary" data-act="brush">🪮 แปรงขน</button>
+                    <button class="btn-secondary" data-act="rename">✏️ ตั้งชื่อ</button>
+                </div>
+                <div class="home-log">${(p.log || []).slice().reverse().slice(0, 6).map(l => `${fmt(l.at)} • ${esc(l.text)}`).join('<br>') || 'ยังไม่มีบันทึก'}</div>`;
+            body.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+                const act = b.dataset.act;
+                if (act === 'rename') {
+                    const n = prompt('ตั้งชื่อน้องแมวของเรา', p.name);
+                    if (!n) return;
+                    const old = p.name;
+                    home.rename(n);
+                    mind.decide(`ตั้งชื่อแมวใหม่เป็น ${home.data.pet.name}`);
+                    tellMo(`เองเปลี่ยนชื่อน้องแมวที่เราเลี้ยงด้วยกันจาก "${old}" เป็น "${home.data.pet.name}" — ตอบสั้นๆ ว่าชอบชื่อไหม`);
+                    renderHouse();
+                    return;
+                }
+                const text = home[act]();
+                home.petLog(text);
+                home.save();
+                mind.think('limbic', text);
+                chat.showNotification(text);
+                if (Math.random() < 0.35) tellMo(`เองเพิ่ง${text.replace(/^\S+\s/, '')} — ตอบสั้นๆ แบบน่ารัก เล่าว่าน้อง${home.data.pet.name}ทำท่าอะไร`);
+                else rerender();
+            }));
+        } else if (obj === 'calendar') {
+            title.textContent = '📅 ปฏิทินของเรา';
+            const list = home.upcoming();
+            body.innerHTML = `<p class="diary-sub">ถึงวันแล้วโมจะทักตอน 9 โมงเช้า (ปิดแอปอยู่ก็ทัก)</p>
+                ${list.length ? list.map(e => `<div class="cal-item"><span>${e.emoji || '⭐'}</span><b>${esc(e.title)}</b>
+                    <span class="cal-left ${e.daysLeft === 0 ? 'today' : ''}">${e.daysLeft === 0 ? 'วันนี้!' : `อีก ${e.daysLeft} วัน`}</span>
+                    ${e.id ? `<button class="mind-x" data-del="${e.id}" title="ลบ">&times;</button>` : ''}</div>`).join('') : '<p class="diary-empty">ยังไม่มีวันสำคัญเลย เพิ่มวันแรกของเราได้ข้างล่าง</p>'}
+                <form class="cal-form" id="cal-form">
+                    <input class="wide" name="title" placeholder="เช่น วันครบรอบ, นัดไปทะเล" maxlength="60" required>
+                    <input type="date" name="date" required>
+                    <select name="emoji"><option>💞</option><option>🎂</option><option>✈️</option><option>🍽️</option><option>🎬</option><option>📌</option></select>
+                    <label class="wide" style="font-size:0.85rem"><input type="checkbox" name="yearly" style="width:auto"> วนทุกปี (เช่น วันครบรอบ วันเกิด)</label>
+                    <button class="btn-primary wide" type="submit">➕ เพิ่มในปฏิทิน</button>
+                </form>`;
+            body.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => { home.removeEvent(b.dataset.del); rerender(); }));
+            body.querySelector('#cal-form').addEventListener('submit', e => {
+                e.preventDefault();
+                const f = new FormData(e.target);
+                const ev = home.addEvent(f.get('title'), f.get('date'), !!f.get('yearly'), f.get('emoji'));
+                const { daysLeft } = home.nextDate(ev);
+                mind.think('parietal', `จดวัน "${ev.title}" ลงปฏิทินของเรา (อีก ${daysLeft} วัน)`);
+                tellMo(`เองเพิ่งเพิ่ม "${ev.title}" ${ev.emoji} ลงปฏิทินของเรา ${daysLeft === 0 ? 'คือวันนี้' : `อีก ${daysLeft} วัน`}${ev.yearly ? ' (ทุกปี)' : ''} — ตอบแบบตื่นเต้น/ใส่ใจ บอกว่าจำไว้แล้ว`);
+                renderHouse();
+            });
+        } else if (obj === 'plant') {
+            const pl = home.plant(chat.messages);
+            title.textContent = `${pl.emoji} ต้นไม้ของเรา`;
+            body.innerHTML = `<p class="diary-sub">ต้นนี้โตตามจำนวนวันที่เราคุยกัน ถ้าหายไปนาน หรือไม่มีใครรดน้ำ จะเหี่ยวนะ</p>
+                <div class="home-stats">${bar('น้ำ', pl.water)}</div>
+                <p>${pl.wilted ? '🥀 เหี่ยวแล้ว รีบรดน้ำแล้วกลับมาคุยกันบ่อยๆ นะ' : `ตอนนี้: <b>${pl.name}</b> • คุยกันมา ${pl.days} วัน`}</p>
+                ${pl.next ? `<p class="diary-sub">อีก ${pl.next.days - pl.days} วันจะ${pl.next.name} ${pl.next.emoji}</p>` : '<p class="diary-sub">โตเต็มที่แล้ว 🌳 เหมือนความรักของเรา</p>'}
+                <div class="home-actions"><button class="btn-primary" id="plant-water">💧 รดน้ำ</button></div>`;
+            body.querySelector('#plant-water').addEventListener('click', () => {
+                const text = home.water();
+                mind.think('limbic', text);
+                chat.showNotification(text);
+                rerender();
+            });
+        } else if (obj === 'fridge') {
+            title.textContent = '🧊 ตู้เย็นบ้านโม';
+            const snacks = [
+                { e: '🍓', n: 'สตรอว์เบอร์รี', p: 40 }, { e: '🧋', n: 'ชานมไข่มุก', p: 55 },
+                { e: '🍰', n: 'เค้กช็อกโกแลต', p: 80 }, { e: '🍉', n: 'แตงโมหั่น', p: 30 },
+            ];
+            body.innerHTML = `<p class="diary-sub">ซื้อของกินใส่ตู้เย็นให้โม (หักจากเงินเรา ฿${life.state.userWallet.toLocaleString()}) • โมหิวอยู่ ${life.state.hunger}/100</p>
+                <div class="gift-shop">${snacks.map((x, i) => `<button class="gift-item" data-snack="${i}"><span class="gift-emoji">${x.e}</span><span>${x.n}</span><small>฿${x.p}</small></button>`).join('')}</div>`;
+            body.querySelectorAll('[data-snack]').forEach(b => b.addEventListener('click', () => {
+                const x = snacks[b.dataset.snack];
+                if (life.state.userWallet < x.p) return chat.showNotification('เงินเราไม่พอ 🥲');
+                life.state.userWallet -= x.p;
+                life.state.hunger = Math.max(0, life.state.hunger - 20);
+                life.state.mood = Math.min(100, life.state.mood + 8);
+                life.save();
+                mind.reward(x.p);
+                tellMo(`เองเพิ่งซื้อ ${x.e} ${x.n} ใส่ตู้เย็นให้โม (฿${x.p}) — ดีใจ ขอบคุณสั้นๆ แบบอ้อนๆ`);
+                renderHouse();
+            }));
+        } else if (obj === 'tv') {
+            const c = life.state.current || {};
+            title.textContent = '📺 ทีวีห้องนั่งเล่น';
+            const watching = ['📺', '🎮'].includes(MO_SPOTS[c.id]);
+            body.innerHTML = `<p class="diary-sub">${watching ? `ตอนนี้โม${esc(c.label)}อยู่` : 'ทีวีปิดอยู่'}</p>
+                <div class="home-actions">
+                    <button class="btn-primary" data-tv="movie">🎬 ชวนดูหนังด้วยกัน</button>
+                    <button class="btn-secondary" data-tv="series">📺 ถามว่าดูอะไรอยู่</button>
+                </div>`;
+            body.querySelectorAll('[data-tv]').forEach(b => b.addEventListener('click', () => tellMo(b.dataset.tv === 'movie'
+                ? 'เองชวนโมดูหนังด้วยกันที่ทีวีห้องนั่งเล่น — เสนอหนัง 1 เรื่องที่โมอยากดู ถามเองว่าโอเคมั้ย'
+                : `เองถามว่าโมดูอะไรอยู่ที่ทีวี (ตอนนี้โม${c.label || 'ว่างๆ'}) — ตอบตามจริงสั้นๆ`)));
+        } else {
+            return;
+        }
+        homeSheet.classList.remove('hidden');
+    }
 })();

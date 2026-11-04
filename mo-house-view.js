@@ -151,6 +151,9 @@ const MoHouseView = {
         for (let x = 0.3; x < 10.8; x += 0.75) g += B(x, 3.9, 4.8, 0.06, 0.06, 1.1, '#2d2d2d');
         g += B(0, 3.88, 5.9, 10.8, 0.1, 0.08, '#2d2d2d');
 
+        // ---- รายละเอียดบ้าน (ของแต่ง + ของที่แตะได้) ----
+        g += this.details(opts, { B, night, asleep });
+
         // ---- ของขวัญจากเอง + ของแต่งตามเทศกาล ----
         const item = (x, y, z, emoji, size = 15, cls = 'hv-gift') => {
             const [sx, sy] = this.iso(x, y, z);
@@ -201,6 +204,96 @@ const MoHouseView = {
             </defs>
             ${g}
         </svg>`;
+    },
+
+    /** แตะได้: ห่อของด้วย <g data-obj> + วงแสงให้รู้ว่ากดได้ */
+    tap(obj, x, y, z, inner, label) {
+        const [sx, sy] = this.iso(x, y, z);
+        return `<g class="hv-obj" data-obj="${obj}" role="button" aria-label="${label}">
+            <circle cx="${sx}" cy="${sy - 5}" r="14" class="hv-obj-glow"/>${inner}</g>`;
+    },
+
+    details(opts, { B, night, asleep }) {
+        const home = opts.home || {};
+        const now = new Date();
+        let g = '';
+        const emo = (x, y, z, e, size = 14, cls = 'hv-gift') => {
+            const [sx, sy] = this.iso(x, y, z);
+            return `<text x="${sx}" y="${sy}" class="${cls}" style="font-size:${size}px">${e}</text>`;
+        };
+
+        // ---- ชั้นล่าง ----
+        // นาฬิกาแขวน (เวลาจริง)
+        {
+            const [cx, cy] = this.iso(0.02, 4.9, 3.5);
+            const hA = ((now.getHours() % 12) + now.getMinutes() / 60) * 30 * Math.PI / 180;
+            const mA = now.getMinutes() * 6 * Math.PI / 180;
+            g += `<g class="hv-clock"><ellipse cx="${cx}" cy="${cy}" rx="11" ry="12" fill="#fff" stroke="#c98" stroke-width="2"/>
+                <line x1="${cx}" y1="${cy}" x2="${(cx + Math.sin(hA) * 5).toFixed(1)}" y2="${(cy - Math.cos(hA) * 6).toFixed(1)}" stroke="#333" stroke-width="2" stroke-linecap="round"/>
+                <line x1="${cx}" y1="${cy}" x2="${(cx + Math.sin(mA) * 8).toFixed(1)}" y2="${(cy - Math.cos(mA) * 9).toFixed(1)}" stroke="#f04d85" stroke-width="1.3" stroke-linecap="round"/></g>`;
+        }
+        // ปฏิทินของเรา (แตะเพื่อเปิด) — มีวันสำคัญใน 7 วัน = จุดเหลืองนับถอยหลัง
+        {
+            const [px, py] = this.iso(0.02, 8.6, 3.1);
+            const soon = home.nextEvent;
+            g += `<g class="hv-obj" data-obj="calendar" role="button" aria-label="ปฏิทินของเรา">
+                <circle cx="${px + 9}" cy="${py + 10}" r="15" class="hv-obj-glow"/>
+                <rect x="${px}" y="${py}" width="18" height="20" rx="2" fill="#fff" stroke="#e7a"/>
+                <rect x="${px}" y="${py}" width="18" height="6" rx="2" fill="#f04d85"/>
+                <text x="${px + 9}" y="${py + 17}" text-anchor="middle" class="hv-cal-day">${now.getDate()}</text>
+                ${soon && soon.daysLeft <= 7 ? `<circle cx="${px + 18}" cy="${py}" r="5" fill="#ffd166"/><text x="${px + 18}" y="${py + 2.5}" text-anchor="middle" class="hv-cal-badge">${soon.daysLeft}</text>` : ''}</g>`;
+        }
+        // รูปคู่บนผนังนั่งเล่น
+        g += this.wallLeft(2.2, 2.2, 1.1, 0.9, night ? '#a89' : '#ffe1ec', 'stroke="#c98" stroke-width="2"');
+        g += emo(0.05, 2.9, 2.35, '💑', 10);
+        // ชั้นหนังสือ
+        g += B(0, 3.2, 0, 0.6, 1.4, 2.4, '#c9a27a');
+        ['#e76f51', '#2a9d8f', '#e9c46a', '#8ab6d6', '#f4a6c1', '#6d597a'].forEach((col, i) => {
+            g += B(0.08, 3.3 + (i % 3) * 0.42, 0.9 + Math.floor(i / 3) * 0.75, 0.42, 0.3, 0.6, col);
+        });
+        // พรมลาย + โต๊ะกลาง + ของว่าง
+        g += this.flat(1.7, 5.3, 0.012, 2.8, 2.8, night ? 'rgba(160,140,170,0.6)' : 'rgba(240,77,133,0.13)');
+        g += B(1.9, 6.1, 0, 0.9, 1.2, 0.45, '#9b6b4a');
+        g += emo(2.3, 6.6, 0.5, '☕', 9) + emo(2.35, 7.1, 0.5, '🍪', 9);
+        // ทีวี: จอสว่างตอนโมดูทีวี/เล่นเกม
+        if (home.tvOn) g += B(0.37, 5.4, 1.0, 0.02, 1.8, 1.1, night ? '#7cc6ff' : '#9fd8ff');
+        g += this.tap('tv', 0.3, 6.3, 2.0, '', 'ทีวี');
+        // ครัว
+        g += emo(5.9, 0.6, 1.45, '🍲', 12) + emo(7.2, 0.5, 1.45, '🫖', 11) + emo(4.9, 0.5, 1.45, '🧂', 9);
+        g += this.tap('fridge', 8.5, 1.1, 1.8, emo(8.5, 1.12, 1.8, '🧲', 9), 'ตู้เย็น');
+        g += emo(7.1, 1.9, 0, '🥣', 10);
+        // ห้องน้ำ
+        g += B(9.5, 0, 0, 0.6, 0.6, 1, '#ffffff');
+        g += B(11.7, 0.3, 1, 0.06, 0.8, 0.9, '#f9c6d6');
+        g += emo(10.9, 1.8, 0.95, '🦆', 9);
+        // ไฟเพดาน (กลางคืนเปิด)
+        [[3.2, 6.4], [7, 2.4], [8.6, 6.4]].forEach(([x, y]) => {
+            const [sx, sy] = this.iso(x, y, 4.2);
+            g += `<line x1="${sx}" y1="${sy - 10}" x2="${sx}" y2="${sy}" stroke="#bbb"/><circle cx="${sx}" cy="${sy + 3}" r="4" fill="${night && !asleep ? '#ffe08a' : '#eee'}"/>`;
+        });
+
+        // ---- ชั้นบน ----
+        g += B(11.45, 0.4, 4.8, 0.5, 0.6, 0.8, '#d9b88f');                       // โต๊ะข้างเตียง
+        g += emo(11.7, 0.7, 5.65, night && !asleep ? '🪔' : '💡', 10);
+        g += emo(6.0, 0.4, 5.95, '🖊️', 8);
+        if (home.laptopOn) g += B(5.45, 0.22, 5.96, 0.8, 0.05, 0.45, '#9fe3ff');  // จอโน้ตบุ๊กสว่าง
+        g += emo(7.35, 1.0, 7.5, '👒', 10);
+        g += this.flat(8.4, 3.45, 4.81, 2.4, 0.4, night ? '#8a7f8f' : '#f7d6e0');  // พรมข้างเตียง
+        // ต้นไม้ของเรา (โตตามวันที่คุยกัน — แตะเพื่อรดน้ำ)
+        const pl = home.plant;
+        if (pl) {
+            g += B(1.0, 2.9, 4.8, 0.7, 0.7, 0.5, '#d98c5f');
+            g += this.tap('plant', 1.35, 3.25, 5.4, emo(1.35, 3.25, 5.35, pl.emoji, 22), 'ต้นไม้ของเรา');
+        }
+        g += emo(3.4, 0.6, 4.85, '🧺', 11);
+
+        // น้องแมว
+        if (home.pet) {
+            const [x, y, z] = home.pet.spot;
+            g += this.tap('pet', x, y, z, emo(x, y, z, '🐈', 18, 'hv-pet' + (home.pet.sleeping ? ' sleeping' : '')), 'น้องแมว')
+                + (home.pet.badge ? emo(x + 0.3, y - 0.3, z + 1.3, home.pet.badge, 10) : '');
+        }
+        return g;
     },
 
     esc(t) {

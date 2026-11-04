@@ -4457,3 +4457,118 @@ button.mind-region-chip {
     box-shadow: 0 0 18px rgba(255, 209, 102, 0.8);
     animation: statusPulse 1s ease-in-out infinite;
 }
+
+/* ===== บ้านโม: ของที่แตะได้ ===== */
+.hv-obj {
+    cursor: pointer;
+}
+
+.hv-obj-glow {
+    fill: rgba(240, 77, 133, 0.12);
+    stroke: rgba(240, 77, 133, 0.35);
+    stroke-dasharray: 3 3;
+    animation: statusPulse 2.4s ease-in-out infinite;
+}
+
+.hv-cal-day {
+    font-size: 9px;
+    font-weight: 700;
+    fill: #333;
+}
+
+.hv-cal-badge {
+    font-size: 7px;
+    font-weight: 700;
+    fill: #5a3b00;
+}
+
+.hv-pet {
+    animation: hvPetWalk 3s ease-in-out infinite;
+}
+
+.hv-pet.sleeping {
+    animation: none;
+}
+
+@keyframes hvPetWalk {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(3px); }
+}
+
+.house-hint {
+    margin: -4px 0 8px;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.home-stats {
+    display: grid;
+    gap: 6px;
+    margin: 6px 0 12px;
+}
+
+.home-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.home-actions button {
+    flex: 1 1 auto;
+}
+
+.home-log {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.7;
+}
+
+.cal-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px dashed #f0c9d6;
+}
+
+.cal-item b {
+    flex: 1;
+    font-weight: 600;
+}
+
+.cal-left {
+    min-width: 62px;
+    padding: 3px 8px;
+    border-radius: 10px;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--pink-600);
+    background: var(--pink-50);
+}
+
+.cal-left.today {
+    color: #fff;
+    background: var(--pink-500);
+}
+
+.cal-form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.cal-form input,
+.cal-form select {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--pink-100);
+    border-radius: 12px;
+    font: inherit;
+    background: #fff;
+}
+
+.cal-form .wide {
+    grid-column: 1 / -1;
+}
