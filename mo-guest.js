@@ -109,7 +109,7 @@
     //  โหมดแอคเคานต์ของขวัญ: AI ผ่านหลังบ้าน / ไม่ซิงก์ / ไม่มีตั้งค่า
     // =============================================
     function applyRuntime() {
-        window.MO_GUEST = { mode: saved.mode };
+        window.MO_GUEST = { mode: saved.mode, aiNote: (saved.gift && saved.gift.aiNote) || '' };
         window.MO_KEYS = { ...(window.MO_KEYS || {}), gemini: 'guest-proxy', groq: '', supabaseUrl: '', supabaseAnonKey: '' };
         const realFetch = window.fetch.bind(window);
         window.fetch = (input, init = {}) => {
@@ -525,7 +525,7 @@
             try { localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v)); } catch (e) {}
         });
         const gf = st.data.gift || {};
-        saved = { token: ok.token, mode: ok.mode, gift: { chatLimit: gf.chatLimit, limitMsg: gf.limitMsg, ending: gf.ending, byeLabel: gf.byeLabel, byeLast: gf.byeLast }, ready: false };
+        saved = { token: ok.token, mode: ok.mode, gift: { chatLimit: gf.chatLimit, limitMsg: gf.limitMsg, ending: gf.ending, byeLabel: gf.byeLabel, byeLast: gf.byeLast, aiNote: gf.aiNote }, ready: false };
         write('mo_guest', saved);
         localStorage.setItem('mo_guest_sent', '0');
         ok.el.remove();
@@ -533,6 +533,13 @@
         await letter(st.data.gift);
         saved.ready = true;
         write('mo_guest', saved);
+        // ข้อความแรกของโม AI ในแชท (ต่อท้ายประวัติเดิม)
+        if (st.data.gift.greeting) {
+            const hist = read('mo_chat_history_v2') || [];
+            const now = Date.now();
+            hist.push({ id: now, type: 'received', text: st.data.gift.greeting, format: 'text', timestamp: now });
+            write('mo_chat_history_v2', hist.slice(-200));
+        }
         applyRuntime();
         loadApp();
         await tour();
