@@ -105,6 +105,20 @@ const MoStatus = {
             const total = usage.reduce((n, [, u]) => n + u.calls, 0);
             lines.push(`📊 ใช้ AI วันนี้ (เครื่องนี้) ${total} ครั้ง\n${usage.map(([name, u]) => `• ${name}: ${u.calls} ครั้ง${u.tokens ? ` · ~${Math.round(u.tokens / 1000)}k token` : ''}`).join('\n')}`);
         }
+        // หลังบ้าน (ปิดแอปแล้วโมทักได้ไหม): อ่านบันทึกล่าสุดจาก worker
+        if (sync && sync.client && sync.user) {
+            try {
+                const { data } = await sync.client.from('mo_state').select('value').eq('user_id', sync.user.id).eq('key', 'worker_status').maybeSingle();
+                const w = data && data.value;
+                if (!w) lines.push('📡 หลังบ้านทักตอนปิดแอป: ❌ ยังไม่เคยทำงาน (ยังไม่ได้กด 🔔 เปิดแจ้งเตือน หรือ Cloudflare ยังไม่ได้ตั้ง Secrets)');
+                else {
+                    const ago = Math.round((Date.now() - w.at) / 60000);
+                    lines.push(`📡 หลังบ้านทักตอนปิดแอป: ${ago <= 10 ? '✅' : '⚠️'} เช็คล่าสุด ${ago} นาทีที่แล้ว (${w.local}) · เครื่องรับแจ้งเตือน ${w.subs} เครื่อง${w.sent && w.sent.length ? `
+รอบนั้นส่ง: ${w.sent.join(', ')}` : ''}${w.why && w.why.length ? `
+เหตุผล: ${w.why.join(' / ')}` : ''}`);
+                }
+            } catch (e) {}
+        }
         lines.push(`⏰ งานที่รออยู่: เตือน ${reminders.getPending().length} · กิจวัตร ${routines.routines.length} · รอถามผล ${routines.followUps.length}`);
 
         const bad = [gemini, groq, supa].filter(r => r && r.ok === false).length;

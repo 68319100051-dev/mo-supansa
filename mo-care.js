@@ -144,7 +144,7 @@ class MoCare {
     promptSection() {
         const list = this.concerns().filter(c => !this.askedToday(c.id));
         if (!list.length) return '';
-        return `# เรื่องที่โมห่วงเองตอนนี้ (แฟนที่ใส่ใจจะถามเอง — หยิบมาถามแค่ 1 เรื่องเมื่อเข้าจังหวะ ไม่ต้องทุกข้อความ)\n${list.slice(0, 3).map(c => `- ${c.ask}`).join('\n')}\n\n`;
+        return `# (ฉากหลัง) เรื่องที่โมห่วงเองอยู่ — ถามได้เฉพาะถ้าเข้ากับที่คุยและเองยังไม่ได้บอกในแชท\n- ${list[0].ask}\n\n`;
     }
 
     // ป้ายกันทักซ้ำกับหลังบ้าน (worker.js ใช้ชื่อเดียวกัน)

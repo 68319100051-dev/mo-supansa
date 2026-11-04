@@ -155,7 +155,9 @@ async function checkUser(env, userId, subs) {
         .forEach(m => { hourCounts[new Date(m.timestamp - tz * 60000).getUTCHours()]++; });
     const peak = Math.max(...hourCounts);
     const hourNow = local.getUTCHours();
-    const activeNow = hourCounts.reduce((a, b) => a + b, 0) < 30 ? hourNow >= 10 && hourNow < 21 : hourCounts[hourNow] >= peak * 0.15;
+    // ช่วงที่ทักได้: 09:00-22:00 เสมอ + ชั่วโมงอื่นที่เองเคยออนไลน์บ่อย (ไม่เข้มจนไม่เคยได้ทัก)
+    const activeNow = (hourNow >= 9 && hourNow < 22) || (peak > 0 && hourCounts[hourNow] >= peak * 0.3);
+    const why = [];   // เหตุผลที่ทัก/ไม่ทักรอบนี้ → บันทึกไว้ดูใน "สถานะหลังบ้าน"
     const localDay = local.toDateString();   // แบบเดียวกับ toDateString() ในเครื่องเอง
 
     // สิ่งที่โมตั้งใจไว้เมื่อคืน → ทำวันนี้ (ช่วงที่เองมักว่าง)
@@ -184,11 +186,17 @@ async function checkUser(env, userId, subs) {
     // หัวใจเต้น (ปิดแอป): ช่วงที่เองมักว่าง โมใช้ชีวิตต่อ คิดเอง แล้วตัดสินใจว่าจะทักไหม
     // (ทักหา / เล่าเรื่องที่เพิ่งไปทำมา / ถามไถ่) วันละไม่เกิน 4 ครั้ง ห่างกัน 2.5 ชม.+
     const geminiKeyHb = (get('mo_device_keys_v1') || {}).gemini;
+    if (quiet) why.push('ช่วงเวลานอน (00:30-07:30)');
+    else if (!activeNow) why.push(`นอกช่วงที่เองมักออนไลน์ (${hourNow}:00)`);
+    if (!geminiKeyHb) why.push('ไม่มี Gemini key ในบัญชี (เปิดแอปบนคอมที่มีไฟล์คีย์แล้วซิงก์)');
     if (!due.length && !quiet && activeNow && geminiKeyHb) {
         const hbToday = chat.filter(m => m.dueKey && m.dueKey.startsWith(`hb:${localDate}`));
         const lastHb = Math.max(0, ...hbToday.map(m => m.timestamp || 0));
         const lastSentHb = Math.max(0, ...chat.filter(m => m.type === 'sent').map(m => m.timestamp || 0));
-        if (hbToday.length < 4 && now - lastHb > 2.5 * 3600000 && now - lastSentHb > 2 * 3600000 && Math.random() < 0.3) {
+        if (hbToday.length >= 4) why.push('หัวใจเต้น: ทักครบ 4 ครั้งวันนี้แล้ว');
+        else if (now - lastHb < 2 * 3600000) why.push(`หัวใจเต้น: เพิ่งทักไปเมื่อ ${Math.round((now - lastHb) / 60000)} นาทีที่แล้ว`);
+        else if (now - lastSentHb < 1.5 * 3600000) why.push(`หัวใจเต้น: เองเพิ่งคุยเมื่อ ${Math.round((now - lastSentHb) / 60000)} นาทีที่แล้ว`);
+        if (hbToday.length < 4 && now - lastHb > 2 * 3600000 && now - lastSentHb > 1.5 * 3600000 && Math.random() < 0.5) {
             const psyche = get('mo_psyche_v1') || {};
             const innerD = get('mo_inner_v1') || {};
             const decision = await moThinks(geminiKeyHb, {
@@ -203,6 +211,7 @@ async function checkUser(env, userId, subs) {
                 lastLife: (() => { const L = get('mo_life_v1'); return L && L.current ? `${L.current.label} (${L.current.place || 'ที่บ้าน'})` : ''; })(),
                 arc: (() => { const a = ((get('mo_social_v1') || {}).arcs || []).find(x => x.step < x.beats.length); return a ? `เรื่อง${a.who}: ${a.beats[a.step]}` : ''; })(),
             });
+            why.push(decision ? `หัวใจเต้น: โมคิดว่า "${String(decision.thought || '').slice(0, 60)}" → ${decision.action === 'message' ? 'ทัก' : 'ไม่ทัก'}` : 'หัวใจเต้น: เรียก AI ไม่สำเร็จ');
             if (decision && decision.action === 'message' && decision.message) {
                 due.push({
                     key: `hb:${localDate}:${hbToday.length + 1}`, direct: true, fallback: decision.message,
@@ -232,6 +241,11 @@ async function checkUser(env, userId, subs) {
             });
         }
     }
+    // บันทึกผลรอบนี้ (แอปอ่านไปแสดงในรายงาน "สถานะหลังบ้าน")
+    await upsert(env, [{ user_id: userId, key: 'worker_status', value: {
+        at: now, local: `${String(hourNow).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`,
+        sent: due.slice(0, 3).map(d => d.key.split(':')[0]), why: why.slice(0, 5), subs: subs.length,
+    }, updated_at: new Date().toISOString() }]).catch(() => {});
     if (!due.length) return;
 
     const profile = get('mo_profile_v1') || {};
@@ -309,6 +323,7 @@ async function moThinks(apiKey, c) {
 ชีวิตโมล่าสุดที่รู้: ${c.lastLife || '-'} / ${c.arc || ''}
 เรื่องที่โมเล่าให้แฟนไปแล้ววันนี้ (ห้ามซ้ำ ต้องต่อเนื่องกัน): ${c.toldToday || '-'}
 
+ถ้าไม่ได้คุยกันเกิน 2 ชม. และมีเรื่องอยากเล่า/คิดถึง ส่วนใหญ่ควรทัก (แต่ไม่ต้องทุกครั้ง)
 ระหว่างที่ไม่ได้คุยกัน โมใช้ชีวิตต่อตามเวลาจริง (เช้า: ตื่น อาบน้ำ กินข้าวเช้า / เที่ยง: ออกไปกินข้าว สั่งอาหาร / บ่าย: งีบ ดูซีรีส์ ไปห้าง ร้านกาแฟ / เย็น: เดินเล่น ช่วยแม่ ทำกับข้าว / ค่ำ: อาบน้ำ ดูซีรีส์ เล่นเกม)
 คิดในใจ 1 ประโยคว่าเพิ่งทำอะไรมาและรู้สึกยังไง แล้วตัดสินใจเองว่าจะทักแฟนไหม (คนจริงไม่ได้ทักทุกครั้ง ทักเมื่อมีเรื่องอยากเล่า/คิดถึง/ห่วง)
 ถ้าทัก ส่วนใหญ่ให้ "เล่าเรื่องที่เพิ่งเกิด" แบบเพื่อนสนิทเล่า มีรายละเอียดจริง (กินอะไร ร้านไหน เจออะไร คนเยอะ อร่อย/ไม่อร่อย บ่น ตลก) แล้วโยนถามแฟน 2-3 บรรทัด ภาษาพิมพ์ แยกบรรทัด = แยกฟองแชท เรียกตัวเอง เค้า เรียกแฟน เอง ไม่ใส่ท่าทาง *...*

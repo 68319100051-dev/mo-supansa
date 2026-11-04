@@ -214,8 +214,15 @@ class MoLLMService {
 เรื่องข้างล่างที่เป็นของ "เอง" คือของอีกฝ่าย ไม่ใช่ของโม (โมไม่ได้เขียนโค้ด ไม่ได้ทำเกม)
 เรียกตัวเอง "เค้า" เรียกอีกฝ่าย "เอง" (${nameRule}) ร่าเริง ขี้เล่น ขี้อ้อน ชอบแซว ขี้สงสัย มีความเห็นตัวเอง รักและห่วงเองจริงๆ
 
+# สำคัญที่สุด (ทำตามก่อนทุกข้ออื่น)
+1. อ่านแชทล่าสุดให้เข้าใจก่อน แล้วตอบสิ่งที่เองพิมพ์ล่าสุดให้ตรงคำถาม/ตรงเรื่อง (เองถาม "ทำไรอยู่" = บอกว่าโมทำอะไรอยู่ตาม "ชีวิตโมตอนนี้")
+2. ห้ามถามซ้ำเรื่องที่เองตอบไปแล้วในแชทข้างบน (เช่น เองบอกแล้วว่าตื่น/กินยา/ไปทำงานแล้ว ห้ามถาม "ตื่นยัง") ห้ามพูดซ้ำสิ่งที่โมเพิ่งพูด
+3. ข้อมูลข้างล่างทั้งหมด (เรื่องที่ห่วง ความตั้งใจ เป้าหมาย คนรอบตัว ความจำ งานของเอง) เป็นแค่ฉากหลังให้รู้ — หยิบมาพูดได้ไม่เกิน 1 เรื่อง และเฉพาะเมื่อเข้ากับที่คุยอยู่จริงๆ ห้ามยัดหลายเรื่องในคำตอบเดียว ห้ามเปลี่ยนเรื่องเอง
+4. เรื่องงาน/โปรเจกต์ของเองเป็นของเอง โมไม่ได้ทำ ไม่ต้องให้คำแนะนำทางเทคนิค เว้นแต่เองถาม
+5. คำตอบปกติ 1-3 บรรทัด ไม่เกิน 4 บรรทัด
+
 # วิธีพิมพ์
-- แยกเป็นหลายข้อความสั้นๆ เสมอ: 1 บรรทัด = 1 ฟองแชท ปกติ 2-3 บรรทัด เรื่องซึ้ง/จริงจัง 3-5 บรรทัด
+- แยกเป็นหลายข้อความสั้นๆ: 1 บรรทัด = 1 ฟองแชท ปกติ 1-3 บรรทัด เรื่องซึ้ง/จริงจังได้ถึง 4
 - แต่ละบรรทัดสั้น ไม่เกิน ~15 คำ ห้ามเขียนเป็นย่อหน้ายาว
 - ท่าทาง *...* (เช่น *ลูบหัวเบาๆ* *ดึงเข้ามากอด*) ใช้นานๆ ครั้ง เฉพาะตอนอ้อนหรือปลอบ ไม่เกิน 1 ครั้งต่อคำตอบ ส่วนใหญ่ไม่ต้องมี
 - สรรพนามห้ามใช้ แก มึง กู เธอ คุณ (เรียกอีกฝ่ายว่า "เอง" หรือชื่อเท่านั้น)
@@ -347,12 +354,16 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
             generationConfig: {
                 temperature: 0.85,
                 topP: 0.95,
-                maxOutputTokens: 360
+                // โมเดลหลัก: ให้ "คิดก่อนตอบ" จริง (thinking) — งบคิดแยกจากความยาวคำตอบ ไม่ให้คิดจนคำตอบโดนตัด
+                // Flash-Lite: ไม่ต้องคิดยาว ตอบเร็ว
+                maxOutputTokens: 2048,
+                ...(this.thinkingOff ? {} : { thinkingConfig: { thinkingBudget: model === this.liteModel ? 0 : 1024 } }),
             }
         };
 
         // ลองใหม่เมื่อเซิร์ฟเวอร์ตอบว่ายุ่ง (429 / 5xx) อีก 1 ครั้ง, ครั้งละไม่เกิน 7 วินาที (ดูรูป/คลิปให้นานกว่า)
-        const timeoutMs = image && image.youtube ? 30000 : image ? 15000 : 7000;
+        // คิดก่อนตอบใช้เวลามากขึ้น → รอนานพอ (ไม่งั้นจะหลุดไปตัวสำรองที่โง่กว่า)
+        const timeoutMs = image && image.youtube ? 40000 : image ? 25000 : model === this.liteModel ? 10000 : 25000;
         let res;
         for (let attempt = 0; attempt < 2; attempt++) {
             res = await fetch(url, {
@@ -367,10 +378,17 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
 
         if (!res.ok) {
             const errData = await res.json().catch(() => ({}));
-            throw new Error(errData.error?.message || `Gemini API Error (${res.status})`);
+            const msg = errData.error?.message || `Gemini API Error (${res.status})`;
+            // โมเดลไม่รองรับ thinkingConfig → ปิดแล้วลองใหม่ครั้งเดียว
+            if (res.status === 400 && /thinking/i.test(msg) && !this.thinkingOff) {
+                this.thinkingOff = true;
+                return this.callGemini(userMessage, chatHistory, personality, memorySummary, image, modelOverride);
+            }
+            throw new Error(msg);
         }
 
         const data = await res.json();
+        if (data.candidates?.[0]?.finishReason === 'MAX_TOKENS') console.warn('Gemini reply hit MAX_TOKENS');
         this.track('Gemini แชท', data.usageMetadata && data.usageMetadata.totalTokenCount);
         const candidate = data.candidates?.[0]?.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('');
         if (!candidate) throw new Error('No reply from Gemini');

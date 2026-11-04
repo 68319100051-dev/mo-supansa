@@ -171,7 +171,7 @@ traitChanges = นิสัยเปลี่ยนนิดหน่อยต�
         const today = d.intentions.filter(x => x.day === this.dayKey());
         if (reflection) parts.push(`- เมื่อคืนโมคิดในใจว่า: ${reflection.text}`);
         if (d.view) parts.push(`- มุมมองของโมต่อความสัมพันธ์ช่วงนี้: ${d.view.text} (ไม่ต้องพูดออกมาตรงๆ แต่ให้มีผลกับน้ำเสียงและการตอบจริง)`);
-        if (today.length) parts.push(`- วันนี้โมตั้งใจไว้ว่าจะ: ${today.map(x => x.text + (x.done ? ' (ทำแล้ว)' : '')).join(' / ')}`);
+        if (today.length) parts.push(`- วันนี้โมตั้งใจไว้ว่าจะ: ${today.map(x => x.text + (x.done ? ' (ทำแล้ว ไม่ต้องทำซ้ำ)' : '')).join(' / ')} (ทำเมื่อเข้าจังหวะ ไม่ต้องทำในข้อความนี้)`);
         if (d.goals.length) parts.push(`- เป้าหมายของโมเอง: ${d.goals.map(g => `${g.title} (คืบหน้า ${g.progress}%${g.note ? `, ล่าสุด ${g.note}` : ''})`).join(' / ')} — เล่าความคืบหน้า ขอความเห็นเองได้เมื่อเข้าจังหวะ`);
         if (lastThought && Date.now() - lastThought.at < 2 * 3600000) parts.push(`- เมื่อกี้โมคิดในใจว่า: ${lastThought.text}`);
         return `# ความคิดและโลกภายในของโม (ของโมเอง ไม่ใช่ของเอง)
