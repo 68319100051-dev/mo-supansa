@@ -861,6 +861,11 @@
         renderSync();
     });
     sync.start().then(renderSync);
+    // แอคเคานต์ของขวัญ: รหัส + จดหมายจากไฟล์ส่วนตัว mo-gift.local.js → ซิงก์ขึ้นแถวของเรา (หลังบ้านส่งให้คนที่ใส่รหัสถูก)
+    if (window.MO_GIFT && !window.MO_GUEST) {
+        const giftJson = JSON.stringify(window.MO_GIFT);
+        if (localStorage.getItem('mo_gift_v1') !== giftJson) localStorage.setItem('mo_gift_v1', giftJson);
+    }
 
     function openMemoryPanel() {
         if (!mindUI.open) mindUI.show();

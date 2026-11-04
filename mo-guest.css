@@ -1,0 +1,611 @@
+/* ===== แอคเคานต์ของขวัญ 💌 ===== */
+
+/* หน้าโหลด: ไม่โชว์หน้า/ชื่อโมก่อนใส่รหัส */
+.guest .splash-avatar,
+.guest .splash-name,
+.guest .splash-subtitle {
+    visibility: hidden;
+}
+
+.guest #btn-settings {
+    display: none !important;
+}
+
+.gg-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    font-family: var(--font-body, sans-serif);
+    color: #4a2a3a;
+}
+
+.gg-gate {
+    background: linear-gradient(160deg, #fff0f6 0%, #fde2ee 50%, #f3e4ff 100%);
+    transition: opacity 0.8s, transform 0.8s;
+}
+
+.gg-gate.gg-unlock {
+    opacity: 0;
+    transform: scale(1.08);
+}
+
+.gg-hearts i {
+    position: absolute;
+    bottom: -40px;
+    font-style: normal;
+    opacity: 0.5;
+    animation: ggRise 9s linear infinite;
+}
+
+.gg-hearts i:nth-child(1) { left: 5%; animation-delay: 0s; }
+.gg-hearts i:nth-child(2) { left: 15%; animation-delay: 2s; font-size: 0.8em; }
+.gg-hearts i:nth-child(3) { left: 27%; animation-delay: 4s; }
+.gg-hearts i:nth-child(4) { left: 38%; animation-delay: 1s; font-size: 1.3em; }
+.gg-hearts i:nth-child(5) { left: 50%; animation-delay: 6s; }
+.gg-hearts i:nth-child(6) { left: 61%; animation-delay: 3s; font-size: 0.7em; }
+.gg-hearts i:nth-child(7) { left: 72%; animation-delay: 5s; }
+.gg-hearts i:nth-child(8) { left: 82%; animation-delay: 7s; font-size: 1.2em; }
+.gg-hearts i:nth-child(9) { left: 90%; animation-delay: 1.5s; }
+.gg-hearts i:nth-child(10) { left: 96%; animation-delay: 8s; font-size: 0.9em; }
+
+@keyframes ggRise {
+    from { transform: translateY(0) rotate(0); opacity: 0; }
+    10% { opacity: 0.55; }
+    to { transform: translateY(-110vh) rotate(40deg); opacity: 0; }
+}
+
+.gg-lock {
+    position: relative;
+    width: min(100%, 340px);
+    padding: 26px 22px 22px;
+    border-radius: 28px;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 20px 50px rgba(240, 77, 133, 0.18);
+}
+
+.gg-lock.shake {
+    animation: ggShake 0.45s;
+}
+
+@keyframes ggShake {
+    20%, 60% { transform: translateX(-9px); }
+    40%, 80% { transform: translateX(9px); }
+}
+
+.gg-lock-icon {
+    font-size: 2rem;
+    animation: ggBob 2.4s ease-in-out infinite;
+}
+
+.gg-lock h2 {
+    margin: 6px 0 2px;
+    font-size: 1.25rem;
+}
+
+.gg-sub {
+    font-size: 0.85rem;
+    color: #9a6b80;
+}
+
+.gg-pin-wrap {
+    position: relative;
+    margin: 18px 0 8px;
+}
+
+.gg-faint {
+    position: absolute;
+    inset: -6px 0 0;
+    font-size: 2.4rem;
+    font-weight: 800;
+    letter-spacing: 26px;
+    text-indent: 26px;
+    color: #f04d85;
+    opacity: 0;
+    filter: blur(2px);
+    pointer-events: none;
+    transition: opacity 1.5s;
+}
+
+.gg-faint.show {
+    opacity: 0.13;
+}
+
+.gg-dots {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+}
+
+.gg-dots span {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid #f04d85;
+    transition: background 0.15s, transform 0.15s;
+}
+
+.gg-dots span.on {
+    background: #f04d85;
+    transform: scale(1.15);
+}
+
+.gg-msg {
+    min-height: 1.3em;
+    font-size: 0.82rem;
+    color: #d13a6f;
+}
+
+.gg-pad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.gg-pad button {
+    height: 56px;
+    border: none;
+    border-radius: 18px;
+    font: inherit;
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: #4a2a3a;
+    background: #fff;
+    box-shadow: 0 3px 0 #f6cadb;
+    cursor: pointer;
+}
+
+.gg-pad button:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #f6cadb;
+}
+
+.gg-pad .gg-empty {
+    visibility: hidden;
+}
+
+/* ตัวการ์ตูน */
+.gg-mascot {
+    width: 96px;
+    cursor: pointer;
+}
+
+.gg-mascot.float {
+    position: fixed;
+    right: 14px;
+    bottom: 22px;
+    animation: ggFloat 3.2s ease-in-out infinite;
+}
+
+.gg-mascot.small {
+    width: 74px;
+    margin: 0 auto 6px;
+    animation: ggBob 2.4s ease-in-out infinite;
+}
+
+.gg-mascot-svg {
+    width: 100%;
+    display: block;
+    filter: drop-shadow(0 8px 12px rgba(240, 77, 133, 0.3));
+}
+
+.gg-eyes {
+    animation: ggBlink 4s infinite;
+    transform-origin: 60px 62px;
+}
+
+@keyframes ggBlink {
+    0%, 92%, 100% { transform: scaleY(1); }
+    95% { transform: scaleY(0.1); }
+}
+
+@keyframes ggFloat {
+    0%, 100% { transform: translateY(0) rotate(-3deg); }
+    50% { transform: translateY(-14px) rotate(3deg); }
+}
+
+@keyframes ggBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+.gg-bubble {
+    position: absolute;
+    right: 70px;
+    bottom: 78px;
+    width: max-content;
+    max-width: 200px;
+    padding: 9px 13px;
+    border-radius: 16px 16px 4px 16px;
+    font-size: 0.82rem;
+    line-height: 1.4;
+    background: #fff;
+    box-shadow: 0 6px 18px rgba(240, 77, 133, 0.2);
+}
+
+/* การ์ดเด้ง */
+.gg-dim {
+    background: rgba(60, 20, 40, 0.45);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+}
+
+.gg-limit {
+    background: rgba(60, 20, 40, 0.45);
+}
+
+.gg-card {
+    width: min(100%, 340px);
+    padding: 24px 22px;
+    border-radius: 26px;
+    text-align: center;
+    background: #fff;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+}
+
+.gg-pop {
+    animation: ggPop 0.45s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+@keyframes ggPop {
+    from { transform: scale(0.6); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+.gg-warn-icon {
+    font-size: 2.4rem;
+    animation: ggBob 1.6s ease-in-out infinite;
+}
+
+.gg-card h3 {
+    margin: 6px 0 10px;
+}
+
+.gg-card p {
+    line-height: 1.65;
+    font-size: 0.95rem;
+}
+
+.gg-btn {
+    margin-top: 16px;
+    padding: 11px 26px;
+    border: none;
+    border-radius: 999px;
+    font: inherit;
+    font-weight: 700;
+    color: #fff;
+    background: linear-gradient(135deg, #ff7eb6, #f04d85);
+    box-shadow: 0 8px 20px rgba(240, 77, 133, 0.35);
+    cursor: pointer;
+}
+
+.gg-btn.big {
+    padding: 14px 30px;
+    font-size: 1.05rem;
+}
+
+/* ฉากจดหมาย */
+.gg-night {
+    justify-content: flex-start;
+    padding-top: 12vh;
+    background: radial-gradient(ellipse at 50% 30%, #4a2350, #1d1030 70%);
+    color: #ffeaf3;
+    transition: opacity 0.6s;
+}
+
+.gg-night.gg-out {
+    opacity: 0;
+}
+
+.gg-stars i {
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: #fff;
+    animation: ggTwinkle 3s ease-in-out infinite;
+}
+
+.gg-stars i:nth-child(5n) { top: 8%; left: 12%; animation-delay: 0.3s; }
+.gg-stars i:nth-child(5n+1) { top: 22%; left: 80%; animation-delay: 1.1s; }
+.gg-stars i:nth-child(5n+2) { top: 60%; left: 6%; animation-delay: 2s; }
+.gg-stars i:nth-child(5n+3) { top: 78%; left: 88%; animation-delay: 0.7s; }
+.gg-stars i:nth-child(5n+4) { top: 40%; left: 50%; animation-delay: 1.6s; }
+.gg-stars i:nth-child(3n) { margin-left: 9vw; margin-top: 7vh; }
+.gg-stars i:nth-child(4n) { margin-left: -6vw; margin-top: 15vh; }
+.gg-stars i:nth-child(7n) { margin-left: 18vw; margin-top: -4vh; }
+
+@keyframes ggTwinkle {
+    0%, 100% { opacity: 0.15; }
+    50% { opacity: 0.9; }
+}
+
+.gg-intro {
+    min-height: 140px;
+    max-width: 340px;
+    text-align: center;
+    transition: opacity 0.6s;
+}
+
+.gg-intro.fade {
+    opacity: 0;
+}
+
+.gg-intro p {
+    margin-bottom: 10px;
+    font-size: 1.02rem;
+    line-height: 1.5;
+    text-shadow: 0 0 12px rgba(255, 126, 182, 0.5);
+}
+
+.gg-envelope {
+    position: relative;
+    width: 250px;
+    height: 160px;
+    margin-top: 18px;
+    opacity: 0;
+    transform: translateY(60px) scale(0.8);
+    transition: opacity 0.8s, transform 0.8s cubic-bezier(0.2, 1.3, 0.4, 1);
+    perspective: 700px;
+}
+
+.gg-envelope.in {
+    opacity: 1;
+    transform: none;
+}
+
+.gg-envelope.ready {
+    cursor: pointer;
+    animation: ggWiggle 1.6s ease-in-out infinite;
+}
+
+@keyframes ggWiggle {
+    0%, 100% { transform: rotate(0); }
+    20% { transform: rotate(-3deg); }
+    40% { transform: rotate(3deg); }
+    60% { transform: rotate(0); }
+}
+
+.gg-env-back,
+.gg-env-front {
+    position: absolute;
+    inset: 0;
+    border-radius: 10px;
+}
+
+.gg-env-back {
+    background: #e8668f;
+}
+
+.gg-env-front {
+    z-index: 3;
+    background: linear-gradient(135deg, #ff9cc0, #f47aa4);
+    clip-path: polygon(0 0, 50% 55%, 100% 0, 100% 100%, 0 100%);
+}
+
+.gg-env-flap {
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: 4;
+    height: 95px;
+    background: #ff8fb6;
+    clip-path: polygon(0 0, 100% 0, 50% 100%);
+    transform-origin: top;
+    transition: transform 0.7s ease-in;
+}
+
+.gg-envelope.open .gg-env-flap {
+    z-index: 1;
+    transform: rotateX(180deg);
+}
+
+.gg-seal {
+    position: absolute;
+    left: 50%;
+    top: 72px;
+    z-index: 5;
+    transform: translate(-50%, -50%);
+    font-size: 1.6rem;
+    transition: opacity 0.3s;
+}
+
+.gg-envelope.open .gg-seal {
+    opacity: 0;
+}
+
+.gg-paper-peek {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: 10px;
+    height: 140px;
+    z-index: 2;
+    border-radius: 6px;
+    background: repeating-linear-gradient(#fffaf3 0 18px, #f6dde6 18px 19px);
+    transition: transform 1s cubic-bezier(0.3, 1.2, 0.4, 1);
+}
+
+.gg-envelope.rise .gg-paper-peek {
+    transform: translateY(-120px);
+}
+
+.gg-tapme {
+    margin-top: 22px;
+    opacity: 0;
+    transition: opacity 0.6s;
+    animation: ggBob 1.8s ease-in-out infinite;
+}
+
+.gg-tapme.show {
+    opacity: 1;
+}
+
+.gg-mute {
+    position: absolute;
+    top: calc(14px + env(safe-area-inset-top));
+    right: 14px;
+    z-index: 20;
+    width: 42px;
+    height: 42px;
+    border: none;
+    border-radius: 50%;
+    font-size: 1.1rem;
+    background: rgba(255, 255, 255, 0.15);
+    cursor: pointer;
+}
+
+/* กระดาษเต็มจอ อ่านได้ */
+.gg-reader {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    overflow-y: auto;
+    padding: 70px 16px 120px;
+    opacity: 0;
+    transform: translateY(40px) scale(0.96);
+    transition: opacity 0.9s, transform 0.9s;
+    -webkit-overflow-scrolling: touch;
+}
+
+.gg-reader.show {
+    opacity: 1;
+    transform: none;
+}
+
+.gg-sheet {
+    max-width: 520px;
+    margin: 0 auto;
+    padding: 30px 22px 40px;
+    border-radius: 6px 6px 18px 18px;
+    color: #4a2a3a;
+    background:
+        repeating-linear-gradient(transparent 0 31px, rgba(240, 77, 133, 0.12) 31px 32px),
+        #fffaf3;
+    box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
+}
+
+.gg-sheet h3 {
+    margin: 10px 0 12px;
+    color: #d13a6f;
+    font-size: 1.12rem;
+}
+
+.gg-sheet p {
+    margin-bottom: 14px;
+    font-size: 1rem;
+    line-height: 32px;
+}
+
+.gg-p {
+    opacity: 0;
+    filter: blur(6px);
+    transform: translateY(14px);
+    transition: opacity 1.1s, filter 1.1s, transform 1.1s;
+}
+
+.gg-p.in {
+    opacity: 1;
+    filter: none;
+    transform: none;
+}
+
+.gg-divider {
+    margin: 18px 0;
+    text-align: center;
+    color: #f0a0bd;
+    letter-spacing: 6px;
+}
+
+.gg-end {
+    text-align: center;
+    padding-top: 10px;
+}
+
+.gg-peeker {
+    position: fixed;
+    left: 10px;
+    bottom: -110px;
+    z-index: 30;
+    width: 84px;
+    transition: bottom 0.5s cubic-bezier(0.2, 1.4, 0.4, 1);
+    pointer-events: none;
+}
+
+.gg-peeker.show {
+    bottom: 10px;
+}
+
+.gg-tease {
+    position: absolute;
+    left: 74px;
+    bottom: 66px;
+    width: max-content;
+    max-width: 220px;
+    padding: 9px 13px;
+    border-radius: 16px 16px 16px 4px;
+    font-size: 0.85rem;
+    color: #4a2a3a;
+    background: #fff;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* แนะนำแอป */
+.gg-tour {
+    position: fixed;
+    inset: 0;
+    z-index: 9500;
+}
+
+.gg-spot {
+    position: fixed;
+    border-radius: 16px;
+    box-shadow: 0 0 0 9999px rgba(40, 10, 30, 0.6), 0 0 0 3px #ff7eb6;
+    animation: ggPulse 1.6s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes ggPulse {
+    0%, 100% { box-shadow: 0 0 0 9999px rgba(40, 10, 30, 0.6), 0 0 0 3px #ff7eb6; }
+    50% { box-shadow: 0 0 0 9999px rgba(40, 10, 30, 0.6), 0 0 0 7px rgba(255, 126, 182, 0.6); }
+}
+
+.gg-tip {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    max-width: 360px;
+    margin: 0 auto;
+    padding: 14px 16px;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+    animation: ggPop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.gg-tip p {
+    line-height: 1.5;
+}
+
+.gg-tip div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.gg-tip .gg-btn {
+    margin-top: 10px;
+    padding: 8px 20px;
+}
+
+.gg-tip small {
+    color: #9a6b80;
+}

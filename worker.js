@@ -28,6 +28,9 @@ export default {
             const rows = await db(env, `mo_state?select=value&key=like.push_sub:*&value->>endpoint=eq.${encodeURIComponent(endpoint)}`);
             return json((rows[0] && rows[0].value.inbox) || {});
         }
+        if (url.pathname.startsWith('/api/gift/')) {
+            return handleGift(request, env, url).catch(err => json({ error: String(err.message || err).slice(0, 200) }, 500));
+        }
         return env.ASSETS.fetch(request);
     },
 
@@ -445,4 +448,131 @@ async function sendFcm(env, token, inbox) {
     });
     if (!res.ok) console.error('fcm send', res.status, (await res.text()).slice(0, 200));
     return res.status;
+}
+
+// =============================================
+//  แอคเคานต์ของขวัญ 💌 (เข้าด้วยรหัส ไม่ต้องมีบัญชี)
+//  - รหัส/จดหมายอยู่ในแถว mo_gift_v1 ของเจ้าของ (ซิงก์จากไฟล์ส่วนตัว mo-gift.local.js) ไม่อยู่ในโค้ด
+//  - คนที่ใส่รหัสถูกได้ token → อ่านข้อมูลโมของเจ้าของ (อ่านอย่างเดียว) + ใช้ AI ผ่านหลังบ้าน (คีย์ไม่ออกจาก server)
+//  - ใส่ผิดเกิน 8 ครั้ง ล็อก 30 นาที / AI จำกัดวันละ 80 ครั้ง
+// =============================================
+
+// ข้อมูลที่ส่งให้แอคเคานต์ของขวัญ (ไม่มีคีย์ ไม่มีรหัส ไม่มีข้อมูลซิงก์)
+const GIFT_KEYS = [
+    'mo_chat_history_v2', 'mo_memory_v2', 'mo_stats_v2', 'mo_memory_settings_v2', 'mo_life_v1', 'mo_mind_v1', 'mo_diary_v1',
+    'mo_reminders_v1', 'mo_clips_v1', 'mo_clips_sent_v1', 'mo_special_days_v1', 'mo_routines_v1', 'mo_followups_v1', 'mo_self_v1',
+    'mo_profile_v1', 'mo_stories_v1', 'mo_games_v1', 'mo_social_v1', 'mo_care_v1', 'mo_inner_v1', 'mo_psyche_v1', 'mo_home_v1', 'mo_quests_v1',
+];
+const GIFT_AI_PER_DAY = 80;
+
+async function giftRow(env) {
+    const rows = await db(env, 'mo_state?select=user_id,value&key=eq.mo_gift_v1&order=updated_at.desc&limit=1');
+    return rows && rows[0] && rows[0].value && rows[0].value.guestPin ? rows[0] : null;
+}
+
+async function giftGet(env, userId, key) {
+    const rows = await db(env, `mo_state?select=value&user_id=eq.${userId}&key=eq.${key}`);
+    return rows && rows[0] ? rows[0].value : null;
+}
+
+function giftPut(env, userId, key, value) {
+    return upsert(env, [{ user_id: userId, key, value, updated_at: new Date().toISOString() }]);
+}
+
+async function giftSign(env, text) {
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('mo-gift:' + env.SUPABASE_SERVICE_ROLE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return b64u.encode(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(text)));
+}
+
+async function giftToken(env, payload) {
+    const body = b64u.encode(new TextEncoder().encode(JSON.stringify(payload)));
+    return `${body}.${await giftSign(env, body)}`;
+}
+
+async function giftAuth(env, request) {
+    const [body, sig] = (request.headers.get('authorization') || '').replace(/^Bearer /, '').split('.');
+    if (!body || !sig || sig !== await giftSign(env, body)) return null;
+    try {
+        const p = JSON.parse(new TextDecoder().decode(b64u.decode(body)));
+        return p.exp > Date.now() ? p : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function giftLog(env, userId, type, extra = {}) {
+    const v = (await giftGet(env, userId, 'gift_visits')) || { count: 0, events: [] };
+    const now = Date.now();
+    if (type === 'login') { v.count = (v.count || 0) + 1; v.first = v.first || now; }
+    v.last = now;
+    if (type === 'letter_done') v.letterDone = v.letterDone || now;
+    if (type === 'messages') v.messages = Math.max(v.messages || 0, Number(extra.n) || 0);
+    v.events = [...(v.events || []), { at: now, type, ...(extra.n ? { n: Number(extra.n) } : {}) }].slice(-50);
+    await giftPut(env, userId, 'gift_visits', v);
+}
+
+async function handleGift(request, env, url) {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ error: 'ยังไม่ได้ตั้งค่าหลังบ้าน' }, 503);
+    const route = url.pathname.slice('/api/gift/'.length);
+
+    if (route === 'hint') {
+        const row = await giftRow(env);
+        return json(row ? { ready: true, hint: row.value.hint || '', faint: row.value.faint || '' } : { ready: false });
+    }
+
+    if (route === 'login' && request.method === 'POST') {
+        const row = await giftRow(env);
+        if (!row) return json({ error: 'ยังไม่พร้อม' }, 503);
+        const { pin } = await request.json().catch(() => ({}));
+        const att = (await giftGet(env, row.user_id, 'gift_attempts')) || { fails: 0, until: 0 };
+        if (att.until > Date.now()) return json({ locked: true, mins: Math.ceil((att.until - Date.now()) / 60000) }, 429);
+        const mode = pin === row.value.guestPin ? 'guest' : pin === row.value.ownerPin ? 'owner' : null;
+        if (!mode) {
+            att.fails = (att.fails || 0) + 1;
+            if (att.fails >= 8) { att.until = Date.now() + 30 * 60000; att.fails = 0; }
+            await giftPut(env, row.user_id, 'gift_attempts', att);
+            return json({ wrong: true, left: att.until > Date.now() ? 0 : 8 - att.fails }, 401);
+        }
+        if (att.fails) await giftPut(env, row.user_id, 'gift_attempts', { fails: 0, until: 0 });
+        if (mode === 'guest') await giftLog(env, row.user_id, 'login');
+        const token = await giftToken(env, { u: row.user_id, m: mode, exp: Date.now() + 60 * 86400000 });
+        return json({ token, mode });
+    }
+
+    const auth = await giftAuth(env, request);
+    if (!auth) return json({ error: 'ต้องใส่รหัสก่อน' }, 401);
+
+    if (route === 'state') {
+        const rows = await db(env, `mo_state?select=key,value&user_id=eq.${auth.u}&key=in.(${GIFT_KEYS.join(',')})`);
+        const gift = (await giftGet(env, auth.u, 'mo_gift_v1')) || {};
+        const { guestPin, ownerPin, faint, hint, ...open } = gift;
+        return json({ keys: Object.fromEntries(rows.map(r => [r.key, r.value])), gift: open, mode: auth.m });
+    }
+
+    if (route === 'event' && request.method === 'POST') {
+        const { type, n } = await request.json().catch(() => ({}));
+        if (auth.m === 'guest' && /^(letter_open|letter_done|tour_done|messages|limit)$/.test(type)) await giftLog(env, auth.u, type, { n });
+        return json({ ok: true });
+    }
+
+    if (route === 'ai' && request.method === 'POST') {
+        const { path, method = 'POST', payload } = await request.json().catch(() => ({}));
+        if (!/^models\/[\w.-]+(:(generateContent|batchEmbedContents))?$/.test(path || '')) return json({ error: 'ไม่อนุญาต' }, 400);
+        const keys = (await giftGet(env, auth.u, 'mo_device_keys_v1')) || {};
+        if (!keys.gemini) return json({ error: 'ไม่มีคีย์' }, 503);
+        const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
+        const usage = (await giftGet(env, auth.u, 'gift_usage')) || {};
+        const u = usage[auth.m] && usage[auth.m].day === today ? usage[auth.m] : { day: today, calls: 0 };
+        if (u.calls >= GIFT_AI_PER_DAY) return json({ error: { message: 'gift daily limit' } }, 429);
+        usage[auth.m] = { day: today, calls: u.calls + 1 };
+        await giftPut(env, auth.u, 'gift_usage', usage);
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${path}`, {
+            method: method === 'GET' ? 'GET' : 'POST',
+            headers: { 'content-type': 'application/json', 'x-goog-api-key': keys.gemini },
+            ...(method === 'GET' ? {} : { body: JSON.stringify(payload || {}) }),
+        });
+        return new Response(res.body, { status: res.status, headers: { 'content-type': 'application/json' } });
+    }
+
+    return json({ error: 'ไม่พบ' }, 404);
 }

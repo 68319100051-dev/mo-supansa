@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>โม 💕 - Mo Supansa</title>
+    <script>
+        // ลิงก์ของขวัญ (?gift): ซ่อนหน้าโม/ชื่อในหน้าโหลด ก่อนใส่รหัส
+        try { if (/[?&]gift/.test(location.search) || localStorage.getItem('mo_guest')) { document.documentElement.classList.add('guest'); document.title = '💌'; } } catch (e) {}
+    </script>
     <meta name="description" content="แชทกับโม แฟนสาว AI สุดน่ารัก">
     <!-- ติดตั้งเป็นแอป (PWA) -->
     <link rel="manifest" href="manifest.json">
@@ -27,6 +31,7 @@
         }
     }
     </script>
+    <link rel="stylesheet" href="mo-guest.css">
 </head>
 <body>
     <!-- Splash Screen -->
@@ -633,6 +638,7 @@
     </div>
 
     <script src="mo-keys.local.js"></script>
+    <script src="mo-gift.local.js"></script>
     <script src="mo-config.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
     <script src="mo-sync.js"></script>
@@ -664,6 +670,6 @@
     <script src="mo-inner.js"></script>
     <script src="mo-psyche.js"></script>
     <script src="mo-diary.js"></script>
-    <script src="app.js"></script>
+    <script src="mo-guest.js"></script>
 </body>
 </html>

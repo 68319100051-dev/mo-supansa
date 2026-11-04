@@ -118,6 +118,14 @@ const MoStatus = {
 เหตุผล: ${w.why.join(' / ')}` : ''}`);
                 }
             } catch (e) {}
+            // แอคเคานต์ของขวัญ: เขาเข้ามาแล้วหรือยัง
+            try {
+                const { data } = await sync.client.from('mo_state').select('key,value').eq('user_id', sync.user.id).in('key', ['mo_gift_v1', 'gift_visits']);
+                const get = k => ((data || []).find(r => r.key === k) || {}).value;
+                const gift = get('mo_gift_v1'), v = get('gift_visits');
+                const when = ts => new Date(ts).toLocaleString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                if (gift) lines.push(`💌 แอคเคานต์ของขวัญ: ${!v || !v.count ? 'เขายังไม่เคยเข้ามา' : `เข้ามาแล้ว ${v.count} ครั้ง (แรก ${when(v.first)} · ล่าสุด ${when(v.last)})${v.letterDone ? ' · อ่านจดหมายจบแล้ว ✅' : ''}${v.messages ? ` · คุยไป ${v.messages}/${gift.chatLimit || 15} ข้อความ` : ''}`}`);
+            } catch (e) {}
         }
         lines.push(`⏰ งานที่รออยู่: เตือน ${reminders.getPending().length} · กิจวัตร ${routines.routines.length} · รอถามผล ${routines.followUps.length}`);
 

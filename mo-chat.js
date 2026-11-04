@@ -158,6 +158,7 @@ class MoChat {
         const text = this.input.value.trim();
         if (this.editing) return text && this.applyEdit(text);
         if (!text || this.isTyping) return;
+        if (window.MoGuestGuard && !window.MoGuestGuard()) return;   // แอคเคานต์ของขวัญ: จำกัดจำนวนข้อความ
 
         // Add user message (พร้อมข้อความที่ตอบกลับ ถ้ามี)
         const replyTo = this.replyTo;
@@ -648,6 +649,7 @@ class MoChat {
      * Send an image: ย่อรูปก่อน (เก็บใน localStorage ได้) แล้วให้โมดู
      */
     async sendImage(file) {
+        if (window.MoGuestGuard && !window.MoGuestGuard()) return;
         if (this.isTyping) return;
         if (file.type.startsWith('video/')) return this.sendVideo(file);
         let dataUrl;
