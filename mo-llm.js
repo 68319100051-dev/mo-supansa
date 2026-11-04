@@ -29,6 +29,7 @@ class MoLLMService {
         this.config = this.loadConfig();
         this.cooldowns = {};   // { providerName: { until, fails } }
         this.liteModel = 'gemini-3.5-flash-lite';
+        this.proModel = 'gemini-pro-latest';   // ฉลาดที่สุด (ใช้ในแอคเคานต์ของขวัญ) ต้องมีโควต้า/billing
         this.lastProvider = null;
     }
 
@@ -377,15 +378,16 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
                 topP: 0.9,
                 // โมเดลหลัก: ให้ "คิดก่อนตอบ" จริง (thinking) — งบคิดแยกจากความยาวคำตอบ ไม่ให้คิดจนคำตอบโดนตัด
                 // Flash-Lite: ไม่ต้องคิดยาว ตอบเร็ว
-                maxOutputTokens: 2048,
+                maxOutputTokens: window.MO_GUEST ? 6144 : 2048,   // รวมโทเคนที่ใช้คิดด้วย
                 // ใส่ thinkingConfig เฉพาะโมเดลหลัก (Lite บางรุ่นไม่รับ → 400 invalid argument)
-                ...(this.thinkingOff || model === this.liteModel ? {} : { thinkingConfig: { thinkingBudget: 1024 } }),
+                // แอคเคานต์ของขวัญ: ให้คิดนานขึ้น (ฉลาดขึ้น แลกกับตอบช้าลงนิด)
+                ...(this.thinkingOff || model === this.liteModel ? {} : { thinkingConfig: { thinkingBudget: window.MO_GUEST ? 4096 : 1024 } }),
             }
         };
 
         // ลองใหม่เมื่อเซิร์ฟเวอร์ตอบว่ายุ่ง (429 / 5xx) อีก 1 ครั้ง, ครั้งละไม่เกิน 7 วินาที (ดูรูป/คลิปให้นานกว่า)
         // คิดก่อนตอบใช้เวลามากขึ้น → รอนานพอ (ไม่งั้นจะหลุดไปตัวสำรองที่โง่กว่า)
-        const timeoutMs = image && image.youtube ? 40000 : image ? 25000 : model === this.liteModel ? 10000 : 25000;
+        const timeoutMs = image && image.youtube ? 40000 : image ? 25000 : model === this.liteModel ? 10000 : model === this.proModel ? 45000 : 25000;
         let res;
         for (let attempt = 0; attempt < 2; attempt++) {
             res = await fetch(url, {
@@ -490,6 +492,13 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
     getProviders(hasImage) {
         const providers = [];
         const hasGeminiKey = this.config.enabled && this.config.provider !== 'openai' && this.config.apiKey && this.config.apiKey.trim().length > 5;
+        // แอคเคานต์ของขวัญ: ลองรุ่นที่ฉลาดที่สุด (Pro) ก่อนเสมอ — โควต้าหมด/ใช้ไม่ได้ ค่อยลงมาตัวหลัก
+        if (hasGeminiKey && window.MO_GUEST) {
+            providers.push({
+                name: `gemini:${this.proModel}`,
+                call: args => this.callGemini(...args, this.proModel)
+            });
+        }
         // แชท: ใช้ model หลัก (ฉลาดกว่า ตอบเป็นเรื่องเป็นราว) ก่อน — โควตาหมด/ล่ม → Flash-Lite → Groq
         if (hasGeminiKey && this.config.model && this.config.model !== this.liteModel) {
             providers.push({
