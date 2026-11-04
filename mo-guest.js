@@ -2,7 +2,7 @@
    Mo Guest 💌 - แอคเคานต์ของขวัญ (เปิดลิงก์ ?gift แล้วใส่รหัส)
    - ไม่มีรหัส/จดหมายในไฟล์นี้: หลังบ้านส่งให้หลังใส่รหัสถูกเท่านั้น
    - ใช้โมของเจ้าของ (อ่านอย่างเดียว ไม่ซิงก์กลับ) AI วิ่งผ่านหลังบ้าน คีย์ไม่ออกมาที่เครื่องนี้
-   - ลำดับ: ใส่รหัส → คำเตือน → จดหมาย (เปิด/อ่าน) → แนะนำแอป → คุยได้ 15 ข้อความ
+   - ลำดับ: ใส่รหัส → คำเตือน → จดหมาย (เปิด/อ่าน) → แนะนำแอป → คุยได้ตามโควต้า (chatLimit ในไฟล์ส่วนตัว)
    ============================================ */
 
 (function () {
@@ -103,6 +103,7 @@
         ...(body ? { body: JSON.stringify(body) } : {}),
     }).then(async r => ({ status: r.status, data: await r.json().catch(() => ({})) }));
 
+    const chatLimit = () => (saved && saved.gift && saved.gift.chatLimit) || 10;
     const event = (type, n) => saved && saved.token && api('event', { type, n }, saved.token).catch(() => {});
 
     // =============================================
@@ -126,8 +127,8 @@
             if (url.startsWith('https://api.groq.com/')) return Promise.reject(new Error('guest: groq off'));
             return realFetch(input, init);
         };
-        // จำกัด 15 ข้อความ (mo-chat.js เรียกก่อนส่งทุกครั้ง)
-        const limit = (saved.gift && saved.gift.chatLimit) || 15;
+        // จำกัดจำนวนข้อความ (mo-chat.js เรียกก่อนส่งทุกครั้ง)
+        const limit = chatLimit();
         window.MoGuestGuard = () => {
             const n = Number(localStorage.getItem('mo_guest_sent') || 0);
             if (n >= limit) { showLimit(); return false; }
@@ -476,7 +477,7 @@
     //  4) แนะนำแอปทีละจุด
     // =============================================
     const TOUR = [
-        { sel: '#message-input', text: 'พิมพ์คุยกับโมตรงนี้ได้เลย (เวอร์ชั่นนี้ได้ 15 ข้อความนะ 🤫)' },
+        { sel: '#message-input', text: 'พิมพ์คุยกับโมตรงนี้ได้เลย (เวอร์ชั่นนี้ได้ {n} ข้อความนะ 🤫)' },
         { sel: '#mo-avatar', text: 'แตะรูปโมเพื่อดูสตอรี่ที่โมลงไว้' },
         { sel: '#btn-call', text: 'โทรหาโมได้ด้วยนะ 📞' },
         { sel: '#btn-games', text: 'มีเกมให้เล่นกับโมเยอะเลย 🎮' },
@@ -496,7 +497,7 @@
             const el = $(`<div class="gg-tour">
                 <div class="gg-spot" style="left:${r.left - 6}px;top:${r.top - 6}px;width:${r.width + 12}px;height:${r.height + 12}px"></div>
                 <div class="gg-tip" style="${r.top > innerHeight / 2 ? `bottom:${innerHeight - r.top + 14}px` : `top:${r.bottom + 14}px`}">
-                    <p>${esc(step.text)}</p>
+                    <p>${esc(step.text.replace('{n}', chatLimit()))}</p>
                     <div><small>${i + 1}/${TOUR.length}</small><button class="gg-btn" type="button">${i === TOUR.length - 1 ? 'เริ่มเลย!' : 'ต่อไป'}</button></div>
                 </div></div>`);
             document.body.appendChild(el);
@@ -514,7 +515,7 @@
         if (saved && saved.ready) {   // เคยผ่านแล้ว → เข้าแอปเลย
             applyRuntime();
             loadApp();
-            if (Number(localStorage.getItem('mo_guest_sent') || 0) >= ((saved.gift && saved.gift.chatLimit) || 15)) setTimeout(showLimit, 4000);
+            if (Number(localStorage.getItem('mo_guest_sent') || 0) >= chatLimit()) setTimeout(showLimit, 4000);
             return;
         }
         const ok = await gate();
