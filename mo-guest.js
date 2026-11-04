@@ -368,12 +368,16 @@
     }
 
     /** แต่งข้อความ: 5555 เด้งๆ / อีโมจิกระดึ๊บ / คำพูดในเครื่องหมายคำพูดเป็นลายมือ */
+    // เบราว์เซอร์เก่าอ่าน \p{...} ไม่ได้ → สร้างตอนรัน ถ้าพังก็แค่ไม่ทำอีโมจิเด้ง (ไม่ให้ทั้งไฟล์พัง)
+    let emojiRe = null;
+    try { emojiRe = new RegExp('(\\p{Extended_Pictographic}\\uFE0F?)', 'gu'); } catch (e) {}
+
     function decorate(text) {
-        return esc(text)
+        let html = esc(text)
             .replace(/\n/g, '<br>')
-            .replace(/(5{4,})/g, '<span class="gg-laugh">$1</span>')
-            .replace(/(\p{Extended_Pictographic}️?)/gu, '<span class="gg-emo">$1</span>')
-            .replace(/^"(.+)"$/, '<span class="gg-quote">"$1"</span>');
+            .replace(/(5{4,})/g, '<span class="gg-laugh">$1</span>');
+        if (emojiRe) html = html.replace(emojiRe, '<span class="gg-emo">$1</span>');
+        return html.replace(/^"(.+)"$/, '<span class="gg-quote">"$1"</span>');
     }
 
     /** ระเบิดหัวใจ/คอนเฟตติ ณ จุดหนึ่งบนจอ */
@@ -428,25 +432,41 @@
                 teaseTimer = setTimeout(() => peeker.classList.remove('show'), 3400);
             };
             const told = new Set();
-            const io = new IntersectionObserver(entries => entries.forEach(e => {
-                if (!e.isIntersecting) return;
-                e.target.classList.add('in');
-                if (e.target.classList.contains('gg-title')) Sound.tone(1318, 0.18, 'triangle', 0.04);
-                const sec = e.target.closest('section');
+            const reveal = target => {
+                if (target.classList.contains('in')) return;
+                target.classList.add('in');
+                if (target.classList.contains('gg-title')) Sound.tone(1318, 0.18, 'triangle', 0.04);
+                const sec = target.closest('section');
                 if (sec && !told.has(sec.dataset.i)) { told.add(sec.dataset.i); say(sections[sec.dataset.i].tease); }
-                if (e.target.classList.contains('gg-end') && !told.has('end')) {
+                if (target.classList.contains('gg-end') && !told.has('end')) {
                     told.add('end');
                     say(gift.endTease);
                     event('letter_done');
-                    const r = e.target.getBoundingClientRect();
+                    const r = target.getBoundingClientRect();
                     burst(r.left + r.width / 2, r.top, 22);
                 }
-            }), { root: el, threshold: 0.25 });
-            el.querySelectorAll('.gg-p').forEach(p => io.observe(p));
+            };
+            const items = [...el.querySelectorAll('.gg-p')];
+            // ตัวหลัก: เช็กเองจากตำแหน่งบนจอทุกครั้งที่เลื่อน (ใช้ได้ทุกเบราว์เซอร์มือถือ)
+            const check = () => {
+                const h = window.innerHeight || document.documentElement.clientHeight;
+                items.forEach(p => {
+                    const r = p.getBoundingClientRect();
+                    if (r.top < h * 0.92 && r.bottom > 0) reveal(p);
+                });
+            };
+            el.addEventListener('scroll', check, { passive: true });
+            window.addEventListener('resize', check);
+            const ticker = setInterval(check, 400);   // เผื่อเลื่อนแบบที่ไม่ยิง scroll event
+            setTimeout(check, 80);
+            setTimeout(check, 1000);
+            // กันพลาด: ผ่านไป 4 วิแล้วยังไม่มีอะไรขึ้นเลย → โชว์ทั้งหมด อย่างน้อยอ่านได้
+            setTimeout(() => { if (!el.querySelector('.gg-p.in')) el.classList.add('fallback'); }, 4000);
             el.querySelector('.gg-end button').onclick = ev => {
                 Sound.ok();
                 burst(ev.clientX, ev.clientY, 30, ['🎉', '💗', '✨', '🎊', '💖']);
-                io.disconnect();
+                clearInterval(ticker);
+                window.removeEventListener('resize', check);
                 setTimeout(resolve, 700);
             };
         });
