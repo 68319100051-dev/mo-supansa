@@ -866,6 +866,19 @@
         const giftJson = JSON.stringify(window.MO_GIFT);
         if (localStorage.getItem('mo_gift_v1') !== giftJson) localStorage.setItem('mo_gift_v1', giftJson);
     }
+    // เจ้าของสั่งปิด/เปิดแอคของขวัญผ่านแชท → เขียนแถว gift_closed (หลังบ้านเช็คทุกครั้งที่เขาเข้า/คุย)
+    if (!window.MO_GUEST) chat.onGiftCommand = async close => {
+        if (!sync.client || !sync.user) return 'ต้องล็อกอินซิงก์ในเครื่องนี้ก่อนนะ ถึงจะสั่งปิด/เปิดแอคของขวัญได้';
+        const { error } = await sync.client.from('mo_state').upsert({
+            user_id: sync.user.id, key: 'gift_closed', value: { closed: close, at: Date.now() }, updated_at: new Date().toISOString(),
+        });
+        if (error) return `สั่งไม่สำเร็จ: ${error.message}`;
+        mind.decide(close ? 'ปิดแอคของขวัญตามที่เองสั่ง' : 'เปิดแอคของขวัญตามที่เองสั่ง');
+        return close
+            ? '🔒 ปิดแอคของขวัญแล้วนะ ใครเปิดลิงก์มาจะเจอหน้า "ปิดแล้ว" คนที่คุยอยู่ก็จะคุยต่อไม่ได้\nถ้าจะเปิดใหม่ พิมพ์ "เปิดแอคของขวัญ"'
+            : '🔓 เปิดแอคของขวัญแล้ว ใส่รหัสเข้ามาได้เหมือนเดิม';
+    };
+
     // คลิปฉากจบ (ไฟล์ส่วนตัวในเครื่องนี้) → อัปขึ้นที่เก็บไฟล์ของเรา (อ่านได้ผ่านหลังบ้านเมื่อใส่รหัสถูกเท่านั้น)
     async function uploadGiftVideo() {
         const file = window.MO_GIFT && window.MO_GIFT.endingVideo;

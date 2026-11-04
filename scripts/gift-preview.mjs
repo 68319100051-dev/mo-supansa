@@ -22,6 +22,7 @@ if (!GIFT) { console.error('ไม่พบ mo-gift.local.js'); process.exit(1);
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json', '.jpg': 'image/jpeg', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
 const send = (res, code, data) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(data)); };
 let fails = 0;
+let closed = false;
 
 http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -30,7 +31,11 @@ http.createServer(async (req, res) => {
         for await (const c of req) body += c;
         const j = body ? JSON.parse(body) : {};
         const route = url.pathname.slice('/api/gift/'.length);
-        if (route === 'hint') return send(res, 200, { ready: true, hint: GIFT.hint, faint: GIFT.faint });
+        // ทดสอบปิด/เปิดแอค: http://localhost:8766/api/gift/close?on=1 (หรือ on=0) — ของจริงสั่งผ่านแชท "ปิดแอคของขวัญ"
+        if (route === 'close') { closed = url.searchParams.get('on') !== '0'; console.log(closed ? '🔒 ปิดแอค' : '🔓 เปิดแอค'); return send(res, 200, { closed }); }
+        if (route === 'hint') return send(res, 200, closed ? { ready: true, closed: true } : { ready: true, hint: GIFT.hint, faint: GIFT.faint });
+        if (closed && route !== 'event') return send(res, 403, { closed: true, error: { message: 'gift closed' } });
+        if (route === 'ping') return send(res, 200, { ok: true });
         if (route === 'login') {
             const mode = j.pin === GIFT.guestPin ? 'guest' : j.pin === GIFT.ownerPin ? 'owner' : null;
             if (!mode) { fails++; return send(res, 401, { wrong: true, left: Math.max(0, 8 - fails) }); }
@@ -42,7 +47,12 @@ http.createServer(async (req, res) => {
             const { guestPin, ownerPin, hint, faint, ...open } = GIFT;
             return send(res, 200, { keys: {}, gift: open, mode: 'owner' });
         }
-        if (route === 'event') { console.log('📝', j.type, j.n ?? ''); return send(res, 200, { ok: true }); }
+        if (route === 'event') {
+            console.log('📝', j.type, j.n ?? '');
+            // ของจริง: โมเขียนข้อความลงแชทเจ้าของ + เด้งแจ้งเตือน (ตอนเข้า / อ่านจดหมายจบ / คุยครบ / บ้ายบาย)
+            if (/^(letter_done|limit|bye)$/.test(j.type)) console.log('📣 (ของจริงจะรายงานเจ้าของ):', j.type);
+            return send(res, 200, { ok: true });
+        }
         if (route === 'video') {   // คลิปฉากจบจากไฟล์ส่วนตัว (รองรับ Range เหมือนของจริง — iPhone ต้องใช้)
             const file = GIFT.endingVideo && join(ROOT, GIFT.endingVideo);
             if (!url.searchParams.get('t') || !file || !existsSync(file)) return send(res, 404, {});

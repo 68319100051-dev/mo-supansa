@@ -122,7 +122,7 @@
                     signal: init.signal,
                     headers: { 'content-type': 'application/json', authorization: `Bearer ${saved.token}` },
                     body: JSON.stringify({ path: u.pathname.replace('/v1beta/', ''), method: init.method || 'GET', payload: init.body ? JSON.parse(init.body) : null }),
-                });
+                }).then(r => { if (r.status === 403) closedScreen(); return r; });
             }
             if (url.startsWith('https://api.groq.com/')) return Promise.reject(new Error('guest: groq off'));
             return realFetch(input, init);
@@ -225,6 +225,23 @@
         el.querySelector('button').onclick = () => { Sound.tap(); el.remove(); document.getElementById('message-input')?.focus(); };
     }
 
+    /** เจ้าของปิดแอคของขวัญแล้ว → หน้าปิด (ทับทุกอย่าง) */
+    function closedScreen() {
+        if (document.querySelector('.gg-closed')) return;
+        document.querySelectorAll('.gg-overlay, .gg-tour').forEach(e => e.remove());
+        const el = $(`<div class="gg-overlay gg-gate gg-closed">
+            <div class="gg-hearts">${'<i>💗</i>'.repeat(10)}</div>
+            <div class="gg-lock">
+                <div class="gg-mascot small">${mascotSVG}</div>
+                <h2>แอคนี้ปิดแล้วนะ</h2>
+                <p class="gg-sub">ขอบคุณที่แวะมาเล่นนะ 💗</p>
+            </div>
+        </div>`);
+        document.body.appendChild(el);
+        const input = document.getElementById('message-input');
+        if (input) { input.disabled = true; input.placeholder = 'แอคนี้ปิดแล้ว'; }
+    }
+
     // =============================================
     //  1) หน้าใส่รหัส + การ์ตูนใบ้รหัส
     // =============================================
@@ -254,7 +271,7 @@
             return;
         }
         let hint = { hint: '', faint: '' };
-        api('hint').then(r => { hint = r.data || hint; if (!hint.ready) msg.textContent = 'ของยังไม่พร้อม ลองใหม่ทีหลังนะ'; }).catch(() => {});
+        api('hint').then(r => { hint = r.data || hint; if (hint.closed) return closedScreen(); if (!hint.ready) msg.textContent = 'ของยังไม่พร้อม ลองใหม่ทีหลังนะ'; }).catch(() => {});
 
         el.querySelector('.gg-mascot').onclick = () => {
             Sound.init(); Sound.pop();
@@ -286,6 +303,7 @@
                     resolve({ token: r.data.token, mode: r.data.mode, el });
                     return;
                 }
+                if (r.status === 403 && r.data.closed) { closedScreen(); return; }
                 Sound.wrong();
                 el.querySelector('.gg-lock').classList.add('shake');
                 setTimeout(() => el.querySelector('.gg-lock').classList.remove('shake'), 500);
@@ -520,9 +538,10 @@
     //  เริ่ม
     // =============================================
     (async () => {
-        if (saved && saved.ready) {   // เคยผ่านแล้ว → เข้าแอปเลย
+        if (saved && saved.ready) {   // เคยผ่านแล้ว → เข้าแอปเลย (เจ้าของปิดแล้ว = หน้าปิด)
             applyRuntime();
             loadApp();
+            api('ping', null, saved.token).then(r => { if (r.status === 403) closedScreen(); }).catch(() => {});
             if (Number(localStorage.getItem('mo_guest_sent') || 0) >= chatLimit()) setTimeout(showLimit, 4000);
             return;
         }

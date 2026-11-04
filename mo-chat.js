@@ -221,6 +221,13 @@ class MoChat {
         // นัดกันแล้ว: ส่งข้อความหลังเวลานัด = มาตามนัด
         if (this.dateWaiting) this.dateWaiting = null;
 
+        // เจ้าของสั่ง "ปิดแอคของขวัญ" / "เปิดแอคของขวัญ" (ตอบทันที ไม่ใช้ AI)
+        const giftCmd = this.onGiftCommand && /(ปิด|เปิด)\s*แอค(?:เคา\S*)?\s*(?:ของ)?\s*ขวัญ/.exec(text);
+        if (giftCmd) {
+            this.onGiftCommand(giftCmd[1] === 'ปิด').then(reply => this.addMessage('received', reply));
+            return;
+        }
+
         // ถามสถานะหลังบ้าน → โมไล่เช็คระบบจริงแล้วรายงาน (ไม่ใช้ AI ตอบ)
         if (window.MoStatus && this.statusContext && MoStatus.isAsking(text)) {
             this.queueReply(() => this.reportStatus());

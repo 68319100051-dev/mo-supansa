@@ -17,7 +17,7 @@ const FOLLOW_WINDOW = 12 * 3600000;
 const REMINDER_WINDOW = 2 * 3600000;
 
 export default {
-    async fetch(request, env) {
+    async fetch(request, env, ctx) {
         const url = new URL(request.url);
         if (url.pathname === '/api/push/key') {
             return json({ key: env.VAPID_PUBLIC_KEY || null });
@@ -29,7 +29,7 @@ export default {
             return json((rows[0] && rows[0].value.inbox) || {});
         }
         if (url.pathname.startsWith('/api/gift/')) {
-            return handleGift(request, env, url).catch(err => json({ error: String(err.message || err).slice(0, 200) }, 500));
+            return handleGift(request, env, url, ctx).catch(err => json({ error: String(err.message || err).slice(0, 200) }, 500));
         }
         return env.ASSETS.fetch(request);
     },
@@ -502,6 +502,30 @@ async function giftAuth(env, request) {
     }
 }
 
+/** โมรายงานเจ้าของ: เขียนข้อความลงแชทของเรา + เด้งแจ้งเตือนทุกเครื่องที่สมัครไว้ */
+async function giftNotify(env, userId, text) {
+    const rows = await db(env, `mo_state?select=key,value&user_id=eq.${userId}&or=(key.eq.mo_chat_history_v2,key.like.push_sub:*,key.like.fcm_token:*)`);
+    const chatRow = rows.find(r => r.key === 'mo_chat_history_v2');
+    const chat = chatRow && Array.isArray(chatRow.value) ? chatRow.value : [];
+    const subs = rows.filter(r => r.key !== 'mo_chat_history_v2');
+    const now = Date.now();
+    const tz = subs[0] ? Number(subs[0].value.tz) || -420 : -420;
+    const local = new Date(now - tz * 60000);
+    const hhmm = `${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
+    const msg = { id: now + Math.random(), type: 'received', text, format: 'text', time: hhmm, timestamp: now, dueKey: `gift:${now}` };
+    await upsert(env, [{ user_id: userId, key: 'mo_chat_history_v2', value: [...chat, msg].slice(-200), updated_at: new Date().toISOString() }]);
+    const inbox = { title: 'โม 💕', body: text.slice(0, 180), at: now, type: 'chat', lines: [text] };
+    for (const sub of subs) {
+        if (sub.key.startsWith('fcm_token:')) {
+            if (env.FCM_PRIVATE_KEY) await sendFcm(env, sub.value.token, inbox).catch(() => 0);
+            continue;
+        }
+        if (!env.VAPID_PRIVATE_KEY) continue;
+        await upsert(env, [{ user_id: userId, key: sub.key, value: { ...sub.value, inbox }, updated_at: new Date().toISOString() }]);
+        await sendPush(env, sub.value.endpoint).catch(() => 0);
+    }
+}
+
 async function giftLog(env, userId, type, extra = {}) {
     const v = (await giftGet(env, userId, 'gift_visits')) || { count: 0, events: [] };
     const now = Date.now();
@@ -510,21 +534,39 @@ async function giftLog(env, userId, type, extra = {}) {
     if (type === 'letter_done') v.letterDone = v.letterDone || now;
     if (type === 'messages') v.messages = Math.max(v.messages || 0, Number(extra.n) || 0);
     v.events = [...(v.events || []), { at: now, type, ...(extra.n ? { n: Number(extra.n) } : {}) }].slice(-50);
+    // รายงานเจ้าของ: เข้ามา (เว้น 30 นาทีกันเด้งรัว) / คุยครบ / บ้ายบาย
+    let note = '';
+    if (type === 'login' && now - (v.notifiedAt || 0) > 30 * 60000) {
+        note = `💌 เจ็ทๆ มีคนเข้าแอคของขวัญแล้วนะ (ครั้งที่ ${v.count}) 👀\nถ้าอยากปิดแอคนั้น พิมพ์ "ปิดแอคของขวัญ" มาได้เลย`;
+        v.notifiedAt = now;
+    }
+    if (type === 'letter_done') note = '💌 เขาอ่านจดหมายจบแล้วนะ กำลังเริ่มคุยกับเค้า (โมตอน ปวช.3) 🥹';
+    if (type === 'limit') note = '💌 เขาคุยครบโควต้าแล้วนะ กำลังดูฉากจบอยู่';
+    if (type === 'bye') note = '💌 เขากดบ้ายบายไปแล้ว จบครบทุกฉากเลย 💗\nจะปิดแอคของขวัญเลยไหม? พิมพ์ "ปิดแอคของขวัญ" ได้';
     await giftPut(env, userId, 'gift_visits', v);
+    if (note) await giftNotify(env, userId, note).catch(e => console.error('gift notify failed', e.message));
 }
 
-async function handleGift(request, env, url) {
+/** เจ้าของปิดแอคของขวัญไว้ไหม (แถว gift_closed ที่แอปเจ้าของเขียน) */
+async function giftClosed(env, userId) {
+    const v = await giftGet(env, userId, 'gift_closed');
+    return Boolean(v && v.closed);
+}
+
+async function handleGift(request, env, url, ctx) {
     if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ error: 'ยังไม่ได้ตั้งค่าหลังบ้าน' }, 503);
     const route = url.pathname.slice('/api/gift/'.length);
 
     if (route === 'hint') {
         const row = await giftRow(env);
+        if (row && await giftClosed(env, row.user_id)) return json({ ready: true, closed: true });
         return json(row ? { ready: true, hint: row.value.hint || '', faint: row.value.faint || '' } : { ready: false });
     }
 
     if (route === 'login' && request.method === 'POST') {
         const row = await giftRow(env);
         if (!row) return json({ error: 'ยังไม่พร้อม' }, 503);
+        if (await giftClosed(env, row.user_id)) return json({ closed: true }, 403);
         const { pin } = await request.json().catch(() => ({}));
         const att = (await giftGet(env, row.user_id, 'gift_attempts')) || { fails: 0, until: 0 };
         if (att.until > Date.now()) return json({ locked: true, mins: Math.ceil((att.until - Date.now()) / 60000) }, 429);
@@ -536,13 +578,15 @@ async function handleGift(request, env, url) {
             return json({ wrong: true, left: att.until > Date.now() ? 0 : 8 - att.fails }, 401);
         }
         if (att.fails) await giftPut(env, row.user_id, 'gift_attempts', { fails: 0, until: 0 });
-        if (mode === 'guest') await giftLog(env, row.user_id, 'login');
+        if (mode === 'guest') ctx ? ctx.waitUntil(giftLog(env, row.user_id, 'login')) : await giftLog(env, row.user_id, 'login');
         const token = await giftToken(env, { u: row.user_id, m: mode, exp: Date.now() + 60 * 86400000 });
         return json({ token, mode });
     }
 
     const auth = await giftAuth(env, request);
     if (!auth) return json({ error: 'ต้องใส่รหัสก่อน' }, 401);
+    if (await giftClosed(env, auth.u)) return json({ closed: true, error: { message: 'gift closed' } }, 403);
+    if (route === 'ping') return json({ ok: true });
 
     // คลิปฉากจบ: อ่านจากที่เก็บไฟล์ของเจ้าของ ส่งต่อทีละช่วง (Range — iPhone ต้องใช้)
     if (route === 'video') {
@@ -569,7 +613,10 @@ async function handleGift(request, env, url) {
 
     if (route === 'event' && request.method === 'POST') {
         const { type, n } = await request.json().catch(() => ({}));
-        if (auth.m === 'guest' && /^(letter_open|letter_done|tour_done|messages|limit|bye)$/.test(type)) await giftLog(env, auth.u, type, { n });
+        if (auth.m === 'guest' && /^(letter_open|letter_done|tour_done|messages|limit|bye)$/.test(type)) {
+            const job = giftLog(env, auth.u, type, { n });
+            ctx ? ctx.waitUntil(job) : await job;
+        }
         return json({ ok: true });
     }
 
