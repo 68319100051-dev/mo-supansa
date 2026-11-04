@@ -46,13 +46,18 @@ http.createServer(async (req, res) => {
         if (route === 'ai') {
             if (!KEY) return send(res, 200, { candidates: [{ content: { parts: [{ text: 'ว่าไงงง (ไม่มี Gemini key ในเครื่อง ตอบแทนไว้ก่อน)' }] } }] });
             if (!/^models\/[\w.-]+(:(generateContent|batchEmbedContents))?$/.test(j.path || '')) return send(res, 400, {});
-            const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/${j.path}`, {
-                method: j.method === 'GET' ? 'GET' : 'POST',
-                headers: { 'content-type': 'application/json', 'x-goog-api-key': KEY },
-                ...(j.method === 'GET' ? {} : { body: JSON.stringify(j.payload || {}) }),
-            });
-            res.writeHead(r.status, { 'content-type': 'application/json' });
-            return res.end(await r.text());
+            try {
+                const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/${j.path}`, {
+                    method: j.method === 'GET' ? 'GET' : 'POST',
+                    headers: { 'content-type': 'application/json', 'x-goog-api-key': KEY },
+                    ...(j.method === 'GET' ? {} : { body: JSON.stringify(j.payload || {}) }),
+                });
+                res.writeHead(r.status, { 'content-type': 'application/json' });
+                return res.end(await r.text());
+            } catch (err) {   // เน็ตหลุด/ต่อ Gemini ไม่ได้ → ให้แอปลองตัวสำรอง ไม่ให้เซิร์ฟเวอร์ล่ม
+                console.log('⚠️ ต่อ Gemini ไม่ได้:', err.cause ? err.cause.code : err.message);
+                return send(res, 502, { error: { message: 'gemini unreachable' } });
+            }
         }
         return send(res, 404, {});
     }
