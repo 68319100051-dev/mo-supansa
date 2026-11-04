@@ -107,6 +107,46 @@
     const event = (type, n) => saved && saved.token && api('event', { type, n }, saved.token).catch(() => {});
 
     // =============================================
+    //  แชทเก่าของเจ็ทกับโมเวอร์ชั่นแรก (ดูอย่างเดียว)
+    // =============================================
+    function ownerChatButton() {
+        const old = read('mo_guest_owner_chat') || [];
+        const area = document.getElementById('chat-area');
+        if (!old.length || !area || document.querySelector('.gg-oldchat-btn')) return;
+        const btn = $(`<button class="gg-oldchat-btn" type="button">📜 ดูข้อความที่เจ็ทเคยคุยกับโมเวอร์ชั่นแรก</button>`);
+        area.prepend(btn);
+        btn.onclick = () => { Sound.init(); Sound.tap(); ownerChatViewer(old); };
+    }
+
+    function ownerChatViewer(old) {
+        const label = m => {
+            if (!m.format || m.format === 'text') return esc(m.text).replace(/\n/g, '<br>');
+            if (m.format === 'sticker') return esc(m.text);
+            if (m.format === 'image') return /^(data:image|https?:)/.test(m.text || '') ? `<img src="${esc(m.text)}" alt="" loading="lazy">` : '📷 รูป';
+            return { voice: '🎤 ข้อความเสียง', reel: '🎬 คลิป', song: '🎵 เพลง', call: '📞 โทร' }[m.format] || '💬';
+        };
+        let day = '';
+        const rows = old.filter(m => m.type === 'sent' || m.type === 'received').map(m => {
+            const d = new Date(m.timestamp);
+            const dl = d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+            const head = dl !== day ? `<div class="gg-oc-day">${(day = dl)}</div>` : '';
+            return `${head}<div class="gg-oc-msg ${m.type === 'sent' ? 'jet' : 'mo'}"><div class="gg-oc-bubble">${label(m)}</div>
+                <time>${d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</time></div>`;
+        }).join('');
+        const el = $(`<div class="gg-overlay gg-dim gg-oldchat">
+            <div class="gg-oc-box">
+                <div class="gg-oc-head"><div><b>📜 เจ็ท × โมเวอร์ชั่นแรก</b><small>${old.length} ข้อความ • ดูอย่างเดียว</small></div>
+                    <button class="close-btn" type="button" aria-label="ปิด">&times;</button></div>
+                <div class="gg-oc-list">${rows}</div>
+            </div></div>`);
+        document.body.appendChild(el);
+        const list = el.querySelector('.gg-oc-list');
+        list.scrollTop = list.scrollHeight;   // เริ่มที่ข้อความล่าสุด เลื่อนขึ้นดูย้อนหลัง
+        el.querySelector('.close-btn').onclick = () => el.remove();
+        el.addEventListener('click', e => { if (e.target === el) el.remove(); });
+    }
+
+    // =============================================
     //  โหมดแอคเคานต์ของขวัญ: AI ผ่านหลังบ้าน / ไม่ซิงก์ / ไม่มีตั้งค่า
     // =============================================
     function applyRuntime() {
@@ -541,6 +581,7 @@
         if (saved && saved.ready) {   // เคยผ่านแล้ว → เข้าแอปเลย (เจ้าของปิดแล้ว = หน้าปิด)
             applyRuntime();
             loadApp();
+            ownerChatButton();
             api('ping', null, saved.token).then(r => { if (r.status === 403) closedScreen(); }).catch(() => {});
             if (Number(localStorage.getItem('mo_guest_sent') || 0) >= chatLimit()) setTimeout(showLimit, 4000);
             return;
@@ -561,15 +602,13 @@
         await letter(st.data.gift);
         saved.ready = true;
         write('mo_guest', saved);
-        // ข้อความแรกของโม AI ในแชท (ต่อท้ายประวัติเดิม)
-        if (st.data.gift.greeting) {
-            const hist = read('mo_chat_history_v2') || [];
-            const now = Date.now();
-            hist.push({ id: now, type: 'received', text: st.data.gift.greeting, format: 'text', timestamp: now });
-            write('mo_chat_history_v2', hist.slice(-200));
-        }
+        // แชทใหม่: แชทเก่าของเจ็ทเก็บแยกไว้ดูอย่างเดียว (ปุ่ม 📜) / แชทนี้เริ่มด้วยข้อความทักของโมตอน ปวช.3
+        write('mo_guest_owner_chat', read('mo_chat_history_v2') || []);
+        const now = Date.now();
+        write('mo_chat_history_v2', st.data.gift.greeting ? [{ id: now, type: 'received', text: st.data.gift.greeting, format: 'text', timestamp: now }] : []);
         applyRuntime();
         loadApp();
+        ownerChatButton();
         await tour();
         playNote(st.data.gift.playNote);
     })();

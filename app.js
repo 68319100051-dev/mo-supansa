@@ -821,6 +821,7 @@
         syncStatus.textContent = sync.status + (loggedIn ? when : '');
         syncStatus.className = 'llm-status-msg' + (/ไม่สำเร็จ|ผิด/.test(sync.status) ? ' error' : loggedIn ? ' success' : '');
         syncBtn.classList.toggle('synced', loggedIn && !/ไม่สำเร็จ/.test(sync.status));
+        if (loggedIn && !renderSync.giftTried) { renderSync.giftTried = true; uploadGiftVideo(); }   // เพิ่งล็อกอิน → อัปคลิปฉากจบเลย
     }
     sync.onStatus(renderSync);
 

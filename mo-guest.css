@@ -934,3 +934,112 @@
 .gg-end-lines {
     position: relative;
 }
+
+/* แชทเก่าของเจ็ท (ดูอย่างเดียว) */
+.gg-oldchat-btn {
+    position: sticky;
+    top: 8px;
+    z-index: 5;
+    display: block;
+    margin: 8px auto 4px;
+    padding: 8px 14px;
+    border: 1px solid var(--pink-100, #ffd6e7);
+    border-radius: 999px;
+    font: inherit;
+    font-size: 0.8rem;
+    color: #b8336a;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 4px 14px rgba(240, 77, 133, 0.15);
+    cursor: pointer;
+}
+
+.gg-oc-box {
+    display: flex;
+    flex-direction: column;
+    width: min(100%, 440px);
+    height: min(86vh, 720px);
+    border-radius: 22px;
+    overflow: hidden;
+    background: #fff7fa;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+    animation: ggPop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.gg-oc-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: #fff;
+    border-bottom: 1px solid #fde0ea;
+}
+
+.gg-oc-head b {
+    display: block;
+}
+
+.gg-oc-head small {
+    color: #9a6b80;
+    font-size: 0.75rem;
+}
+
+.gg-oc-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+.gg-oc-day {
+    margin: 12px 0 8px;
+    text-align: center;
+    font-size: 0.72rem;
+    color: #9a6b80;
+}
+
+.gg-oc-msg {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 6px;
+}
+
+.gg-oc-msg.jet {
+    align-items: flex-end;
+}
+
+.gg-oc-msg.mo {
+    align-items: flex-start;
+}
+
+.gg-oc-bubble {
+    max-width: 78%;
+    padding: 8px 12px;
+    border-radius: 16px;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+.gg-oc-msg.jet .gg-oc-bubble {
+    color: #fff;
+    background: linear-gradient(135deg, #ff7eb6, #f04d85);
+    border-bottom-right-radius: 4px;
+}
+
+.gg-oc-msg.mo .gg-oc-bubble {
+    background: #fff;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.gg-oc-bubble img {
+    display: block;
+    max-width: 100%;
+    max-height: 220px;
+    border-radius: 10px;
+}
+
+.gg-oc-msg time {
+    margin: 2px 4px 0;
+    font-size: 0.65rem;
+    color: #b39aa6;
+}
