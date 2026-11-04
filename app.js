@@ -493,7 +493,7 @@
             return;
         }
         // ทักไปแล้วเองเปิดแอปอยู่แต่ไม่ตอบ → ทักตามสั้นๆ ครั้งเดียว (แบบคนจริง)
-        if (chat.awaitingReply && chat.awaitingSince && !chat.nudged && canReachOut()
+        if (chat.awaitingReply && chat.awaitingSince && !chat.nudged && canReachOut() && !care.busy()
             && Date.now() - chat.awaitingSince > (6 + Math.random() * 6) * 60000) {
             chat.nudged = true;
             chat.sendProactiveMessage(`โมทักไปแล้ว เองเปิดอ่านแต่ไม่ตอบมา ${Math.round((Date.now() - chat.awaitingSince) / 60000)} นาที`,
@@ -529,7 +529,7 @@
         }
         // คิดถึงมาก → ทักเร็วขึ้น, ง่วง/เครียด → ช้าลง / นอกช่วงที่เองมักว่าง → รอนานขึ้น 2 เท่า
         const active = MoCare.activeHours(chat.messages);
-        const offHours = active && !active.has(new Date().getHours()) ? 2 : 1;
+        const offHours = (active && !active.has(new Date().getHours()) ? 2 : 1) * (care.busy() ? 3 : 1);
         if (Date.now() - lastActivity() < nextGapMs * mind.behavior().proactiveGapFactor * offHours) return;
         mind.decide(`เงียบกันไปนาน + อารมณ์${mind.emotion().label} → ทักไปก่อน`);
         nextGapMs = randomGap();

@@ -445,6 +445,7 @@ class MoChat {
             const reacts = msg.type === 'received'
                 ? `<div class="menu-row">${emojis.map(e => `<button data-react="${e}" class="${msg.reaction === e ? 'active' : ''}">${e}</button>`).join('')}</div>` : '';
             const actions = [
+                ...(msg.type === 'received' && isText ? ['<button data-rate="up" class="menu-text">👍</button>', '<button data-rate="down" class="menu-text">👎</button>'] : []),
                 '<button data-reply="1" class="menu-text">↩️ ตอบกลับ</button>',
                 isText ? '<button data-copy="1" class="menu-text">📋 คัดลอก</button>' : '',
                 msg.type === 'sent' && isText ? '<button data-edit="1" class="menu-text">✏️ แก้ไข</button>' : '',
@@ -496,6 +497,7 @@ class MoChat {
             if (btn.dataset.react) this.reactToMo(menu.dataset.id, btn.dataset.react);
             if (btn.dataset.edit) this.startEdit(menu.dataset.id);
             if (btn.dataset.reply) this.setReply(menu.dataset.id);
+            if (btn.dataset.rate) this.rateReply(menu.dataset.id, btn.dataset.rate);
             if (btn.dataset.copy) {
                 const m = this.messages.find(x => String(x.id) === menu.dataset.id);
                 if (m && navigator.clipboard) navigator.clipboard.writeText(m.text).then(() => this.showNotification('คัดลอกแล้ว 📋')).catch(() => {});
@@ -504,6 +506,24 @@ class MoChat {
         });
         document.addEventListener('pointerdown', (e) => { if (!menu.contains(e.target)) hide(); });
         this.container.addEventListener('scroll', hide, { passive: true });
+    }
+
+    /**
+     * 👍/👎 คำตอบของโม: เก็บคู่ (ข้อความเอง → คำตอบโมทั้งชุด) ไว้สอนสไตล์ใน prompt
+     */
+    rateReply(msgId, kind) {
+        const i = this.messages.findIndex(m => String(m.id) === String(msgId));
+        if (i < 0 || !this.self) return;
+        // คำตอบทั้งชุด = ฟองโมที่ติดกันรอบข้อความนี้ / ข้อความเองก่อนหน้า
+        let a = i, b = i;
+        while (a > 0 && this.messages[a - 1].type === 'received') a--;
+        while (b < this.messages.length - 1 && this.messages[b + 1].type === 'received') b++;
+        const mo = this.messages.slice(a, b + 1).filter(m => !m.format || m.format === 'text').map(m => m.text).join(' / ');
+        const user = a > 0 ? this.messages[a - 1].text : '';
+        const why = kind === 'down' ? (prompt('ไม่ชอบตรงไหน? (ไม่ใส่ก็ได้)', '') || '') : '';
+        this.self.rate(kind, user, mo, why);
+        this.mind && this.mind.decide(kind === 'up' ? 'เองชอบคำตอบนี้ จำไว้' : `เองไม่ชอบคำตอบนี้${why ? ` เพราะ${why}` : ''} จะไม่ตอบแบบนี้อีก`);
+        this.showNotification(kind === 'up' ? '👍 โมจำไว้ว่าเองชอบแบบนี้' : '👎 โมจะไม่ตอบแบบนี้อีก');
     }
 
     /**
@@ -1213,6 +1233,9 @@ class MoChat {
             moSticker = window.MoStickers && MoStickers.byId(id);
             return '';
         });
+        // สติกเกอร์: ห่างกันอย่างน้อย 30 นาที และไม่ซ้ำอันล่าสุด (กันส่งรัวๆ)
+        const lastSticker = [...this.messages].reverse().find(m => m.type === 'received' && m.format === 'sticker');
+        if (moSticker && lastSticker && (Date.now() - lastSticker.timestamp < 30 * 60000 || (lastSticker.extra && lastSticker.extra.id === moSticker.id))) moSticker = null;
         if (moSticker) setTimeout(() => this.addMessage('received', moSticker.e, 'sticker', { id: moSticker.id, caption: moSticker.t }), 1200 + Math.random() * 1000);
 
         // [เพลง: ศิลปิน - ชื่อเพลง] = โมส่งการ์ดเพลง (ส่งตามหลังข้อความ)

@@ -220,6 +220,7 @@ class MoLLMService {
 3. ข้อมูลข้างล่างทั้งหมด (เรื่องที่ห่วง ความตั้งใจ เป้าหมาย คนรอบตัว ความจำ งานของเอง) เป็นแค่ฉากหลังให้รู้ — หยิบมาพูดได้ไม่เกิน 1 เรื่อง และเฉพาะเมื่อเข้ากับที่คุยอยู่จริงๆ ห้ามยัดหลายเรื่องในคำตอบเดียว ห้ามเปลี่ยนเรื่องเอง
 4. เรื่องงาน/โปรเจกต์ของเองเป็นของเอง โมไม่ได้ทำ ไม่ต้องให้คำแนะนำทางเทคนิค เว้นแต่เองถาม
 5. คำตอบปกติ 1-3 บรรทัด ไม่เกิน 4 บรรทัด
+6. ภาษาไทยต้องเป็นธรรมชาติแบบที่วัยรุ่นไทยพิมพ์จริง ทวนทุกประโยคก่อนส่ง ถ้าประโยคแปลก ไม่มีความหมาย หรือแปลตรงตัว (เช่น "บิงซูมันไม่ใช่อ้วน") ให้เขียนใหม่ (เช่น "กินบิงซูไม่อ้วนหรอกน่า")
 
 # วิธีพิมพ์
 - แยกเป็นหลายข้อความสั้นๆ: 1 บรรทัด = 1 ฟองแชท ปกติ 1-3 บรรทัด เรื่องซึ้ง/จริงจังได้ถึง 4
@@ -289,7 +290,7 @@ ${window.MoLifeInstance.describeNow()}${window.MoWeather && window.MoWeather.des
 ${memorySummary && memorySummary.chatSummary ? `# สรุปที่คุยกันก่อนหน้านี้ (เก่ากว่าแชทที่เห็น)
 ${memorySummary.chatSummary}
 
-` : ''}${window.MoDiaryInstance ? window.MoDiaryInstance.recentForPrompt() : ''}${window.MoInnerInstance ? window.MoInnerInstance.promptSection() : ''}${window.MoPsycheInstance ? window.MoPsycheInstance.promptSection(contextText, window.MoLifeInstance && window.MoLifeInstance.state) : ''}${window.MoCareInstance ? window.MoCareInstance.promptSection() : ''}${window.MoSocialInstance ? window.MoSocialInstance.promptSection(contextText) : ''}${window.MoFestivals ? window.MoFestivals.promptSection() : ''}${window.MoGifts && window.MoLifeInstance && this.wants(contextText, /ของขวัญ|ตุ๊กตา|ซื้อ|ให้เค้า|ห้อง|บ้าน|โคม|ต้นไม้|ดอกไม้/, 0.2) ? window.MoGifts.promptSection(window.MoLifeInstance) : ''}${window.MoSelfInstance ? window.MoSelfInstance.promptSection(contextText) : ''}${window.MoStoriesInstance ? window.MoStoriesInstance.promptSection() : ''}# ความจำจากแชท
+` : ''}${window.MoSelfInstance && window.MoSelfInstance.feedbackSection ? window.MoSelfInstance.feedbackSection() : ''}${window.MoDiaryInstance && this.wants(contextText, /เมื่อวาน|วันก่อน|เมื่อคืน|ครั้งก่อน|คราวก่อน|จำได้|ที่เคย/, 0.25) ? window.MoDiaryInstance.recentForPrompt() : ''}${window.MoInnerInstance ? window.MoInnerInstance.promptSection() : ''}${window.MoPsycheInstance ? window.MoPsycheInstance.promptSection(contextText, window.MoLifeInstance && window.MoLifeInstance.state) : ''}${window.MoCareInstance ? window.MoCareInstance.promptSection() : ''}${window.MoSocialInstance ? window.MoSocialInstance.promptSection(contextText) : ''}${window.MoFestivals && this.wants(contextText, /เทศกาล|ลอยกระทง|ปีใหม่|สงกรานต์|คริสต์มาส|วาเลน|ฮาโลวีน|วันแม่|วันพ่อ|วันหยุด/, 0.35) ? window.MoFestivals.promptSection() : ''}${window.MoGifts && window.MoLifeInstance && this.wants(contextText, /ของขวัญ|ตุ๊กตา|ซื้อ|ให้เค้า|ห้อง|บ้าน|โคม|ต้นไม้|ดอกไม้/, 0.2) ? window.MoGifts.promptSection(window.MoLifeInstance) : ''}${window.MoSelfInstance ? window.MoSelfInstance.promptSection(contextText) : ''}${window.MoStoriesInstance && this.wants(contextText, /สตอรี่|story|ลง|รูป|ไอจี/, 0.3) ? window.MoStoriesInstance.promptSection() : ''}# ความจำจากแชท
 ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่มี'}
 
 หยิบเรื่องที่จำได้มาพูดเมื่อเกี่ยวกับที่คุย ทีละเรื่อง ตอบเป็นข้อความแชทของโมเท่านั้น ไม่ใส่ "โม:" นำหน้า`;
@@ -351,13 +352,17 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
                 parts: [{ text: systemPrompt }]
             },
             contents: contents,
+            // บล็อกเฉพาะเนื้อหาร้ายแรงจริง — เรื่องเศร้า/โดนด่า/ระบาย เป็นเรื่องปกติของแฟน (ไม่งั้นโมจะเงียบตอนเองแย่ที่สุด)
+            safetySettings: ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH', 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT']
+                .map(category => ({ category, threshold: 'BLOCK_ONLY_HIGH' })),
             generationConfig: {
-                temperature: 0.85,
-                topP: 0.95,
+                temperature: 0.7,
+                topP: 0.9,
                 // โมเดลหลัก: ให้ "คิดก่อนตอบ" จริง (thinking) — งบคิดแยกจากความยาวคำตอบ ไม่ให้คิดจนคำตอบโดนตัด
                 // Flash-Lite: ไม่ต้องคิดยาว ตอบเร็ว
                 maxOutputTokens: 2048,
-                ...(this.thinkingOff ? {} : { thinkingConfig: { thinkingBudget: model === this.liteModel ? 0 : 1024 } }),
+                // ใส่ thinkingConfig เฉพาะโมเดลหลัก (Lite บางรุ่นไม่รับ → 400 invalid argument)
+                ...(this.thinkingOff || model === this.liteModel ? {} : { thinkingConfig: { thinkingBudget: 1024 } }),
             }
         };
 
@@ -379,8 +384,8 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
         if (!res.ok) {
             const errData = await res.json().catch(() => ({}));
             const msg = errData.error?.message || `Gemini API Error (${res.status})`;
-            // โมเดลไม่รองรับ thinkingConfig → ปิดแล้วลองใหม่ครั้งเดียว
-            if (res.status === 400 && /thinking/i.test(msg) && !this.thinkingOff) {
+            // โมเดลไม่รับ thinkingConfig (400 อะไรก็ตาม) → ปิดแล้วลองใหม่ครั้งเดียว
+            if (res.status === 400 && requestBody.generationConfig.thinkingConfig && !this.thinkingOff) {
                 this.thinkingOff = true;
                 return this.callGemini(userMessage, chatHistory, personality, memorySummary, image, modelOverride);
             }
@@ -391,7 +396,12 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
         if (data.candidates?.[0]?.finishReason === 'MAX_TOKENS') console.warn('Gemini reply hit MAX_TOKENS');
         this.track('Gemini แชท', data.usageMetadata && data.usageMetadata.totalTokenCount);
         const candidate = data.candidates?.[0]?.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('');
-        if (!candidate) throw new Error('No reply from Gemini');
+        if (!candidate) {
+            const why = data.candidates?.[0]?.finishReason || data.promptFeedback?.blockReason || 'empty';
+            const e = new Error(`No reply from Gemini (${why})`);
+            e.soft = true;   // ไม่ใช่เซิร์ฟเวอร์ล่ม → ไม่ต้องพักเจ้านี้
+            throw e;
+        }
         return candidate.trim();
     }
 
@@ -654,8 +664,13 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
                 return reply.replace(/^\s*โม\s*:\s*/gm, '').replace(/\[(?:วันนี้|เมื่อวาน|\d+ วันก่อน) \d{1,2}:\d{2}\]\s*/g, '').trim();
             } catch (err) {
                 // พักเจ้านี้ 30 วิ, 1 นาที, 2 นาที... (สูงสุด 5 นาที)
-                const fails = state.fails + 1;
-                this.cooldowns[provider.name] = { until: Date.now() + Math.min(30000 * 2 ** (fails - 1), 300000), fails };
+                // โควต้ารายวันหมด ("retry in 4h39m...") → พักจนกว่าจะรีเซ็ตจริง ไม่ต้องลองซ้ำทุก 5 นาที
+                const fails = err.soft ? state.fails : state.fails + 1;
+                if (err.soft) { console.warn(`LLM ${provider.name}: ${err.message}`); lastError = err; continue; }
+                const retry = String(err.message).match(/retry in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?/i);
+                const quotaMs = retry && /quota|per day|limit/i.test(err.message)
+                    ? ((+retry[1] || 0) * 3600 + (+retry[2] || 0) * 60 + (parseFloat(retry[3]) || 0)) * 1000 : 0;
+                this.cooldowns[provider.name] = { until: Date.now() + Math.max(quotaMs, Math.min(30000 * 2 ** (fails - 1), 300000)), fails };
                 console.warn(`LLM ${provider.name} failed:`, err.message);
                 lastError = err;
             }

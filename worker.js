@@ -189,7 +189,10 @@ async function checkUser(env, userId, subs) {
     if (quiet) why.push('ช่วงเวลานอน (00:30-07:30)');
     else if (!activeNow) why.push(`นอกช่วงที่เองมักออนไลน์ (${hourNow}:00)`);
     if (!geminiKeyHb) why.push('ไม่มี Gemini key ในบัญชี (เปิดแอปบนคอมที่มีไฟล์คีย์แล้วซิงก์)');
-    if (!due.length && !quiet && activeNow && geminiKeyHb) {
+    const busySig = (((get('mo_care_v1') || {}).signals || {}).busy);
+    const busyNow = busySig && now - busySig.at < 2 * 3600000;
+    if (busyNow) why.push('เองบอกว่ายุ่งอยู่ → ไม่ทักกวน');
+    if (!due.length && !quiet && activeNow && geminiKeyHb && !busyNow) {
         const hbToday = chat.filter(m => m.dueKey && m.dueKey.startsWith(`hb:${localDate}`));
         const lastHb = Math.max(0, ...hbToday.map(m => m.timestamp || 0));
         const lastSentHb = Math.max(0, ...chat.filter(m => m.type === 'sent').map(m => m.timestamp || 0));

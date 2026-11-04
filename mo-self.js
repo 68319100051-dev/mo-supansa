@@ -25,7 +25,7 @@ class MoSelf {
     }
 
     load() {
-        const empty = { opinions: [], jokes: [], photos: [], weeks: [], badDay: null, lastWeekly: 0, grudge: null };
+        const empty = { opinions: [], jokes: [], photos: [], weeks: [], badDay: null, lastWeekly: 0, grudge: null, liked: [], disliked: [] };
         try {
             const saved = localStorage.getItem(this.storageKey);
             if (saved) return { ...empty, ...JSON.parse(saved) };
@@ -77,6 +77,25 @@ class MoSelf {
             return 'hurt';
         }
         return null;
+    }
+
+    /**
+     * เองกด 👍/👎 คำตอบของโม → เก็บเป็นตัวอย่าง (ชอบ = ตอบแนวนี้ / ไม่ชอบ = ห้ามแนวนี้)
+     */
+    rate(kind, userText, moText, why = '') {
+        const item = { user: String(userText || '').slice(0, 120), mo: String(moText || '').slice(0, 200), why: String(why || '').slice(0, 80), at: Date.now() };
+        const key = kind === 'up' ? 'liked' : 'disliked';
+        this.data[key] = [...(this.data[key] || []).filter(x => x.mo !== item.mo), item].slice(-20);
+        this.save();
+    }
+
+    feedbackSection() {
+        const liked = (this.data.liked || []).slice(-3);
+        const disliked = (this.data.disliked || []).slice(-4);
+        const parts = [];
+        if (liked.length) parts.push(`# คำตอบที่เองกดชอบ 👍 (สไตล์ที่เองชอบ ตอบแนวนี้ ห้ามลอกคำ)\n${liked.map(x => `เอง: ${x.user}\nโม: ${x.mo}`).join('\n\n')}`);
+        if (disliked.length) parts.push(`# คำตอบที่เองกดไม่ชอบ 👎 (ห้ามตอบแนวนี้อีก)\n${disliked.map(x => `- "${x.mo}"${x.why ? ` (เพราะ: ${x.why})` : ''}`).join('\n')}`);
+        return parts.length ? parts.join('\n\n') + '\n\n' : '';
     }
 
     /**

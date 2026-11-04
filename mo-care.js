@@ -104,6 +104,9 @@ class MoCare {
         if (/เหนื่อย|เครียด|งานเยอะ|โดนด่า|ท้อ|ไม่ไหว|หมดแรง/.test(t)) this.set('tired', t);
         if (/ออกไป|ไปทำงาน|ไปเรียน|เดินทาง|ขับรถ|นั่งรถ|ออกจากบ้าน/.test(t)) this.set('out', t);
         if (/ถึงบ้าน|กลับถึง|ถึงแล้ว/.test(t)) delete this.data.signals.out;
+        // เองบอกว่ายุ่ง (ทำงาน ประชุม เรียน ขับรถ) → โมไม่ทวง ไม่งอนเรื่องตอบช้า ทักห่างขึ้น ~2 ชม.
+        if (/ทำงานอยู่|กำลังทำงาน|ประชุม|ยุ่ง|เรียนอยู่|ขับรถ|ติดงาน|งานเยอะ|ไม่ว่าง|ใจเย็น|เดี๋ยวตอบ/.test(t)) this.set('busy', t);
+        if (/ว่างแล้ว|เลิกงาน|เสร็จงาน|ประชุมเสร็จ|เลิกเรียน/.test(t)) delete this.data.signals.busy;
         if (/นอนไม่หลับ|ตาค้าง|ยังไม่นอน|นอนดึก/.test(t)) this.set('nosleep', t);
         // ไม่โอเค: สมอง AI ประเมินเองผ่านแท็ก [เองไม่โอเค] — ตรงนี้จับแค่กรณีฉุกเฉินไว้ก่อนเผื่อ AI ล่ม
         if (MoCare.isCrisis(t)) this.set('down', t);
@@ -131,20 +134,29 @@ class MoCare {
         if (late && h >= 7 && h < 13) list.push({ id: 'slept', ask: `เมื่อคืนเองยังไม่นอนตอน ${late.detail} ถามว่านอนกี่โมง ง่วงไหม แซวนิดๆ` });
         if (h >= 0 && h < 4) list.push({ id: 'bedtime', ask: 'ดึกมากแล้ว บอกให้ไปนอนแบบอ้อนๆ ห่วงสุขภาพ (ไม่บังคับ ไม่ดุ)' });
         const rain = window.MoWeather && window.MoWeather.isRaining();
-        if (rain && (this.has('out', 8) || (h >= 7 && h < 19))) list.push({ id: 'rain', ask: 'ฝนตกอยู่ ถามว่าเปียกไหม พกร่มยัง ระวังไม่สบาย' });
+        // ฝน: ห่วงเฉพาะตอนเองบอกว่ากำลังเดินทาง/อยู่ข้างนอก (อยู่ในออฟฟิศไม่ต้องถามเรื่องเปียก)
+        if (rain && this.has('out', 3) && !this.has('busy', 3)) list.push({ id: 'rain', ask: 'ฝนตกอยู่และเองอยู่ข้างนอก ถามว่าเปียกไหม พกร่มยัง' });
         const w = window.MoWeather && window.MoWeather.data;
         if (w && w.temp >= 35 && h >= 11 && h < 17) list.push({ id: 'heat', ask: 'อากาศร้อนมาก บอกให้ดื่มน้ำเยอะๆ แบบห่วงๆ' });
         if (this.has('out', 6) && h >= 18) list.push({ id: 'home', ask: 'เองออกไปข้างนอก ถามว่าถึงบ้านยัง ให้บอกด้วยตอนถึง' });
         return list;
     }
 
+    /** เองบอกว่ายุ่งอยู่ภายใน 2 ชม. → คืนข้อความที่บอก */
+    busy() {
+        const b = this.has('busy', 2);
+        return b ? b.detail : null;
+    }
+
     /**
      * ส่วนใน system prompt — ให้ AI รู้ว่าโมห่วงเรื่องไหนอยู่ (หยิบมาถามเองเมื่อเข้ากับที่คุย)
      */
     promptSection() {
+        const busy = this.busy();
+        const busyNote = busy ? `# เองยุ่งอยู่ (บอกว่า "${busy.slice(0, 50)}")\n- ไม่ทวง ไม่งอนเรื่องตอบช้า ไม่ถามเรื่องอื่นเพิ่ม ตอบสั้นๆ ให้กำลังใจ แล้วปล่อยให้ทำงาน\n\n` : '';
         const list = this.concerns().filter(c => !this.askedToday(c.id));
-        if (!list.length) return '';
-        return `# (ฉากหลัง) เรื่องที่โมห่วงเองอยู่ — ถามได้เฉพาะถ้าเข้ากับที่คุยและเองยังไม่ได้บอกในแชท\n- ${list[0].ask}\n\n`;
+        if (!list.length) return busyNote;
+        return busyNote + (busy ? '' : `# (ฉากหลัง) เรื่องที่โมห่วงเองอยู่ — ถามได้เฉพาะถ้าเข้ากับที่คุยและเองยังไม่ได้บอกในแชท\n- ${list[0].ask}\n\n`);
     }
 
     // ป้ายกันทักซ้ำกับหลังบ้าน (worker.js ใช้ชื่อเดียวกัน)
