@@ -31,6 +31,13 @@ class MoBrainPage {
         document.getElementById('brain-card').addEventListener('click', e => {
             if (e.target.closest('[data-close]')) e.currentTarget.classList.add('hidden');
         });
+        // AI ดึงความทรงจำไหนไปใช้ → ดวงไฟนั้นกะพริบ + ป้ายเด้งขึ้นมา 10 วิ
+        this.recalled = new Map();
+        window.addEventListener('mo-recall', e => {
+            const now = Date.now();
+            (e.detail || []).forEach(t => this.recalled.set(String(t), now));
+            if (this.open && this.brain3d) this.brain3d.pulse('limbic', 16);
+        });
         mind.onChange(region => {
             if (!this.open) return;
             if (this.brain3d) this.brain3d.pulse(region, 8);
@@ -160,6 +167,15 @@ class MoBrainPage {
         pos.forEach((p, i) => {
             const el = this.labelEls[i];
             const m = this.memories[i];
+            const hot = Date.now() - (this.recalled.get(m.text) || 0) < 10000;
+            el.classList.toggle('hot', hot);
+            if (hot && p.front > -0.2) {
+                el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -130%)`;
+                el.style.opacity = 1;
+                el.style.pointerEvents = 'auto';
+                el.style.zIndex = 200;
+                return;
+            }
             const ok = zoomIn > 0 && p.front > 0.15 && (!this.filter || m.region === this.filter) && shown < 14 + zoomIn * 16;
             if (!ok) { el.style.opacity = 0; el.style.pointerEvents = 'none'; return; }
             shown++;

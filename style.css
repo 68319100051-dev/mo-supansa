@@ -4449,3 +4449,11 @@ button.mind-region-chip {
 .brain-3d.ready .mind-3d-loading {
     display: none;
 }
+
+.brain-mem.hot {
+    border-color: #ffd166;
+    color: #fff7d6;
+    background: rgba(90, 40, 20, 0.85);
+    box-shadow: 0 0 18px rgba(255, 209, 102, 0.8);
+    animation: statusPulse 1s ease-in-out infinite;
+}

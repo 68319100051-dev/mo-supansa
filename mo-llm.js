@@ -197,9 +197,21 @@ class MoLLMService {
     buildSystemPrompt(personality, memorySummary, contextText = '') {
         const facts = (memorySummary && memorySummary.facts) || [];
         const events = ((memorySummary && memorySummary.events) || []).slice(-3).map(e => e.title);
-        const memory = [...facts, ...events];
-        // ฮิปโปแคมปัสดึงความจำ (แสดงในหน้าสมอง)
-        if (window.MoMindInstance) window.MoMindInstance.fire('limbic', 0.4);
+        // ฮิปโปแคมปัสดึงความจำที่เกี่ยวกับที่คุยอยู่ขึ้นมาก่อน (ไทยไม่มีเว้นวรรค → เทียบทีละคู่ตัวอักษร)
+        const ctx = String(contextText || '');
+        const rel = f => {
+            const a = String(f).replace(/\s+/g, '');
+            let hit = 0;
+            for (let i = 0; i < a.length - 1; i++) if (ctx.includes(a.slice(i, i + 2))) hit++;
+            return hit / Math.max(6, a.length - 1);
+        };
+        const hot = ctx ? facts.map(f => ({ f, s: rel(f) })).filter(x => x.s > 0.4).sort((a, b) => b.s - a.s).slice(0, 3).map(x => x.f) : [];
+        const memory = [...hot.map(f => `${f} ← เกี่ยวกับที่คุยตอนนี้`), ...facts.filter(f => !hot.includes(f)), ...events];
+        if (window.MoMindInstance) {
+            window.MoMindInstance.fire('limbic', 0.4);
+            if (hot.length) window.MoMindInstance.think('limbic', `นึกถึง: ${hot.map(f => String(f).slice(0, 40)).join(' / ')}`);
+        }
+        if (hot.length && typeof window.dispatchEvent === 'function') window.dispatchEvent(new CustomEvent('mo-recall', { detail: hot }));
 
         const knownName = memorySummary && memorySummary.longTerm && memorySummary.longTerm.userName;
         const userName = knownName || 'ไอ้ดื้อ';
@@ -221,6 +233,7 @@ class MoLLMService {
 4. เรื่องงาน/โปรเจกต์ของเองเป็นของเอง โมไม่ได้ทำ ไม่ต้องให้คำแนะนำทางเทคนิค เว้นแต่เองถาม
 5. คำตอบปกติ 1-3 บรรทัด ไม่เกิน 4 บรรทัด
 6. ภาษาไทยต้องเป็นธรรมชาติแบบที่วัยรุ่นไทยพิมพ์จริง ทวนทุกประโยคก่อนส่ง ถ้าประโยคแปลก ไม่มีความหมาย หรือแปลตรงตัว (เช่น "บิงซูมันไม่ใช่อ้วน") ให้เขียนใหม่ (เช่น "กินบิงซูไม่อ้วนหรอกน่า")
+7. ถ้าเองเศร้า เหนื่อย หรือรู้สึกแย่: ตอบแค่ 1-2 บรรทัด อยู่ข้างๆ รับฟัง ถามว่าอยากเล่าไหม ห้ามสอน ห้ามให้คำแนะนำยาวๆ ห้ามแซว
 
 # วิธีพิมพ์
 - แยกเป็นหลายข้อความสั้นๆ: 1 บรรทัด = 1 ฟองแชท ปกติ 1-3 บรรทัด เรื่องซึ้ง/จริงจังได้ถึง 4

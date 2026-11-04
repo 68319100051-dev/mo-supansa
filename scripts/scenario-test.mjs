@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const root = new URL('..', import.meta.url);
-const ctx = { window: {}, console, fetch, AbortSignal, setTimeout, localStorage: { getItem: () => null, setItem() {} } };
+const ctx = { window: {}, console, fetch, AbortSignal, setTimeout, CustomEvent, localStorage: { getItem: () => null, setItem() {} } };
 ctx.window.window = ctx.window;
 vm.createContext(ctx);
 for (const f of ['mo-keys.local.js', 'mo-llm.js', 'mo-care.js']) vm.runInContext(readFileSync(new URL(f, root), 'utf8'), ctx);

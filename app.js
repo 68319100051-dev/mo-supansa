@@ -872,19 +872,6 @@
         }
     }
 
-    function renderDiary() {
-        const diaryEl = document.getElementById('memory-diary');
-        const entries = diary.getEntries();
-        const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-        const writingNote = diary.writing.size ? '<div class="memory-item" style="opacity:0.6">✍️ โมกำลังเขียนไดอารี่...</div>' : '';
-        diaryEl.innerHTML = writingNote + (entries.length
-            ? entries.map(e => `<div class="memory-item">
-                    <strong>${diary.formatDate(e.key)}</strong>
-                    <div style="margin-top:4px; line-height:1.5;">${esc(e.text)}</div>
-                </div>`).join('')
-            : (writingNote ? '' : '<div class="memory-item" style="opacity:0.5">ยังไม่มีไดอารี่ คุยกับโมก่อนนะ</div>'));
-    }
-
     function updateMemoryDisplay() {
         const summary = memory.getSummary();
 
@@ -996,9 +983,8 @@
             });
         });
 
-        // Diary
-        diary.update(chat.messages, renderDiary);
-        renderDiary();
+        // ไดอารี่ย้ายไปวางบนโต๊ะในบ้านโมแล้ว — ยังเขียนต่อเบื้องหลัง
+        diary.update(chat.messages);
 
         // Mood & Behavior
         const moodEl = document.getElementById('memory-mood');

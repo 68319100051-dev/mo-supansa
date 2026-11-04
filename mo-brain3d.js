@@ -114,7 +114,7 @@ const POINT_VERT = `
         if (aRegion > 1.5 && aRegion < 2.5) ridge = 0.35;   // ลิมบิกด้านใน: เรืองแสงนุ่มๆ
         if (aRegion > 5.5) ridge = 0.25;                     // ก้านสมอง
         float sel = abs(aRegion - uSelected) < 0.5 ? 1.0 : 0.0;
-        float intensity = (0.1 + ridge * 0.45) * twinkle + act * (0.1 + ridge * 0.3) + scan * 0.2 + sel * (0.25 + ridge * 0.3);
+        float intensity = (0.17 + ridge * 0.55) * twinkle + act * (0.1 + ridge * 0.3) + scan * 0.2 + sel * (0.25 + ridge * 0.3);
         vec3 cyan = vec3(0.35, 0.92, 1.0);
         vec3 col = mix(cyan, vec3(1.0), clamp(act * 0.8 + scan * 0.6, 0.0, 1.0));
         // ระบบลิมบิกเปลี่ยนสีตามอารมณ์
