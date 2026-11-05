@@ -158,7 +158,6 @@ class MoChat {
         const text = this.input.value.trim();
         if (this.editing) return text && this.applyEdit(text);
         if (!text || this.isTyping) return;
-        if (window.MoGuestGuard && !window.MoGuestGuard()) return;   // แอคเคานต์ของขวัญ: จำกัดจำนวนข้อความ
 
         // Add user message (พร้อมข้อความที่ตอบกลับ ถ้ามี)
         const replyTo = this.replyTo;
@@ -230,12 +229,6 @@ class MoChat {
                 this.hideTyping && this.hideTyping();
                 this.addMessage('received', reply);
             });
-            return;
-        }
-
-        const giftCmd = this.onGiftCommand && /(ปิด|เปิด)\s*แอค(?:เคา\S*)?\s*(?:ของ)?\s*ขวัญ/.exec(text);
-        if (giftCmd) {
-            this.onGiftCommand(giftCmd[1] === 'ปิด').then(reply => this.addMessage('received', reply));
             return;
         }
 
@@ -694,7 +687,6 @@ class MoChat {
      * Send an image: ย่อรูปก่อน (เก็บใน localStorage ได้) แล้วให้โมดู
      */
     async sendImage(file) {
-        if (window.MoGuestGuard && !window.MoGuestGuard()) return;
         if (this.isTyping) return;
         if (file.type.startsWith('video/')) return this.sendVideo(file);
         let dataUrl;
@@ -770,7 +762,7 @@ class MoChat {
         const delay = this.life ? this.life.replyDelay() : 0;
         if (delay === 0 && !this.pendingReply) {
             // ถือมือถืออยู่: ส่วนใหญ่ตอบเลย บางทีขึ้น "อ่านแล้ว" ก่อนแล้วค่อยพิมพ์ (กำลังคิด/ทำอย่างอื่นอยู่)
-            if (Math.random() < 0.25 && !window.MO_GUEST) {
+            if (Math.random() < 0.25) {
                 this.mind && this.mind.decide('อ่านแล้ว แต่ขอคิดแป๊บก่อนตอบ');
                 this.markUnread();
                 this.markRead();

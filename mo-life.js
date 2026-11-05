@@ -488,7 +488,6 @@ class MoLife {
      * โมจะเห็นแชทในอีกกี่ ms (Infinity = ยังไม่เห็นจนกว่าจะเปลี่ยนกิจกรรม)
      */
     replyDelay() {
-        if (window.MO_GUEST) return 0;   // แอคเคานต์ของขวัญ: คุยได้แค่ 15 ข้อความ ตอบทันทีเสมอ
         const c = this.state.current;
         if (!c) return 0;
         switch (c.phone) {

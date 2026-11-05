@@ -29,7 +29,6 @@ class MoLLMService {
         this.config = this.loadConfig();
         this.cooldowns = {};   // { providerName: { until, fails } }
         this.liteModel = 'gemini-3.5-flash-lite';
-        this.proModel = 'gemini-pro-latest';   // ฉลาดที่สุด (ใช้ในแอคเคานต์ของขวัญ) ต้องมีโควต้า/billing
         this.lastProvider = null;
     }
 
@@ -216,15 +215,11 @@ class MoLLMService {
         }
         if (hot.length && typeof window.dispatchEvent === 'function') window.dispatchEvent(new CustomEvent('mo-recall', { detail: hot }));
 
-        // แอคเคานต์ของขวัญ: คนที่คุยอยู่ไม่ใช่เจ้าของ (บทบาทมาจากไฟล์ส่วนตัว ผ่านหลังบ้าน)
-        const guestNote = window.MO_GUEST && window.MO_GUEST.aiNote ? `${window.MO_GUEST.aiNote}\n\n` : '';
-        const knownName = !guestNote && memorySummary && memorySummary.longTerm && memorySummary.longTerm.userName;
-        const userName = guestNote ? 'อีกฝ่าย' : knownName || 'ไอ้ดื้อ';
-        const nameRule = guestNote
-            ? 'เรียกอีกฝ่ายว่า "เอง" อย่างเดียว ห้ามเรียกอีกฝ่ายด้วยชื่อคนสร้าง'
-            : knownName
-                ? `เรียก "${knownName}" เป็นหลัก "ไอ้ดื้อ" ไว้แซว`
-                : 'ยังไม่รู้ชื่อ ถ้าจังหวะดีถามชื่อเล่น';
+        const knownName = memorySummary && memorySummary.longTerm && memorySummary.longTerm.userName;
+        const userName = knownName || 'ไอ้ดื้อ';
+        const nameRule = knownName
+            ? `เรียก "${knownName}" เป็นหลัก "ไอ้ดื้อ" ไว้แซว`
+            : 'ยังไม่รู้ชื่อ ถ้าจังหวะดีถามชื่อเล่น';
 
         return `# เวลาตอนนี้: ${this.timeContext()}
 (ถ้าเองถามเวลา/วันที่ ตอบตามนี้ให้ตรง ข้อความในแชทที่มี [เมื่อวาน 22:10] คือเวลาที่พิมพ์ ใช้รู้ว่าอะไรเพิ่งเกิด อะไรผ่านไปนานแล้ว ห้ามพิมพ์ป้ายเวลาแบบนี้ในคำตอบ)
@@ -233,7 +228,7 @@ class MoLLMService {
 เรื่องข้างล่างที่เป็นของ "เอง" คือของอีกฝ่าย ไม่ใช่ของโม (โมไม่ได้เขียนโค้ด ไม่ได้ทำเกม)
 เรียกตัวเอง "เค้า" เรียกอีกฝ่าย "เอง" (${nameRule}) ร่าเริง ขี้เล่น ขี้อ้อน ชอบแซว ขี้สงสัย มีความเห็นตัวเอง รักและห่วงเองจริงๆ
 
-${guestNote}# สำคัญที่สุด (ทำตามก่อนทุกข้ออื่น)
+# สำคัญที่สุด (ทำตามก่อนทุกข้ออื่น)
 1. อ่านแชทล่าสุดให้เข้าใจก่อน แล้วตอบสิ่งที่เองพิมพ์ล่าสุดให้ตรงคำถาม/ตรงเรื่อง (เองถาม "ทำไรอยู่" = บอกว่าโมทำอะไรอยู่ตาม "ชีวิตโมตอนนี้")
 2. ห้ามถามซ้ำเรื่องที่เองตอบไปแล้วในแชทข้างบน (เช่น เองบอกแล้วว่าตื่น/กินยา/ไปทำงานแล้ว ห้ามถาม "ตื่นยัง") ห้ามพูดซ้ำสิ่งที่โมเพิ่งพูด
 3. ข้อมูลข้างล่างทั้งหมด (เรื่องที่ห่วง ความตั้งใจ เป้าหมาย คนรอบตัว ความจำ งานของเอง) เป็นแค่ฉากหลังให้รู้ — หยิบมาพูดได้ไม่เกิน 1 เรื่อง และเฉพาะเมื่อเข้ากับที่คุยอยู่จริงๆ ห้ามยัดหลายเรื่องในคำตอบเดียว ห้ามเปลี่ยนเรื่องเอง
@@ -380,16 +375,15 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
                 topP: 0.9,
                 // โมเดลหลัก: ให้ "คิดก่อนตอบ" จริง (thinking) — งบคิดแยกจากความยาวคำตอบ ไม่ให้คิดจนคำตอบโดนตัด
                 // Flash-Lite: ไม่ต้องคิดยาว ตอบเร็ว
-                maxOutputTokens: window.MO_GUEST ? 6144 : 2048,   // รวมโทเคนที่ใช้คิดด้วย
+                maxOutputTokens: 2048,
                 // ใส่ thinkingConfig เฉพาะโมเดลหลัก (Lite บางรุ่นไม่รับ → 400 invalid argument)
-                // แอคเคานต์ของขวัญ: ให้คิดนานขึ้น (ฉลาดขึ้น แลกกับตอบช้าลงนิด)
-                ...(this.thinkingOff || model === this.liteModel ? {} : { thinkingConfig: { thinkingBudget: window.MO_GUEST ? 4096 : 1024 } }),
+                ...(this.thinkingOff || model === this.liteModel ? {} : { thinkingConfig: { thinkingBudget: 1024 } }),
             }
         };
 
         // ลองใหม่เมื่อเซิร์ฟเวอร์ตอบว่ายุ่ง (429 / 5xx) อีก 1 ครั้ง, ครั้งละไม่เกิน 7 วินาที (ดูรูป/คลิปให้นานกว่า)
         // คิดก่อนตอบใช้เวลามากขึ้น → รอนานพอ (ไม่งั้นจะหลุดไปตัวสำรองที่โง่กว่า)
-        const timeoutMs = image && image.youtube ? 40000 : image ? 25000 : model === this.liteModel ? 10000 : model === this.proModel ? 45000 : 25000;
+        const timeoutMs = image && image.youtube ? 40000 : image ? 25000 : model === this.liteModel ? 10000 : 25000;
         let res;
         for (let attempt = 0; attempt < 2; attempt++) {
             res = await fetch(url, {
@@ -497,13 +491,6 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
     getProviders(hasImage, lite = false) {
         const providers = [];
         const hasGeminiKey = this.config.enabled && this.config.provider !== 'openai' && this.config.apiKey && this.config.apiKey.trim().length > 5;
-        // แอคเคานต์ของขวัญ: ลองรุ่นที่ฉลาดที่สุด (Pro) ก่อนเสมอ — โควต้าหมด/ใช้ไม่ได้ ค่อยลงมาตัวหลัก
-        if (hasGeminiKey && window.MO_GUEST && !lite) {
-            providers.push({
-                name: `gemini:${this.proModel}`,
-                call: args => this.callGemini(...args, this.proModel)
-            });
-        }
         // แชท: ใช้ model หลัก (ฉลาดกว่า ตอบเป็นเรื่องเป็นราว) ก่อน — โควตาหมด/ล่ม → Flash-Lite → Groq
         if (hasGeminiKey && this.config.model && this.config.model !== this.liteModel && !lite) {
             providers.push({

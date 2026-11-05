@@ -131,7 +131,7 @@
     call.setResponder(async (text) => {
         memory.extractFacts(text);
         // โทรด่วน: บอกโมว่านี่เป็นเรื่องด่วน (จนกว่าจะวางสาย)
-        const officeTopic = call.fromPush && office ? office.callTopic(chat.messages) : '';
+        const officeTopic = call.fromPush ? office.callTopic(chat.messages) : '';
         const note = officeTopic + (call.urgentNote ? `[ข้อความระบบ: นี่คือสายด่วน${call.urgentNote}— โมจริงจัง ตั้งใจฟัง ถามว่าเกิดอะไรขึ้น ช่วยคิด ไม่เล่นมุก]\n` : '');
         // วิดีโอคอล: แนบภาพจากกล้องให้โมเห็นเอง (เห็นหน้า สีหน้า ที่ที่อยู่)
         const frame = call.videoMode && call.captureFrame();
@@ -822,7 +822,6 @@
         syncStatus.textContent = sync.status + (loggedIn ? when : '');
         syncStatus.className = 'llm-status-msg' + (/ไม่สำเร็จ|ผิด/.test(sync.status) ? ' error' : loggedIn ? ' success' : '');
         syncBtn.classList.toggle('synced', loggedIn && !/ไม่สำเร็จ/.test(sync.status));
-        if (loggedIn && !renderSync.giftTried) { renderSync.giftTried = true; uploadGiftVideo(); }   // เพิ่งล็อกอิน → อัปคลิปฉากจบเลย
     }
     sync.onStatus(renderSync);
 
@@ -862,16 +861,10 @@
         await sync.signOut();
         renderSync();
     });
-    sync.start().then(() => { renderSync(); uploadGiftVideo(); });
-    // แอคเคานต์ของขวัญ: รหัส + จดหมายจากไฟล์ส่วนตัว mo-gift.local.js → ซิงก์ขึ้นแถวของเรา (หลังบ้านส่งให้คนที่ใส่รหัสถูก)
-    if (window.MO_GIFT && !window.MO_GUEST) {
-        const giftJson = JSON.stringify(window.MO_GIFT);
-        if (localStorage.getItem('mo_gift_v1') !== giftJson) localStorage.setItem('mo_gift_v1', giftJson);
-    }
-    // เจ้าของสั่งปิด/เปิดแอคของขวัญผ่านแชท → เขียนแถว gift_closed (หลังบ้านเช็คทุกครั้งที่เขาเข้า/คุย)
+    sync.start().then(() => { renderSync(); cleanupGift(); });
     // ห้องทำงานโม: ต่อแอป (Classroom) เช็กงาน สรุป โทรมารายงาน — งานจริงอยู่ที่หลังบ้าน
-    const office = window.MO_GUEST ? null : new MoOffice({ sync, chat, mind });
-    if (office) chat.onOfficeCommand = async text => {
+    const office = new MoOffice({ sync, chat, mind });
+    chat.onOfficeCommand = async text => {
         if (/ห้องทำงาน/.test(text) && !/คลาสรูม|classroom/i.test(text)) {
             setTimeout(() => office.show(), 600);
             return 'เข้าห้องทำงานเค้ากัน 🏢 ต่อแอปไหนเพิ่มก็กดในนั้นได้เลย';
@@ -879,31 +872,15 @@
         return office.checkNow();
     };
 
-    if (!window.MO_GUEST) chat.onGiftCommand = async close => {
-        if (!sync.client || !sync.user) return 'ต้องล็อกอินซิงก์ในเครื่องนี้ก่อนนะ ถึงจะสั่งปิด/เปิดแอคของขวัญได้';
-        const { error } = await sync.client.from('mo_state').upsert({
-            user_id: sync.user.id, key: 'gift_closed', value: { closed: close, at: Date.now() }, updated_at: new Date().toISOString(),
-        });
-        if (error) return `สั่งไม่สำเร็จ: ${error.message}`;
-        mind.decide(close ? 'ปิดแอคของขวัญตามที่เองสั่ง' : 'เปิดแอคของขวัญตามที่เองสั่ง');
-        return close
-            ? '🔒 ปิดแอคของขวัญแล้วนะ ใครเปิดลิงก์มาจะเจอหน้า "ปิดแล้ว" คนที่คุยอยู่ก็จะคุยต่อไม่ได้\nถ้าจะเปิดใหม่ พิมพ์ "เปิดแอคของขวัญ"'
-            : '🔓 เปิดแอคของขวัญแล้ว ใส่รหัสเข้ามาได้เหมือนเดิม';
-    };
-
-    // คลิปฉากจบ (ไฟล์ส่วนตัวในเครื่องนี้) → อัปขึ้นที่เก็บไฟล์ของเรา (อ่านได้ผ่านหลังบ้านเมื่อใส่รหัสถูกเท่านั้น)
-    async function uploadGiftVideo() {
-        const file = window.MO_GIFT && window.MO_GIFT.endingVideo;
-        if (!file || window.MO_GUEST || !sync.client || !sync.user) return;
-        const res = await fetch(file, { cache: 'no-store' }).catch(() => null);
-        if (!res || !res.ok) return;
-        const blob = await res.blob();
-        const mark = `${file}:${blob.size}`;
-        if (localStorage.getItem('mo_gift_video') === mark) return;
-        const { error } = await sync.client.storage.from('mo-media')
-            .upload(`${sync.user.id}/gift-ending.mp4`, blob, { upsert: true, contentType: 'video/mp4' });
-        if (error) console.warn('gift video upload failed:', error.message);
-        else localStorage.setItem('mo_gift_video', mark);
+    // เอาแอคเคานต์ของขวัญออกแล้ว → ลบข้อมูลที่เคยอัปไว้ (จดหมาย/รหัส/คลิป/สถิติ) ครั้งเดียวต่อเครื่อง
+    async function cleanupGift() {
+        if (localStorage.getItem('mo_gift_removed')) return;
+        ['mo_gift_v1', 'mo_gift_video', 'mo_guest', 'mo_guest_sent', 'mo_guest_owner_chat'].forEach(k => localStorage.removeItem(k));
+        if (!sync.client || !sync.user) return;   // ยังไม่ล็อกอิน → ไว้ลบตอนล็อกอินครั้งหน้า
+        const keys = ['mo_gift_v1', 'gift_visits', 'gift_closed', 'gift_attempts', 'gift_usage'];
+        const { error } = await sync.client.from('mo_state').delete().eq('user_id', sync.user.id).in('key', keys);
+        await sync.client.storage.from('mo-media').remove([`${sync.user.id}/gift-ending.mp4`]).catch(() => {});
+        if (!error) localStorage.setItem('mo_gift_removed', String(Date.now()));
     }
 
     function openMemoryPanel() {
@@ -1303,8 +1280,8 @@
                 </div>
             </div>`;
             })()}
-            ${window.MO_GUEST ? '' : `<button class="house-card office-door" id="house-office" type="button">
-                <span>🏢</span><div><strong>ห้องทำงานโม</strong><small>ต่อแอปต่างๆ ให้โมเช็กงาน สรุป แล้วโทรมารายงาน</small></div><b>›</b></button>`}
+            <button class="house-card office-door" id="house-office" type="button">
+                <span>🏢</span><div><strong>ห้องทำงานโม</strong><small>ต่อแอปต่างๆ ให้โมเช็กงาน สรุป แล้วโทรมารายงาน</small></div><b>›</b></button>
             <div class="house-card house-urgent">
                 <div>
                     <strong>มีเรื่องด่วน?</strong>
@@ -1366,7 +1343,7 @@
             </div>`;
         document.getElementById('house-transfer').addEventListener('click', openTransfer);
         const officeDoor = document.getElementById('house-office');
-        if (officeDoor && office) officeDoor.addEventListener('click', () => office.show());
+        if (officeDoor) officeDoor.addEventListener('click', () => office.show());
         // แตะสมุดบนโต๊ะ → อ่านไดอารี่ของโม
         const diaryEl = document.querySelector('.hv-diary');
         if (diaryEl) diaryEl.addEventListener('click', openDiaryBook);

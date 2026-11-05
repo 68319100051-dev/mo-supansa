@@ -28,14 +28,8 @@ export default {
             const rows = await db(env, `mo_state?select=value&key=like.push_sub:*&value->>endpoint=eq.${encodeURIComponent(endpoint)}`);
             return json((rows[0] && rows[0].value.inbox) || {});
         }
-        // ลิงก์ของขวัญ: หน้าเดียวกับแอป แต่ชื่อ/ไอคอน/ตัวอย่างลิงก์ (LINE, Messenger) เป็นกลางๆ ไม่บอกว่าเป็นโม
-        if (url.pathname === '/gift/') return Response.redirect(`${url.origin}/gift${url.search}`, 301);
-        if (url.pathname === '/gift') return giftPage(request, env, url);
         if (url.pathname.startsWith('/api/office/')) {
             return handleOffice(request, env, url, ctx).catch(err => json({ error: String(err.message || err).slice(0, 200) }, 500));
-        }
-        if (url.pathname.startsWith('/api/gift/')) {
-            return handleGift(request, env, url, ctx).catch(err => json({ error: String(err.message || err).slice(0, 200) }, 500));
         }
         return env.ASSETS.fetch(request);
     },
@@ -46,33 +40,6 @@ export default {
         ctx.waitUntil(officeRun(env));   // ห้องทำงานโม: เช็ก Classroom ทุก 15 นาที
     },
 };
-
-const GIFT_TITLE = '💌 มีจดหมายมาถึง';
-const GIFT_DESC = 'มีคนฝากของไว้ให้ เปิดดูสิ';
-const GIFT_ICON = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💌</text></svg>";
-
-async function giftPage(request, env, url) {
-    // ขอ "/" (ไม่ใช่ /index.html ซึ่ง assets จะ redirect กลับมา "/")
-    const page = await env.ASSETS.fetch(new Request(`${url.origin}/`, { headers: request.headers }));
-    const drop = { element: el => el.remove() };
-    return new HTMLRewriter()
-        .on('title', { element: el => el.setInnerContent(GIFT_TITLE) })
-        .on('meta[name="description"]', { element: el => el.setAttribute('content', GIFT_DESC) })
-        .on('meta[name="apple-mobile-web-app-title"]', { element: el => el.setAttribute('content', '💌') })
-        .on('link[rel="manifest"]', drop)
-        .on('link[rel="apple-touch-icon"]', drop)
-        .on('link[rel="icon"]', drop)
-        .on('head', {
-            element: el => el.append(
-                `<link rel="icon" href="${GIFT_ICON}">`
-                + `<meta property="og:title" content="${GIFT_TITLE}">`
-                + `<meta property="og:description" content="${GIFT_DESC}">`
-                + '<meta property="og:type" content="website">'
-                + '<meta name="twitter:card" content="summary">',
-                { html: true }),
-        })
-        .transform(new Response(page.body, { status: page.status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } }));
-}
 
 function json(data, status = 200) {
     return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json' } });
@@ -485,59 +452,30 @@ async function sendFcm(env, token, inbox) {
 }
 
 // =============================================
-//  แอคเคานต์ของขวัญ 💌 (เข้าด้วยรหัส ไม่ต้องมีบัญชี)
-//  - รหัส/จดหมายอยู่ในแถว mo_gift_v1 ของเจ้าของ (ซิงก์จากไฟล์ส่วนตัว mo-gift.local.js) ไม่อยู่ในโค้ด
-//  - คนที่ใส่รหัสถูกได้ token → อ่านข้อมูลโมของเจ้าของ (อ่านอย่างเดียว) + ใช้ AI ผ่านหลังบ้าน (คีย์ไม่ออกจาก server)
-//  - ใส่ผิดเกิน 8 ครั้ง ล็อก 30 นาที / AI จำกัดวันละ 80 ครั้ง
+//  ตัวช่วยที่ใช้ร่วมกัน: อ่าน/เขียนแถวของผู้ใช้, ลายเซ็น, โมรายงานเจ้าของ
 // =============================================
 
-// ข้อมูลที่ส่งให้แอคเคานต์ของขวัญ (ไม่มีคีย์ ไม่มีรหัส ไม่มีข้อมูลซิงก์)
-const GIFT_KEYS = [
-    'mo_chat_history_v2', 'mo_memory_v2', 'mo_stats_v2', 'mo_memory_settings_v2', 'mo_life_v1', 'mo_mind_v1', 'mo_diary_v1',
-    'mo_reminders_v1', 'mo_clips_v1', 'mo_clips_sent_v1', 'mo_special_days_v1', 'mo_routines_v1', 'mo_followups_v1', 'mo_self_v1',
-    'mo_profile_v1', 'mo_stories_v1', 'mo_games_v1', 'mo_social_v1', 'mo_care_v1', 'mo_inner_v1', 'mo_psyche_v1', 'mo_home_v1', 'mo_quests_v1',
-];
-const GIFT_AI_PER_DAY = 80;
-
-async function giftRow(env) {
-    const rows = await db(env, 'mo_state?select=user_id,value&key=eq.mo_gift_v1&order=updated_at.desc&limit=1');
-    return rows && rows[0] && rows[0].value && rows[0].value.guestPin ? rows[0] : null;
-}
-
-async function giftGet(env, userId, key) {
+async function stateGet(env, userId, key) {
     const rows = await db(env, `mo_state?select=value&user_id=eq.${userId}&key=eq.${key}`);
     return rows && rows[0] ? rows[0].value : null;
 }
 
-function giftPut(env, userId, key, value) {
+function statePut(env, userId, key, value) {
     return upsert(env, [{ user_id: userId, key, value, updated_at: new Date().toISOString() }]);
 }
 
-async function giftSign(env, text) {
-    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('mo-gift:' + env.SUPABASE_SERVICE_ROLE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+async function signText(env, text) {
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('mo-sign:' + env.SUPABASE_SERVICE_ROLE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     return b64u.encode(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(text)));
 }
 
-async function giftToken(env, payload) {
+async function signedToken(env, payload) {
     const body = b64u.encode(new TextEncoder().encode(JSON.stringify(payload)));
-    return `${body}.${await giftSign(env, body)}`;
-}
-
-async function giftAuth(env, request) {
-    // วิดีโอ (<video src>) ส่ง header เองไม่ได้ → รับ token จาก ?t= ด้วย
-    const raw = (request.headers.get('authorization') || '').replace(/^Bearer /, '') || new URL(request.url).searchParams.get('t') || '';
-    const [body, sig] = raw.split('.');
-    if (!body || !sig || sig !== await giftSign(env, body)) return null;
-    try {
-        const p = JSON.parse(new TextDecoder().decode(b64u.decode(body)));
-        return p.exp > Date.now() ? p : null;
-    } catch (e) {
-        return null;
-    }
+    return `${body}.${await signText(env, body)}`;
 }
 
 /** โมรายงานเจ้าของ: เขียนข้อความลงแชทของเรา + เด้งแจ้งเตือนทุกเครื่องที่สมัครไว้ */
-async function giftNotify(env, userId, text, opts = {}) {
+async function moNotify(env, userId, text, opts = {}) {
     const rows = await db(env, `mo_state?select=key,value&user_id=eq.${userId}&or=(key.eq.mo_chat_history_v2,key.like.push_sub:*,key.like.fcm_token:*)`);
     const chatRow = rows.find(r => r.key === 'mo_chat_history_v2');
     const chat = chatRow && Array.isArray(chatRow.value) ? chatRow.value : [];
@@ -546,7 +484,7 @@ async function giftNotify(env, userId, text, opts = {}) {
     const tz = subs[0] ? Number(subs[0].value.tz) || -420 : -420;
     const local = new Date(now - tz * 60000);
     const hhmm = `${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
-    const msg = { id: now + Math.random(), type: 'received', text, format: 'text', time: hhmm, timestamp: now, dueKey: `${opts.tag || 'gift'}:${now}` };
+    const msg = { id: now + Math.random(), type: 'received', text, format: 'text', time: hhmm, timestamp: now, dueKey: `${opts.tag || 'mo'}:${now}` };
     await upsert(env, [{ user_id: userId, key: 'mo_chat_history_v2', value: [...chat, msg].slice(-200), updated_at: new Date().toISOString() }]);
     // call = เด้งเป็นสายเรียกเข้า (ห้องทำงาน: งานใหม่) / กลางคืน 22:00-07:00 ไม่โทร ส่งเป็นแชทแทน
     const night = local.getUTCHours() >= 22 || local.getUTCHours() < 7;
@@ -561,122 +499,6 @@ async function giftNotify(env, userId, text, opts = {}) {
         await upsert(env, [{ user_id: userId, key: sub.key, value: { ...sub.value, inbox }, updated_at: new Date().toISOString() }]);
         await sendPush(env, sub.value.endpoint).catch(() => 0);
     }
-}
-
-async function giftLog(env, userId, type, extra = {}) {
-    const v = (await giftGet(env, userId, 'gift_visits')) || { count: 0, events: [] };
-    const now = Date.now();
-    if (type === 'login') { v.count = (v.count || 0) + 1; v.first = v.first || now; }
-    v.last = now;
-    if (type === 'letter_done') v.letterDone = v.letterDone || now;
-    if (type === 'messages') v.messages = Math.max(v.messages || 0, Number(extra.n) || 0);
-    v.events = [...(v.events || []), { at: now, type, ...(extra.n ? { n: Number(extra.n) } : {}) }].slice(-50);
-    // รายงานเจ้าของ: เข้ามา (เว้น 30 นาทีกันเด้งรัว) / คุยครบ / บ้ายบาย
-    let note = '';
-    if (type === 'login' && now - (v.notifiedAt || 0) > 30 * 60000) {
-        note = `💌 เจ็ทๆ มีคนเข้าแอคของขวัญแล้วนะ (ครั้งที่ ${v.count}) 👀\nถ้าอยากปิดแอคนั้น พิมพ์ "ปิดแอคของขวัญ" มาได้เลย`;
-        v.notifiedAt = now;
-    }
-    if (type === 'letter_done') note = '💌 เขาอ่านจดหมายจบแล้วนะ กำลังเริ่มคุยกับเค้า (โมตอน ปวช.3) 🥹';
-    if (type === 'limit') note = '💌 เขาคุยครบโควต้าแล้วนะ กำลังดูฉากจบอยู่';
-    if (type === 'bye') note = '💌 เขากดบ้ายบายไปแล้ว จบครบทุกฉากเลย 💗\nจะปิดแอคของขวัญเลยไหม? พิมพ์ "ปิดแอคของขวัญ" ได้';
-    await giftPut(env, userId, 'gift_visits', v);
-    if (note) await giftNotify(env, userId, note).catch(e => console.error('gift notify failed', e.message));
-}
-
-/** เจ้าของปิดแอคของขวัญไว้ไหม (แถว gift_closed ที่แอปเจ้าของเขียน) */
-async function giftClosed(env, userId) {
-    const v = await giftGet(env, userId, 'gift_closed');
-    return Boolean(v && v.closed);
-}
-
-async function handleGift(request, env, url, ctx) {
-    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ error: 'ยังไม่ได้ตั้งค่าหลังบ้าน' }, 503);
-    const route = url.pathname.slice('/api/gift/'.length);
-
-    if (route === 'hint') {
-        const row = await giftRow(env);
-        if (row && await giftClosed(env, row.user_id)) return json({ ready: true, closed: true });
-        return json(row ? { ready: true, hint: row.value.hint || '', faint: row.value.faint || '' } : { ready: false });
-    }
-
-    if (route === 'login' && request.method === 'POST') {
-        const row = await giftRow(env);
-        if (!row) return json({ error: 'ยังไม่พร้อม' }, 503);
-        if (await giftClosed(env, row.user_id)) return json({ closed: true }, 403);
-        const { pin } = await request.json().catch(() => ({}));
-        const att = (await giftGet(env, row.user_id, 'gift_attempts')) || { fails: 0, until: 0 };
-        if (att.until > Date.now()) return json({ locked: true, mins: Math.ceil((att.until - Date.now()) / 60000) }, 429);
-        const mode = pin === row.value.guestPin ? 'guest' : pin === row.value.ownerPin ? 'owner' : null;
-        if (!mode) {
-            att.fails = (att.fails || 0) + 1;
-            if (att.fails >= 8) { att.until = Date.now() + 30 * 60000; att.fails = 0; }
-            await giftPut(env, row.user_id, 'gift_attempts', att);
-            return json({ wrong: true, left: att.until > Date.now() ? 0 : 8 - att.fails }, 401);
-        }
-        if (att.fails) await giftPut(env, row.user_id, 'gift_attempts', { fails: 0, until: 0 });
-        if (mode === 'guest') ctx ? ctx.waitUntil(giftLog(env, row.user_id, 'login')) : await giftLog(env, row.user_id, 'login');
-        const token = await giftToken(env, { u: row.user_id, m: mode, exp: Date.now() + 60 * 86400000 });
-        return json({ token, mode });
-    }
-
-    const auth = await giftAuth(env, request);
-    if (!auth) return json({ error: 'ต้องใส่รหัสก่อน' }, 401);
-    if (await giftClosed(env, auth.u)) return json({ closed: true, error: { message: 'gift closed' } }, 403);
-    if (route === 'ping') return json({ ok: true });
-
-    // คลิปฉากจบ: อ่านจากที่เก็บไฟล์ของเจ้าของ ส่งต่อทีละช่วง (Range — iPhone ต้องใช้)
-    if (route === 'video') {
-        const range = request.headers.get('range');
-        const res = await fetch(`${env.SUPABASE_URL}/storage/v1/object/mo-media/${auth.u}/gift-ending.mp4`, {
-            headers: {
-                apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-                ...(env.SUPABASE_SERVICE_ROLE_KEY.startsWith('sb_') ? {} : { Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` }),
-                ...(range ? { range } : {}),
-            },
-        });
-        if (!res.ok && res.status !== 206) return json({ error: 'ไม่มีคลิป' }, 404);
-        const headers = { 'content-type': 'video/mp4', 'accept-ranges': 'bytes', 'cache-control': 'private, max-age=3600' };
-        for (const h of ['content-length', 'content-range']) if (res.headers.get(h)) headers[h] = res.headers.get(h);
-        return new Response(res.body, { status: res.status, headers });
-    }
-
-    if (route === 'state') {
-        const rows = await db(env, `mo_state?select=key,value&user_id=eq.${auth.u}&key=in.(${GIFT_KEYS.join(',')})`);
-        const gift = (await giftGet(env, auth.u, 'mo_gift_v1')) || {};
-        const { guestPin, ownerPin, faint, hint, ...open } = gift;
-        return json({ keys: Object.fromEntries(rows.map(r => [r.key, r.value])), gift: open, mode: auth.m });
-    }
-
-    if (route === 'event' && request.method === 'POST') {
-        const { type, n } = await request.json().catch(() => ({}));
-        if (auth.m === 'guest' && /^(letter_open|letter_done|tour_done|messages|limit|bye)$/.test(type)) {
-            const job = giftLog(env, auth.u, type, { n });
-            ctx ? ctx.waitUntil(job) : await job;
-        }
-        return json({ ok: true });
-    }
-
-    if (route === 'ai' && request.method === 'POST') {
-        const { path, method = 'POST', payload } = await request.json().catch(() => ({}));
-        if (!/^models\/[\w.-]+(:(generateContent|batchEmbedContents))?$/.test(path || '')) return json({ error: 'ไม่อนุญาต' }, 400);
-        const keys = (await giftGet(env, auth.u, 'mo_device_keys_v1')) || {};
-        if (!keys.gemini) return json({ error: 'ไม่มีคีย์' }, 503);
-        const today = new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
-        const usage = (await giftGet(env, auth.u, 'gift_usage')) || {};
-        const u = usage[auth.m] && usage[auth.m].day === today ? usage[auth.m] : { day: today, calls: 0 };
-        if (u.calls >= GIFT_AI_PER_DAY) return json({ error: { message: 'gift daily limit' } }, 429);
-        usage[auth.m] = { day: today, calls: u.calls + 1 };
-        await giftPut(env, auth.u, 'gift_usage', usage);
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${path}`, {
-            method: method === 'GET' ? 'GET' : 'POST',
-            headers: { 'content-type': 'application/json', 'x-goog-api-key': keys.gemini },
-            ...(method === 'GET' ? {} : { body: JSON.stringify(payload || {}) }),
-        });
-        return new Response(res.body, { status: res.status, headers: { 'content-type': 'application/json' } });
-    }
-
-    return json({ error: 'ไม่พบ' }, 404);
 }
 
 // =============================================
@@ -725,7 +547,7 @@ async function officeUnseal(env, sealed) {
 
 async function officeVerify(env, raw) {
     const [body, sig] = String(raw || '').split('.');
-    if (!body || !sig || sig !== await giftSign(env, body)) return null;
+    if (!body || !sig || sig !== await signText(env, body)) return null;
     try {
         const p = JSON.parse(new TextDecoder().decode(b64u.decode(body)));
         return p.exp > Date.now() ? p : null;
@@ -747,8 +569,8 @@ async function googleAccess(env, userId, g) {
     if (!res.ok || !j.access_token) {
         // ถูกถอนสิทธิ์/หมดอายุ → ทำเครื่องหมาย + บอกเจ้าของครั้งเดียว
         if (j.error === 'invalid_grant' && !g.broken) {
-            await giftPut(env, userId, 'office_google', { ...g, broken: true });
-            await giftNotify(env, userId, '🏢 การเชื่อม Google Classroom หลุดแล้วนะ เข้าห้องทำงานโมแล้วกดเชื่อมใหม่ทีนึง', { tag: 'office' }).catch(() => {});
+            await statePut(env, userId, 'office_google', { ...g, broken: true });
+            await moNotify(env, userId, '🏢 การเชื่อม Google Classroom หลุดแล้วนะ เข้าห้องทำงานโมแล้วกดเชื่อมใหม่ทีนึง', { tag: 'office' }).catch(() => {});
         }
         throw new Error(`google token ${res.status} ${j.error || ''}`);
     }
@@ -796,9 +618,9 @@ ${it.due ? `กำหนดส่ง: ${it.due}` : ''}${it.materials && it.mater
  * seed = ครั้งแรกหลังเชื่อม (จำของเดิมไว้ ไม่รายงานย้อนหลังทั้งหมด) / manual = เจ้าของสั่งเช็กเดี๋ยวนี้
  */
 async function officeClassroom(env, userId, { seed = false, manual = false } = {}) {
-    const g = await giftGet(env, userId, 'office_google');
+    const g = await stateGet(env, userId, 'office_google');
     if (!g || g.broken) return { ok: false, reason: g ? 'broken' : 'not_connected' };
-    const st = (await giftGet(env, userId, 'office_classroom')) || { seen: {}, lastCheck: 0 };
+    const st = (await stateGet(env, userId, 'office_classroom')) || { seen: {}, lastCheck: 0 };
     const now = Date.now();
     if (!seed && !manual && now - (st.lastCheck || 0) < OFFICE_EVERY_MS) return { ok: true, skipped: true };
     const seeding = seed || !st.lastCheck;
@@ -837,26 +659,26 @@ async function officeClassroom(env, userId, { seed = false, manual = false } = {
         // จำแค่ 600 อันล่าสุด
         st.seen = Object.fromEntries(Object.entries(st.seen).sort((a, b) => b[1] - a[1]).slice(0, 600));
 
-        const keys = (await giftGet(env, userId, 'mo_device_keys_v1')) || {};
+        const keys = (await stateGet(env, userId, 'mo_device_keys_v1')) || {};
         const reports = [];
         for (const it of fresh.slice(0, 6)) {
             const s = await officeSummarize(keys.gemini, it);
             reports.push({ id: it.id, app: 'classroom', kind: it.kind, course: it.course, title: it.title, due: it.due, link: it.link, ...s, at: now });
         }
         if (reports.length) {
-            const old = (await giftGet(env, userId, 'office_reports')) || [];
-            await giftPut(env, userId, 'office_reports', [...reports, ...old].slice(0, 60));
+            const old = (await stateGet(env, userId, 'office_reports')) || [];
+            await statePut(env, userId, 'office_reports', [...reports, ...old].slice(0, 60));
             const works = reports.filter(r => r.kind === 'work');
             const lines = reports.map(r => `${r.kind === 'work' ? '📝' : '📢'} ${r.course}: ${r.title}${r.due ? ` (ส่ง ${r.due})` : ''}\n${r.summary}${r.todo ? `\n👉 ${r.todo}` : ''}`);
             const head = works.length ? `📚 เจ็ทๆ มีงานใหม่ใน Classroom ${works.length} งาน` : '📢 มีประกาศใหม่ใน Classroom';
-            await giftNotify(env, userId, `${head}\n\n${lines.join('\n\n')}`.slice(0, 1500), { tag: 'office', call: works.length > 0 });
+            await moNotify(env, userId, `${head}\n\n${lines.join('\n\n')}`.slice(0, 1500), { tag: 'office', call: works.length > 0 });
         }
         Object.assign(st, { lastCheck: now, courses: courses.length, error: null, email: g.email });
-        await giftPut(env, userId, 'office_classroom', st);
+        await statePut(env, userId, 'office_classroom', st);
         return { ok: true, courses: courses.length, fresh: reports, seeded: seeding };
     } catch (e) {
         Object.assign(st, { lastCheck: now, error: String(e.message || e).slice(0, 200) });
-        await giftPut(env, userId, 'office_classroom', st);
+        await statePut(env, userId, 'office_classroom', st);
         return { ok: false, reason: 'error', error: st.error };
     }
 }
@@ -890,9 +712,9 @@ async function handleOffice(request, env, url, ctx) {
         if (!res.ok || !j.refresh_token) return Response.redirect(`${url.origin}/?office=failed`, 302);
         let email = '';
         try { email = JSON.parse(new TextDecoder().decode(b64u.decode(j.id_token.split('.')[1]))).email || ''; } catch (e) {}
-        await giftPut(env, state.u, 'office_google', { rt: await officeSeal(env, j.refresh_token), email, at: Date.now(), scope: j.scope || '' });
-        await giftPut(env, state.u, 'office_classroom', { seen: {}, lastCheck: 0 });
-        const first = officeClassroom(env, state.u, { seed: true }).then(r => r.ok && giftNotify(env, state.u,
+        await statePut(env, state.u, 'office_google', { rt: await officeSeal(env, j.refresh_token), email, at: Date.now(), scope: j.scope || '' });
+        await statePut(env, state.u, 'office_classroom', { seen: {}, lastCheck: 0 });
+        const first = officeClassroom(env, state.u, { seed: true }).then(r => r.ok && moNotify(env, state.u,
             `🏢 ต่อ Google Classroom เสร็จแล้ว! เจอ ${r.courses} วิชา\nต่อไปมีงานหรือประกาศใหม่ เค้าจะอ่านแล้วสรุปมาบอก (งานใหม่จะโทรมารายงานเลย 📞)`, { tag: 'office' }));
         ctx ? ctx.waitUntil(first) : await first;
         return Response.redirect(`${url.origin}/?office=connected`, 302);
@@ -903,7 +725,7 @@ async function handleOffice(request, env, url, ctx) {
 
     if (route === 'status') {
         const [g, st, reports] = await Promise.all([
-            giftGet(env, user.id, 'office_google'), giftGet(env, user.id, 'office_classroom'), giftGet(env, user.id, 'office_reports'),
+            stateGet(env, user.id, 'office_google'), stateGet(env, user.id, 'office_classroom'), stateGet(env, user.id, 'office_reports'),
         ]);
         return json({
             ready,
@@ -916,7 +738,7 @@ async function handleOffice(request, env, url, ctx) {
     if (!ready) return json({ error: 'ยังไม่ได้ตั้ง GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET ใน Cloudflare' }, 503);
 
     if (route === 'google/start' && request.method === 'POST') {
-        const state = await giftToken(env, { u: user.id, p: 'office', exp: Date.now() + 10 * 60000 });
+        const state = await signedToken(env, { u: user.id, p: 'office', exp: Date.now() + 10 * 60000 });
         const auth = new URL('https://accounts.google.com/o/oauth2/v2/auth');
         Object.entries({
             client_id: env.GOOGLE_CLIENT_ID, redirect_uri: redirectUri, response_type: 'code',
@@ -930,7 +752,7 @@ async function handleOffice(request, env, url, ctx) {
     }
 
     if (route === 'google/disconnect' && request.method === 'POST') {
-        const g = await giftGet(env, user.id, 'office_google');
+        const g = await stateGet(env, user.id, 'office_google');
         if (g && g.rt) {
             const rt = await officeUnseal(env, g.rt).catch(() => '');
             if (rt) await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(rt)}`, { method: 'POST' }).catch(() => {});
