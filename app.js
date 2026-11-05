@@ -324,10 +324,28 @@
     // Record first meeting
     memory.recordFirstMeet();
 
+    // หน้าต่างแชทลอย (หัวแชทในแอป Android เปิด ?mini=1): แชทข้อความอย่างเดียว ไม่มี splash
+    // ไม่เริ่มระบบทักเอง/เตือนซ้ำ — แอปหลักทำอยู่แล้ว (กันโมทักสองรอบ)
+    const MINI = new URLSearchParams(location.search).has('mini');
+    if (MINI) document.documentElement.classList.add('mini');
+
+    // แอปหลัก + หน้าต่างแชทลอยใช้ประวัติแชทชุดเดียวกัน → กลับมาเห็นจอเมื่อไหร่ อ่านของล่าสุดใหม่
+    const reloadChat = () => {
+        const saved = memory.loadChatHistory();
+        const last = m => (m.length ? m[m.length - 1].id : null);
+        if (saved.length && last(saved) !== last(chat.messages)) chat.loadHistory();
+    };
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) reloadChat(); });
+    window.addEventListener('mo-mini-open', () => {
+        reloadChat();
+        setTimeout(() => document.getElementById('message-input').focus(), 250);
+    });
+
     // After splash animation
     setTimeout(() => {
         app.classList.remove('hidden');
-        
+        if (MINI) return;
+
         // If first time, show welcome
         if (chat.getMessageCount() === 0) {
             showWelcome();
@@ -338,7 +356,7 @@
         reminders.start();
         routines.start();
 
-    }, 3200);
+    }, MINI ? 0 : 3200);
 
     // ======= Welcome Message =======
     function showWelcome() {

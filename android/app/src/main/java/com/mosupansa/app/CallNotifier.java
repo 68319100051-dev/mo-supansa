@@ -95,7 +95,7 @@ public final class CallNotifier {
 
     static void showChat(Context ctx, String title, String body) {
         ensureChannels(ctx);
-        ChatHeadService.bump();
+        ChatHeadService.incoming(ctx, body);
         Notification n = new NotificationCompat.Builder(ctx, CHANNEL_CHAT)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title != null ? title : "โม 💕")

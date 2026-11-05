@@ -31,7 +31,7 @@ public class AlarmReceiver extends BroadcastReceiver {
         } else if (Intent.ACTION_BOOT_COMPLETED.equals(action) || "android.intent.action.QUICKBOOT_POWERON".equals(action)
             || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)) {
             AlarmScheduler.scheduleAll(ctx);
-            if (ChatHeadService.isWanted(ctx)) ChatHeadService.start(ctx);
+            if (ChatHeadService.isWanted(ctx)) ChatHeadService.start(ctx, null);
         }
     }
 }

@@ -5711,3 +5711,12 @@ button.mind-region-chip {
     font-size: 0.86rem;
     line-height: 1.4;
 }
+
+/* ===== หน้าต่างแชทลอย (หัวแชทแอป Android, ?mini=1): ข้อความอย่างเดียว ===== */
+html.mini .splash-screen,
+html.mini .top-bar,
+html.mini .bottom-nav,
+html.mini .input-actions-left,
+html.mini #btn-mic,
+html.mini .chat-date-divider { display: none !important; }
+html.mini .app { height: 100vh; height: 100dvh; }
