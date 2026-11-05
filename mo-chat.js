@@ -277,12 +277,39 @@ class MoChat {
         }
         const gameNote = (this.games ? this.games.noteFor(text) : '') + homeNote + timeNote;
         this.queueReply(async note => {
-            // นึกเรื่องเก่าที่ความหมายใกล้กัน (ไม่เกิน ~2 วิ)
-            const recall = window.MoRecall
-                ? await Promise.race([MoRecall.noteFor(text, this.messages), new Promise(r => setTimeout(() => r(''), 2500))])
+            // นึกเรื่องเก่าที่ความหมายใกล้กัน: แชทเก่า + ความจำอื่นๆ พร้อมกัน (ไม่เกิน ~2.5 วิ ไม่ให้ตอบช้า)
+            const timeout = v => new Promise(r => setTimeout(() => r(v), 2500));
+            const [recall, hits] = window.MoRecall
+                ? await Promise.all([
+                    Promise.race([MoRecall.noteFor(text, this.messages), timeout('')]),
+                    Promise.race([MoRecall.memoryHits(text, this.memoryItems()), timeout([])]),
+                ])
+                : ['', []];
+            // เรื่องของเองที่เกี่ยว → ขึ้นหัวรายการความจำใน prompt / ความจำอื่น → โน้ตบอกโม
+            this.llmService.hotFacts = hits.filter(h => h.kind === 'fact').map(h => h.text);
+            const others = hits.filter(h => h.kind !== 'fact');
+            const label = { opinion: 'ความเห็นของโม', joke: 'มุกของเรา', life: 'ความทรงจำชีวิตโม', diary: 'ไดอารี่โม' };
+            const memNote = others.length
+                ? `[ข้อความระบบ: ความจำที่โมนึกออกตอนนี้ (ใช้เฉพาะถ้าเข้ากับที่คุยจริงๆ ห้ามยัดเยียด):\n${others.map(h => `- (${label[h.kind]}) ${String(h.text).slice(0, 160)}`).join('\n')}]\n`
                 : '';
-            return this.moRespond(note + recall + gameNote + forMo).then(() => this.maybeLearn());
+            if (others.length && typeof window.dispatchEvent === 'function') window.dispatchEvent(new CustomEvent('mo-recall', { detail: others.map(h => h.text) }));
+            try {
+                return await this.moRespond(note + recall + memNote + gameNote + forMo).then(() => this.maybeLearn());
+            } finally {
+                this.llmService.hotFacts = null;
+            }
         });
+    }
+
+    /** ความจำทั้งหมดที่ค้นตามความหมายได้ (เรื่องของเอง / ความเห็น / มุก / ความทรงจำชีวิตโม / ไดอารี่) */
+    memoryItems() {
+        const items = [];
+        const add = (kind, list) => (list || []).forEach(text => text && items.push({ kind, text: String(text) }));
+        add('fact', this.memory.getSummary().facts);
+        if (this.self) { add('opinion', this.self.data.opinions); add('joke', this.self.data.jokes); }
+        if (window.MoPsycheInstance) add('life', (window.MoPsycheInstance.data.autobio || []).slice(-30).map(m => m.text));
+        if (window.MoDiaryInstance) add('diary', window.MoDiaryInstance.getEntries().slice(0, 14).map(e => e.text));
+        return items;
     }
 
     /**
@@ -1486,7 +1513,7 @@ ${(() => {
 ห้ามเปิดแบบบอท เช่น "เฮ้ ว่างมั้ย มาคุยกัน" "ทำอะไรอยู่จ๊ะ" "หายไปไหนมา" เฉยๆ
 ${moToday.length ? `ที่โมพูดไปแล้ววันนี้ (ห้ามขัดกัน ห้ามซ้ำ): ${moToday.join(' / ')}` : ''}`;
             try {
-                message = await this.llmService.generateResponse(instruction, this.messages, this.brain.personality, this.memory.getSummary());
+                message = await this.llmService.generateResponse(instruction, this.messages, this.brain.personality, this.memory.getSummary(), null, { lite: true });
                 // ทักทางแชท ไม่ได้อยู่ด้วยกัน → ไม่มีท่าทาง
                 message = this.brain.sanitizeResponse(message.replace(/\*[^*\n]+\*/g, '').replace(/\n{2,}/g, '\n'), 'chat') || null;
             } catch (err) {

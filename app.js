@@ -138,7 +138,7 @@
             try {
                 const cur = life.state.current;
                 const reply = await llm.generateResponse(`${note}[ข้อความระบบ: กำลังวิดีโอคอลกัน รูปที่แนบคือสิ่งที่โมเห็นจากกล้องของเองตอนนี้ พูดถึงสิ่งที่เห็นได้เป็นธรรมชาติเมื่อเข้าจังหวะ (สีหน้า ทรงผม เสื้อ ที่ที่อยู่ แสง) ไม่ต้องบรรยายทุกครั้ง โมอยู่${cur ? (cur.room === 'out' ? cur.place || 'ข้างนอก' : 'ที่บ้าน') : 'ที่บ้าน'} ตอบสั้นๆ แบบคุยโทรศัพท์ 1-2 ประโยค]\n${text}`,
-                    chat.messages, brain.personality, memory.getSummary(), frame);
+                    chat.messages, brain.personality, memory.getSummary(), frame, { lite: true });
                 return brain.sanitizeResponse(reply, 'chat') || reply;
             } catch (e) {
                 console.warn('video reply failed', e.message);
@@ -1188,7 +1188,9 @@
                     'สวัสดี ทักทายเค้าสั้นๆ 1 ประโยค',
                     [],
                     brain.personality,
-                    memory.getSummary()
+                    memory.getSummary(),
+                    null,
+                    { lite: true }
                 );
 
                 llmStatusMsg.textContent = `🎉 โมตอบกลับได้: "${reply}"`;

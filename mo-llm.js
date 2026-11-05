@@ -206,7 +206,9 @@ class MoLLMService {
             for (let i = 0; i < a.length - 1; i++) if (ctx.includes(a.slice(i, i + 2))) hit++;
             return hit / Math.max(6, a.length - 1);
         };
-        const hot = ctx ? facts.map(f => ({ f, s: rel(f) })).filter(x => x.s > 0.4).sort((a, b) => b.s - a.s).slice(0, 3).map(x => x.f) : [];
+        // ค้นตามความหมายได้ (MoRecall) ใช้อันนั้นก่อน / ไม่ได้ (ไม่มีเน็ต/โควต้า) ค่อยเทียบตัวอักษร
+        const semantic = (this.hotFacts || []).filter(f => facts.includes(f)).slice(0, 3);
+        const hot = semantic.length ? semantic : ctx ? facts.map(f => ({ f, s: rel(f) })).filter(x => x.s > 0.4).sort((a, b) => b.s - a.s).slice(0, 3).map(x => x.f) : [];
         const memory = [...hot.map(f => `${f} ← เกี่ยวกับที่คุยตอนนี้`), ...facts.filter(f => !hot.includes(f)), ...events];
         if (window.MoMindInstance) {
             window.MoMindInstance.fire('limbic', 0.4);
@@ -489,18 +491,21 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
     /**
      * ลำดับ AI ที่จะลอง: Groq (ฟรี, เร็ว) → ตัวที่ตั้งไว้ในหน้าตั้งค่า → (สมองออฟไลน์ใน mo-brain)
      */
-    getProviders(hasImage) {
+    /**
+     * lite = งานเบื้องหลัง/ทักเอง/วิดีโอคอล → ข้ามรุ่นหลัก (โควต้าฟรีแค่วันละ 20) เก็บไว้ให้แชทที่เองพิมพ์คุย
+     */
+    getProviders(hasImage, lite = false) {
         const providers = [];
         const hasGeminiKey = this.config.enabled && this.config.provider !== 'openai' && this.config.apiKey && this.config.apiKey.trim().length > 5;
         // แอคเคานต์ของขวัญ: ลองรุ่นที่ฉลาดที่สุด (Pro) ก่อนเสมอ — โควต้าหมด/ใช้ไม่ได้ ค่อยลงมาตัวหลัก
-        if (hasGeminiKey && window.MO_GUEST) {
+        if (hasGeminiKey && window.MO_GUEST && !lite) {
             providers.push({
                 name: `gemini:${this.proModel}`,
                 call: args => this.callGemini(...args, this.proModel)
             });
         }
         // แชท: ใช้ model หลัก (ฉลาดกว่า ตอบเป็นเรื่องเป็นราว) ก่อน — โควตาหมด/ล่ม → Flash-Lite → Groq
-        if (hasGeminiKey && this.config.model && this.config.model !== this.liteModel) {
+        if (hasGeminiKey && this.config.model && this.config.model !== this.liteModel && !lite) {
             providers.push({
                 name: `gemini:${this.config.model}`,
                 call: args => this.callGemini(...args, this.config.model)
@@ -667,8 +672,8 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
     /**
      * ส่งข้อความหา LLM: ไล่ลองทีละเจ้า ข้ามเจ้าที่เพิ่งล่ม
      */
-    async generateResponse(userMessage, chatHistory, personality, memorySummary, image = null) {
-        const providers = this.getProviders(Boolean(image));
+    async generateResponse(userMessage, chatHistory, personality, memorySummary, image = null, opts = {}) {
+        const providers = this.getProviders(Boolean(image), Boolean(opts.lite));
         if (providers.length === 0) {
             throw new Error('LLM is not enabled or API key missing');
         }

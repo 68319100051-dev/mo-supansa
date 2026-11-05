@@ -108,7 +108,7 @@ const MoRecall = {
         if (!this.key() || text.trim().length < 6) return '';
         try {
             const recentIds = new Set(messages.slice(-keepRecent).map(m => String(m.id)));
-            const stored = (await this.all()).filter(v => !recentIds.has(v.id));
+            const stored = (await this.all()).filter(v => !v.mem && !recentIds.has(v.id));
             if (stored.length < 5) return '';
             const [q] = await this.embed([text], 'RETRIEVAL_QUERY');
             const hits = stored
@@ -122,6 +122,45 @@ const MoRecall = {
             return `[ข้อความระบบ: เรื่องเก่าที่โมนึกออก อาจเกี่ยวกับที่เองพูด (หยิบมาพูดเฉพาะถ้าเข้ากันจริงๆ ห้ามยัดเยียด):\n${lines.join('\n')}]\n`;
         } catch (e) {
             return '';
+        }
+    },
+
+    hash(s) {
+        let h = 5381;
+        for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+        return (h >>> 0).toString(36);
+    },
+
+    /**
+     * ความจำอื่นๆ (เรื่องของเอง / ความเห็น มุก ความทรงจำชีวิตโม / ไดอารี่) ที่ความหมายใกล้กับที่เองพิมพ์
+     * items = [{ kind, text }] → คืน [{ kind, text, score }] ไม่เกิน 4 อัน
+     * embedding ของแต่ละความจำเก็บไว้ (ฝังครั้งเดียว) ความจำใหม่ค่อยฝังเพิ่ม
+     */
+    async memoryHits(text, items) {
+        if (!this.key() || text.trim().length < 4 || !items.length) return [];
+        try {
+            const cache = new Map((await this.all()).filter(v => v.mem).map(v => [v.id, v]));
+            const list = items
+                .filter(it => it.text && String(it.text).trim().length >= 4)
+                .map(it => ({ ...it, id: `mem:${this.hash(`${it.kind}|${it.text}`)}` }));
+            const todo = list.filter(it => !cache.has(it.id)).slice(0, 90);
+            if (todo.length) {
+                const vecs = await this.embed(todo.map(it => String(it.text).slice(0, 300)), 'RETRIEVAL_DOCUMENT');
+                const fresh = todo.map((it, i) => ({ id: it.id, mem: true, text: it.text, at: Date.now(), vec: vecs[i] })).filter(x => x.vec);
+                await this.putMany(fresh);
+                fresh.forEach(v => cache.set(v.id, v));
+            }
+            const [q] = await this.embed([text], 'RETRIEVAL_QUERY');
+            const scored = list
+                .filter(it => cache.has(it.id))
+                .map(it => ({ kind: it.kind, text: it.text, score: cache.get(it.id).vec.reduce((s, x, i) => s + x * q[i], 0) }))
+                .sort((a, b) => b.score - a.score);
+            // ภาษาไทยคะแนนพื้นฐานสูง (เรื่องไม่เกี่ยวก็ ~0.7) → เอาแค่อันที่ใกล้อันดับหนึ่งจริงๆ
+            const best = scored.length ? scored[0].score : 0;
+            return scored.filter(it => it.score >= Math.max(0.72, best - 0.04)).slice(0, 3);
+        } catch (e) {
+            console.warn('recall memory failed:', e.message);
+            return [];
         }
     },
 };

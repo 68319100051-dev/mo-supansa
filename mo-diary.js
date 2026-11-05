@@ -90,7 +90,7 @@ class MoDiary {
                 const prompt = `เขียนไดอารี่ส่วนตัวของโม 3-5 ประโยค สรุปวันที่ได้คุยกับ${name} จากบทสนทนาด้านล่าง ` +
                     `เขียนแบบเล่าความรู้สึกของโมเอง (เช่น "วันนี้${name}...") ใช้เฉพาะเรื่องที่อยู่ในบทสนทนา ห้ามแต่งเพิ่ม ` +
                     `ไม่ต้องขึ้นต้นด้วยวันที่ ไม่ต้องใช้หัวข้อ\n\n${lines}`;
-                const reply = await this.llmService.generateResponse(prompt, [], this.brain.personality, this.memory.getSummary());
+                const reply = await this.llmService.generateResponse(prompt, [], this.brain.personality, this.memory.getSummary(), null, { lite: true });
                 if (reply && reply.trim()) return reply.trim();
             } catch (e) {
                 console.warn('Diary LLM failed, fallback:', e);
