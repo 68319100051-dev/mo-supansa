@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>โม 💕 - Mo Supansa</title>
+    <script>
+        // เครื่องที่เคยเข้าแอคเคานต์ของขวัญ (เอาออกแล้ว) ยังมีสำเนาข้อมูลโมของเจ้าของค้างอยู่ → ล้างทิ้งก่อนแอปโหลด
+        // (เครื่องเจ้าของไม่เคยมี mo_guest: ตอนนั้นระบบไม่ยอมเปิดโหมดของขวัญในเครื่องที่ล็อกอินอยู่)
+        try {
+            if (localStorage.getItem('mo_guest')) {
+                localStorage.clear();
+                sessionStorage.clear();
+                ['mo_recall', 'mo_media'].forEach(n => { try { indexedDB.deleteDatabase(n); } catch (e) {} });
+            }
+        } catch (e) {}
+    </script>
     <meta name="description" content="แชทกับโม แฟนสาว AI สุดน่ารัก">
     <!-- ติดตั้งเป็นแอป (PWA) -->
     <link rel="manifest" href="manifest.json">
