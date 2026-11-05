@@ -30,6 +30,11 @@ class MoLLMService {
         this.cooldowns = {};   // { providerName: { until, fails } }
         this.liteModel = 'gemini-3.5-flash-lite';
         this.lastProvider = null;
+        // ความจำระยะยาว: สรุปวันที่ผ่านมาเองเบื้องหลัง (เปิดแอปแล้ว 25 วิ แล้วทุก 2 ชม.)
+        if (typeof localStorage !== 'undefined' && typeof setInterval === 'function' && !window.MO_NO_BACKGROUND) {
+            setTimeout(() => this.consolidate(), 25000);
+            setInterval(() => this.consolidate(), 2 * 3600000);
+        }
     }
 
     loadConfig() {
@@ -134,6 +139,139 @@ class MoLLMService {
      */
     wants(contextText, re, chance = 0) {
         return re.test(contextText || '') || Math.random() < chance;
+    }
+
+    /** มีวันสำคัญวันนี้/พรุ่งนี้ → ต้องให้ AI รู้เสมอ */
+    dayIsClose() {
+        try {
+            const next = window.MoHomeInstance.upcoming()[0];
+            return Boolean(next && next.daysLeft <= 1);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    // =============================================
+    //  ค้นข้อมูลจริงจาก Google (ข่าว ราคา ผลบอล ร้าน หนัง ฯลฯ)
+    // =============================================
+
+    /** คำถามที่ต้องใช้ข้อมูลจริงจากโลกภายนอก (ไม่ใช่เรื่องของเรา) */
+    needsSearch(text) {
+        const t = String(text || '').replace(/\[ข้อความระบบ[\s\S]*?\]/g, '');
+        return /(ข่าว|ล่าสุด|อัปเดต.{0,6}(โลก|บ้านเมือง)|ราคา.{0,10}(เท่าไหร่|ตอนนี้|ล่าสุด)|ผลบอล|ผลการแข่ง|ใครชนะ|แข่ง.{0,8}(กี่โมง|วันไหน|ผล)|หนัง(ใหม่|เข้าโรง|เรื่องไหนดี)|เข้าโรง|คอนเสิร์ต|เปิดกี่โมง|ปิดกี่โมง|เปิดวันไหน|ร้าน.{0,12}(ไหน|อร่อย|แนะนำ|ดีไหม)|รีวิว|คืออะไร|หมายถึงอะไร|ใครคือ|เป็นใคร|เกิดอะไรขึ้น|วันหยุด.{0,8}(ปีนี้|เดือน|ยาว)|หวย|เลขเด็ด|ราคาทอง|ทองวันนี้|หุ้น|bitcoin|ค่าเงิน|เรท|ไวรัล|ดราม่า|เทรนด์|ซีรีส์.{0,8}(ใหม่|ไหนดี)|เกมใหม่|มือถือรุ่น|สเปค)/i.test(t);
+    }
+
+    // =============================================
+    //  ความจำระยะยาว: ทุกวันสรุปแชทของเมื่อวาน → ภาพรวมเรื่องของเอง (ไม่ลืมแม้แชทเก่าหลุดไป)
+    // =============================================
+
+    longTermLoad() {
+        try { return JSON.parse(localStorage.getItem('mo_longterm_v1')) || { done: {}, profile: [], days: [], followups: [] }; } catch (e) { return { done: {}, profile: [], days: [], followups: [] }; }
+    }
+
+    longTermSection() {
+        const lt = this.longTermLoad();
+        if (!lt.profile.length && !lt.days.length) return '';
+        return `# ความจำระยะยาว (โมสรุปเองจากหลายวันที่ผ่านมา — รู้ไว้ ไม่ต้องยกมาพูดทุกข้อความ)
+${lt.profile.map(p => `- ${p}`).join('\n')}${lt.days.length ? `\nช่วงนี้: ${lt.days.slice(-3).map(d => `(${d.day}) ${d.summary}`).join(' / ')}` : ''}${lt.followups.length ? `\nเรื่องที่ค้างอยากถามต่อ (หยิบมาถามเมื่อจังหวะเหมาะ ทีละเรื่อง): ${lt.followups.join(' / ')}` : ''}
+
+`;
+    }
+
+    /** สรุปวันที่ผ่านมาที่ยังไม่ได้สรุป (ทีละวัน วันละครั้ง ใช้ Lite) */
+    async consolidate() {
+        if (this.consolidating || !this.isReady || !this.isReady()) return;
+        this.consolidating = true;
+        try {
+            let chat = [];
+            try { chat = JSON.parse(localStorage.getItem('mo_chat_history_v2')) || []; } catch (e) {}
+            const lt = this.longTermLoad();
+            const key = ts => { const d = new Date(ts); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+            const today = key(Date.now());
+            const byDay = {};
+            chat.filter(m => m.text && (!m.format || m.format === 'text') && (m.type === 'sent' || m.type === 'received'))
+                .forEach(m => { (byDay[key(m.timestamp)] = byDay[key(m.timestamp)] || []).push(m); });
+            const day = Object.keys(byDay).filter(d => d !== today && !lt.done[d] && byDay[d].filter(m => m.type === 'sent').length >= 3).sort()[0];
+            if (!day) return;
+            const name = (window.MoMemoryInstance && window.MoMemoryInstance.getUserName && window.MoMemoryInstance.getUserName()) || 'เอง';
+            const transcript = byDay[day].slice(-120).map(m => `${m.type === 'sent' ? name : 'โม'}: ${String(m.text).slice(0, 200)}`).join('\n');
+            const prompt = `คุณคือสมองส่วนความจำของ "โม" (แฟน AI) อ่านแชทของวันที่ ${day} แล้วอัปเดตความจำระยะยาวเกี่ยวกับ ${name}
+ความจำเดิม:
+${lt.profile.map(p => `- ${p}`).join('\n') || '- (ยังไม่มี)'}
+เรื่องค้างเดิม: ${lt.followups.join(' / ') || '-'}
+
+แชทวันนั้น:
+${transcript.slice(0, 12000)}
+
+ตอบ JSON เท่านั้น:
+{"summary":"วันนั้นเกิดอะไรสำคัญ 1-2 ประโยค (มุมของโม)",
+ "profile":["ความจำระยะยาวที่อัปเดตแล้ว ไม่เกิน 15 ข้อ: นิสัย ความชอบ เรื่องงาน/เรียน คนสำคัญ เป้าหมาย สิ่งที่กังวลช่วงนี้ — รวมของเดิมกับของใหม่ ลบที่ล้าสมัย ไม่ใส่เรื่องเล็กน้อย"],
+ "followups":["เรื่องที่ควรถามต่อในวันหลัง ไม่เกิน 3 (เช่น ผลสัมภาษณ์งาน) ลบเรื่องที่จบแล้ว"]}`;
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.liteModel}:generateContent`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.config.apiKey.trim() },
+                body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, responseMimeType: 'application/json', maxOutputTokens: 1200 } }),
+                signal: AbortSignal.timeout(30000),
+            });
+            if (!res.ok) return;
+            const out = await res.json();
+            this.track('Gemini ความจำระยะยาว', out.usageMetadata && out.usageMetadata.totalTokenCount);
+            const r = JSON.parse(out.candidates[0].content.parts.map(p => p.text || '').join(''));
+            lt.done[day] = Date.now();
+            lt.done = Object.fromEntries(Object.entries(lt.done).slice(-60));
+            if (Array.isArray(r.profile) && r.profile.length) lt.profile = r.profile.map(String).map(s => s.slice(0, 160)).slice(0, 15);
+            if (Array.isArray(r.followups)) lt.followups = r.followups.map(String).map(s => s.slice(0, 120)).slice(0, 3);
+            if (r.summary) lt.days = [...lt.days, { day, summary: String(r.summary).slice(0, 240) }].slice(-14);
+            localStorage.setItem('mo_longterm_v1', JSON.stringify(lt));
+            if (window.MoMindInstance) window.MoMindInstance.think('limbic', `เก็บความจำระยะยาวของวันที่ ${day}: ${String(r.summary || '').slice(0, 60)}`);
+        } catch (e) {
+            console.warn('long-term memory failed:', e.message);
+        } finally {
+            this.consolidating = false;
+        }
+    }
+
+    // =============================================
+    //  ทวนคำตอบก่อนส่ง (Lite อ่านแล้วแก้เฉพาะที่ผิดชัดๆ)
+    // =============================================
+
+    async review(userMessage, chatHistory, reply) {
+        const lastUser = String(userMessage || '').replace(/\[ข้อความระบบ[\s\S]*?\]\s*/g, '').trim();
+        if (!lastUser || lastUser.length < 2 || !reply) return reply;
+        const recent = this.historyForLLM(chatHistory, 6).map(m => `${m.type === 'sent' ? 'เอง' : 'โม'}: ${String(m.text).slice(0, 160)}`).join('\n');
+        const prompt = `ตรวจคำตอบแชทของ "โม" (แฟนสาวคนไทย พิมพ์กันเองแบบ LINE เรียกตัวเอง "เค้า" เรียกอีกฝ่าย "เอง") ก่อนส่ง
+แชทล่าสุด:
+${recent}
+เอง: ${lastUser.slice(0, 400)}
+
+ร่างคำตอบของโม:
+${reply}
+
+ตรวจแค่ปัญหาชัดๆ: (1) ไม่ได้ตอบสิ่งที่เองพิมพ์ล่าสุด/ตอบผิดเรื่อง (2) ภาษาไทยแปลก ไม่เป็นธรรมชาติ แปลตรงตัว (3) ถามซ้ำเรื่องที่เองเพิ่งตอบไป หรือขัดกับแชทข้างบน (4) ยาวเกิน 4 บรรทัด
+ถ้าไม่มีปัญหาเหล่านี้ ตอบ {"ok":true}
+ถ้ามี ตอบ {"ok":false,"reply":"คำตอบที่แก้แล้ว"} — แก้น้อยที่สุด คงน้ำเสียงโม คงแท็กในวงเล็บเหลี่ยม [ ... ] ทุกอันไว้ตามเดิม ขึ้นบรรทัดใหม่ได้เหมือนเดิม
+ตอบ JSON เท่านั้น`;
+        try {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.liteModel}:generateContent`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'x-goog-api-key': this.config.apiKey.trim() },
+                body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2, responseMimeType: 'application/json', maxOutputTokens: 600 } }),
+                signal: AbortSignal.timeout(6000),
+            });
+            if (!res.ok) return reply;
+            const out = await res.json();
+            this.track('Gemini ทวนคำตอบ', out.usageMetadata && out.usageMetadata.totalTokenCount);
+            const r = JSON.parse(out.candidates[0].content.parts.map(p => p.text || '').join(''));
+            if (r.ok !== false || !r.reply) return reply;
+            // ห้ามทำแท็กหาย (สติกเกอร์/เพลง/อารมณ์ ฯลฯ)
+            const tags = reply.match(/\[[^\]]+\]/g) || [];
+            const fixed = String(r.reply).trim();
+            if (!fixed || tags.some(t => !fixed.includes(t))) return reply;
+            if (window.MoMindInstance) window.MoMindInstance.think('frontal', 'ทวนคำตอบแล้วแก้ก่อนส่ง');
+            return fixed;
+        } catch (e) {
+            return reply;
+        }
     }
 
     /**
@@ -264,7 +402,7 @@ class MoLLMService {
 - เขาท้อเรื่องเก่ง: ห้ามบอกให้ลดเป้า ยกสิ่งที่เขาทำได้จริงมายืนยัน อ่อนโยน ไม่ปลุกใจแบบโปสเตอร์
 
 # ตัวอย่างสไตล์ (สุ่มมาให้ดูแค่บางส่วน — เอาแค่โทน ห้ามลอกประโยค ห้ามพูดซ้ำที่เคยพูด)
-${this.pickStyleExamples(4)}
+${this.pickStyleExamples(3)}
 
 ${window.MoLifeInstance && window.MoLifeInstance.state.current && window.MoLifeInstance.state.current.room === 'out' ? `# ตอนนี้โมอยู่ข้างนอก
 - พิมพ์ให้เข้ากับที่อยู่จริง: ร้าน/ห้าง → ตอบสั้นลง เล่าสิ่งที่เห็น, บนรถ → บอกว่ากำลังกลับ อีกกี่นาทีถึง, กับเพื่อน → พูดถึงเพื่อนคนนั้น
@@ -305,7 +443,7 @@ ${window.MoLifeInstance.describeNow()}${window.MoWeather && window.MoWeather.des
 ${memorySummary && memorySummary.chatSummary ? `# สรุปที่คุยกันก่อนหน้านี้ (เก่ากว่าแชทที่เห็น)
 ${memorySummary.chatSummary}
 
-` : ''}${window.MoSelfInstance && window.MoSelfInstance.feedbackSection ? window.MoSelfInstance.feedbackSection() : ''}${window.MoDiaryInstance && this.wants(contextText, /เมื่อวาน|วันก่อน|เมื่อคืน|ครั้งก่อน|คราวก่อน|จำได้|ที่เคย/, 0.25) ? window.MoDiaryInstance.recentForPrompt() : ''}${window.MoInnerInstance ? window.MoInnerInstance.promptSection() : ''}${window.MoPsycheInstance ? window.MoPsycheInstance.promptSection(contextText, window.MoLifeInstance && window.MoLifeInstance.state) : ''}${window.MoCareInstance ? window.MoCareInstance.promptSection() : ''}${window.MoSocialInstance ? window.MoSocialInstance.promptSection(contextText) : ''}${window.MoHomeInstance ? window.MoHomeInstance.promptSection(contextText) : ''}${window.MoQuestsInstance ? window.MoQuestsInstance.promptSection() : ''}${window.MoFestivals && this.wants(contextText, /เทศกาล|ลอยกระทง|ปีใหม่|สงกรานต์|คริสต์มาส|วาเลน|ฮาโลวีน|วันแม่|วันพ่อ|วันหยุด/, 0.35) ? window.MoFestivals.promptSection() : ''}${window.MoGifts && window.MoLifeInstance && this.wants(contextText, /ของขวัญ|ตุ๊กตา|ซื้อ|ให้เค้า|ห้อง|บ้าน|โคม|ต้นไม้|ดอกไม้/, 0.2) ? window.MoGifts.promptSection(window.MoLifeInstance) : ''}${window.MoSelfInstance ? window.MoSelfInstance.promptSection(contextText) : ''}${window.MoStoriesInstance && this.wants(contextText, /สตอรี่|story|ลง|รูป|ไอจี/, 0.3) ? window.MoStoriesInstance.promptSection() : ''}# ความจำจากแชท
+` : ''}${window.MoSelfInstance && window.MoSelfInstance.feedbackSection ? window.MoSelfInstance.feedbackSection() : ''}${window.MoDiaryInstance && this.wants(contextText, /เมื่อวาน|วันก่อน|เมื่อคืน|ครั้งก่อน|คราวก่อน|จำได้|ที่เคย/, 0.25) ? window.MoDiaryInstance.recentForPrompt() : ''}${window.MoInnerInstance ? window.MoInnerInstance.promptSection() : ''}${window.MoPsycheInstance ? window.MoPsycheInstance.promptSection(contextText, window.MoLifeInstance && window.MoLifeInstance.state) : ''}${window.MoCareInstance ? window.MoCareInstance.promptSection() : ''}${window.MoSocialInstance && this.wants(contextText, /เพื่อน|แม่|พ่อ|พี่|น้อง|ครอบครัว|ใคร|ไปกับ|เจอ/, 0.35) ? window.MoSocialInstance.promptSection(contextText) : ''}${window.MoHomeInstance && (this.wants(contextText, /แมว|ขนมปัง|เหมียว|ปฏิทิน|วันสำคัญ|ครบรอบ|นัด|ต้นไม้|ระเบียง|บ้าน/, 0.3) || this.dayIsClose()) ? window.MoHomeInstance.promptSection(contextText) : ''}${window.MoQuestsInstance && this.wants(contextText, /น้ำ|ข้าว|กิน|ออกกำลัง|วิ่ง|ภารกิจ|ผัก|ผลไม้|นอน|เก็บห้อง|สายตา/, 0.25) ? window.MoQuestsInstance.promptSection() : ''}${window.MoFestivals && this.wants(contextText, /เทศกาล|ลอยกระทง|ปีใหม่|สงกรานต์|คริสต์มาส|วาเลน|ฮาโลวีน|วันแม่|วันพ่อ|วันหยุด/, 0.35) ? window.MoFestivals.promptSection() : ''}${window.MoGifts && window.MoLifeInstance && this.wants(contextText, /ของขวัญ|ตุ๊กตา|ซื้อ|ให้เค้า|ห้อง|บ้าน|โคม|ต้นไม้|ดอกไม้/, 0.2) ? window.MoGifts.promptSection(window.MoLifeInstance) : ''}${window.MoSelfInstance ? window.MoSelfInstance.promptSection(contextText) : ''}${window.MoStoriesInstance && this.wants(contextText, /สตอรี่|story|ลง|รูป|ไอจี/, 0.3) ? window.MoStoriesInstance.promptSection() : ''}${this.longTermSection()}# ความจำจากแชท
 ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่มี'}
 
 หยิบเรื่องที่จำได้มาพูดเมื่อเกี่ยวกับที่คุย ทีละเรื่อง ตอบเป็นข้อความแชทของโมเท่านั้น ไม่ใส่ "โม:" นำหน้า`;
@@ -319,7 +457,12 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
         const model = modelOverride || this.config.model || 'gemini-1.5-flash';
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-        const systemPrompt = this.buildSystemPrompt(personality, memorySummary, this.contextText(userMessage, chatHistory));
+        // ต้องใช้ข้อมูลจริง (ข่าว ราคา ผลบอล ร้าน ฯลฯ) → เปิดค้น Google ให้โม
+        const search = !image && Date.now() > (this.searchBlockedUntil || 0) && this.needsSearch(userMessage);
+        const systemPrompt = this.buildSystemPrompt(personality, memorySummary, this.contextText(userMessage, chatHistory))
+            + (search ? `\n\n# ค้นข้อมูลจริงได้
+- ใช้ Google Search หาข้อมูลจริงล่าสุดก่อนตอบ แล้วเล่าแบบโม สั้นๆ เป็นภาษาแชท ไม่ต้องแปะลิงก์ ไม่ต้องอ้างแหล่งยาวๆ
+- ถ้าค้นแล้วไม่ชัวร์ บอกตรงๆ ว่าไม่แน่ใจ` : '');
 
         // จัด format messages
         const contents = [];
@@ -367,6 +510,7 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
                 parts: [{ text: systemPrompt }]
             },
             contents: contents,
+            ...(search ? { tools: [{ google_search: {} }] } : {}),
             // บล็อกเฉพาะเนื้อหาร้ายแรงจริง — เรื่องเศร้า/โดนด่า/ระบาย เป็นเรื่องปกติของแฟน (ไม่งั้นโมจะเงียบตอนเองแย่ที่สุด)
             safetySettings: ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH', 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT']
                 .map(category => ({ category, threshold: 'BLOCK_ONLY_HIGH' })),
@@ -400,6 +544,11 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
             const errData = await res.json().catch(() => ({}));
             const msg = errData.error?.message || `Gemini API Error (${res.status})`;
             // โมเดลไม่รับ thinkingConfig (400 อะไรก็ตาม) → ปิดแล้วลองใหม่ครั้งเดียว
+            // ค้น Google ไม่ได้ (รุ่นนี้ไม่รองรับ / ฟรีไม่มีโควต้าค้น ต้องเปิด billing) → ตอบแบบไม่ค้น แล้วพักการค้น 6 ชม.
+            if ((res.status === 400 || res.status === 429) && requestBody.tools) {
+                this.searchBlockedUntil = Date.now() + 6 * 3600000;
+                return this.callGemini(userMessage, chatHistory, personality, memorySummary, image, modelOverride);
+            }
             if (res.status === 400 && requestBody.generationConfig.thinkingConfig && !this.thinkingOff) {
                 this.thinkingOff = true;
                 return this.callGemini(userMessage, chatHistory, personality, memorySummary, image, modelOverride);
@@ -409,6 +558,10 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
 
         const data = await res.json();
         if (data.candidates?.[0]?.finishReason === 'MAX_TOKENS') console.warn('Gemini reply hit MAX_TOKENS');
+        if (search) {
+            this.track('Gemini ค้น Google');
+            if (window.MoMindInstance) window.MoMindInstance.think('parietal', `ค้น Google: "${String(userMessage).slice(0, 40)}"`);
+        }
         this.track('Gemini แชท', data.usageMetadata && data.usageMetadata.totalTokenCount);
         const candidate = data.candidates?.[0]?.content?.parts?.filter(p => !p.thought).map(p => p.text || '').join('');
         if (!candidate) {
@@ -679,7 +832,10 @@ ${memory.length ? memory.map(f => `- ${f}`).join('\n') : '- ยังไม่�
                 if (window.MoInnerInstance) reply = window.MoInnerInstance.takeThought(reply);
                 else reply = reply.replace(/\[\s*คิด\s*:?[^\]]*\]\s*/g, '');
                 // บางที model เลียนแบบป้ายเวลา [วันนี้ 10:40] ในประวัติ → ตัดทิ้ง
-                return reply.replace(/^\s*โม\s*:\s*/gm, '').replace(/\[(?:วันนี้|เมื่อวาน|\d+ วันก่อน) \d{1,2}:\d{2}\]\s*/g, '').trim();
+                reply = reply.replace(/^\s*โม\s*:\s*/gm, '').replace(/\[(?:วันนี้|เมื่อวาน|\d+ วันก่อน) \d{1,2}:\d{2}\]\s*/g, '').trim();
+                // แชทที่เองพิมพ์ (ไม่ใช่งานเบื้องหลัง/รูป) → ทวนก่อนส่ง
+                if (!opts.lite && !image && !opts.noReview && provider.name.startsWith('gemini:')) reply = await this.review(userMessage, chatHistory, reply);
+                return reply;
             } catch (err) {
                 // พักเจ้านี้ 30 วิ, 1 นาที, 2 นาที... (สูงสุด 5 นาที)
                 // โควต้ารายวันหมด ("retry in 4h39m...") → พักจนกว่าจะรีเซ็ตจริง ไม่ต้องลองซ้ำทุก 5 นาที
