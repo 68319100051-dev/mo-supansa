@@ -131,7 +131,8 @@
     call.setResponder(async (text) => {
         memory.extractFacts(text);
         // โทรด่วน: บอกโมว่านี่เป็นเรื่องด่วน (จนกว่าจะวางสาย)
-        const note = call.urgentNote ? `[ข้อความระบบ: นี่คือสายด่วน${call.urgentNote}— โมจริงจัง ตั้งใจฟัง ถามว่าเกิดอะไรขึ้น ช่วยคิด ไม่เล่นมุก]\n` : '';
+        const officeTopic = call.fromPush && office ? office.callTopic(chat.messages) : '';
+        const note = officeTopic + (call.urgentNote ? `[ข้อความระบบ: นี่คือสายด่วน${call.urgentNote}— โมจริงจัง ตั้งใจฟัง ถามว่าเกิดอะไรขึ้น ช่วยคิด ไม่เล่นมุก]\n` : '');
         // วิดีโอคอล: แนบภาพจากกล้องให้โมเห็นเอง (เห็นหน้า สีหน้า ที่ที่อยู่)
         const frame = call.videoMode && call.captureFrame();
         if (frame && llm.isReady()) {
@@ -868,6 +869,16 @@
         if (localStorage.getItem('mo_gift_v1') !== giftJson) localStorage.setItem('mo_gift_v1', giftJson);
     }
     // เจ้าของสั่งปิด/เปิดแอคของขวัญผ่านแชท → เขียนแถว gift_closed (หลังบ้านเช็คทุกครั้งที่เขาเข้า/คุย)
+    // ห้องทำงานโม: ต่อแอป (Classroom) เช็กงาน สรุป โทรมารายงาน — งานจริงอยู่ที่หลังบ้าน
+    const office = window.MO_GUEST ? null : new MoOffice({ sync, chat, mind });
+    if (office) chat.onOfficeCommand = async text => {
+        if (/ห้องทำงาน/.test(text) && !/คลาสรูม|classroom/i.test(text)) {
+            setTimeout(() => office.show(), 600);
+            return 'เข้าห้องทำงานเค้ากัน 🏢 ต่อแอปไหนเพิ่มก็กดในนั้นได้เลย';
+        }
+        return office.checkNow();
+    };
+
     if (!window.MO_GUEST) chat.onGiftCommand = async close => {
         if (!sync.client || !sync.user) return 'ต้องล็อกอินซิงก์ในเครื่องนี้ก่อนนะ ถึงจะสั่งปิด/เปิดแอคของขวัญได้';
         const { error } = await sync.client.from('mo_state').upsert({
@@ -1292,6 +1303,8 @@
                 </div>
             </div>`;
             })()}
+            ${window.MO_GUEST ? '' : `<button class="house-card office-door" id="house-office" type="button">
+                <span>🏢</span><div><strong>ห้องทำงานโม</strong><small>ต่อแอปต่างๆ ให้โมเช็กงาน สรุป แล้วโทรมารายงาน</small></div><b>›</b></button>`}
             <div class="house-card house-urgent">
                 <div>
                     <strong>มีเรื่องด่วน?</strong>
@@ -1352,6 +1365,8 @@
                     `<div class="house-log-item"><time>${fmt(l.at)}</time><span>${l.emoji}</span><span>${esc(l.text)}</span></div>`).join('')}</div>
             </div>`;
         document.getElementById('house-transfer').addEventListener('click', openTransfer);
+        const officeDoor = document.getElementById('house-office');
+        if (officeDoor && office) officeDoor.addEventListener('click', () => office.show());
         // แตะสมุดบนโต๊ะ → อ่านไดอารี่ของโม
         const diaryEl = document.querySelector('.hv-diary');
         if (diaryEl) diaryEl.addEventListener('click', openDiaryBook);
@@ -1499,6 +1514,7 @@
     // ======= โมโทรมาจากแจ้งเตือน (Push แบบสายเรียกเข้า) =======
     const callFromPush = (answer) => {
         if (call.getCallStatus()) return;
+        call.fromPush = true;
         call.startIncomingCall();
         if (answer) setTimeout(() => call.acceptIncomingCall(), 600);
     };

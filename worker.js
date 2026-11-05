@@ -31,6 +31,9 @@ export default {
         // ลิงก์ของขวัญ: หน้าเดียวกับแอป แต่ชื่อ/ไอคอน/ตัวอย่างลิงก์ (LINE, Messenger) เป็นกลางๆ ไม่บอกว่าเป็นโม
         if (url.pathname === '/gift/') return Response.redirect(`${url.origin}/gift${url.search}`, 301);
         if (url.pathname === '/gift') return giftPage(request, env, url);
+        if (url.pathname.startsWith('/api/office/')) {
+            return handleOffice(request, env, url, ctx).catch(err => json({ error: String(err.message || err).slice(0, 200) }, 500));
+        }
         if (url.pathname.startsWith('/api/gift/')) {
             return handleGift(request, env, url, ctx).catch(err => json({ error: String(err.message || err).slice(0, 200) }, 500));
         }
@@ -40,6 +43,7 @@ export default {
     async scheduled(event, env, ctx) {
         if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY || !(env.VAPID_PRIVATE_KEY || env.FCM_PRIVATE_KEY)) return;
         ctx.waitUntil(runChecks(env));
+        ctx.waitUntil(officeRun(env));   // ห้องทำงานโม: เช็ก Classroom ทุก 15 นาที
     },
 };
 
@@ -533,7 +537,7 @@ async function giftAuth(env, request) {
 }
 
 /** โมรายงานเจ้าของ: เขียนข้อความลงแชทของเรา + เด้งแจ้งเตือนทุกเครื่องที่สมัครไว้ */
-async function giftNotify(env, userId, text) {
+async function giftNotify(env, userId, text, opts = {}) {
     const rows = await db(env, `mo_state?select=key,value&user_id=eq.${userId}&or=(key.eq.mo_chat_history_v2,key.like.push_sub:*,key.like.fcm_token:*)`);
     const chatRow = rows.find(r => r.key === 'mo_chat_history_v2');
     const chat = chatRow && Array.isArray(chatRow.value) ? chatRow.value : [];
@@ -542,9 +546,12 @@ async function giftNotify(env, userId, text) {
     const tz = subs[0] ? Number(subs[0].value.tz) || -420 : -420;
     const local = new Date(now - tz * 60000);
     const hhmm = `${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
-    const msg = { id: now + Math.random(), type: 'received', text, format: 'text', time: hhmm, timestamp: now, dueKey: `gift:${now}` };
+    const msg = { id: now + Math.random(), type: 'received', text, format: 'text', time: hhmm, timestamp: now, dueKey: `${opts.tag || 'gift'}:${now}` };
     await upsert(env, [{ user_id: userId, key: 'mo_chat_history_v2', value: [...chat, msg].slice(-200), updated_at: new Date().toISOString() }]);
-    const inbox = { title: 'โม 💕', body: text.slice(0, 180), at: now, type: 'chat', lines: [text] };
+    // call = เด้งเป็นสายเรียกเข้า (ห้องทำงาน: งานใหม่) / กลางคืน 22:00-07:00 ไม่โทร ส่งเป็นแชทแทน
+    const night = local.getUTCHours() >= 22 || local.getUTCHours() < 7;
+    const call = opts.call && !night;
+    const inbox = { title: call ? '📞 โมโทรมารายงาน...' : 'โม 💕', body: text.slice(0, 180), at: now, type: call ? 'call' : 'chat', lines: text.split('\n').filter(Boolean).slice(0, 4) };
     for (const sub of subs) {
         if (sub.key.startsWith('fcm_token:')) {
             if (env.FCM_PRIVATE_KEY) await sendFcm(env, sub.value.token, inbox).catch(() => 0);
@@ -667,6 +674,271 @@ async function handleGift(request, env, url, ctx) {
             ...(method === 'GET' ? {} : { body: JSON.stringify(payload || {}) }),
         });
         return new Response(res.body, { status: res.status, headers: { 'content-type': 'application/json' } });
+    }
+
+    return json({ error: 'ไม่พบ' }, 404);
+}
+
+// =============================================
+//  ห้องทำงานโม 🏢 — ต่อโมกับแอปต่างๆ (ตอนนี้: Google Classroom)
+//  - เจ้าของล็อกอิน Google ผ่านหลังบ้าน (OAuth) → เก็บ refresh token แบบเข้ารหัส (ถอดได้เฉพาะหลังบ้าน)
+//  - ทุก 15 นาที (และเมื่อสั่ง) เช็กงาน/ประกาศใหม่ → AI สรุป → โมเขียนลงแชท + โทรมารายงาน
+//  - ต้องตั้ง Cloudflare secrets: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET (ดู docs/office-setup.md)
+// =============================================
+
+const GOOGLE_SCOPES = [
+    'openid', 'email',
+    'https://www.googleapis.com/auth/classroom.courses.readonly',
+    'https://www.googleapis.com/auth/classroom.coursework.me.readonly',
+    'https://www.googleapis.com/auth/classroom.announcements.readonly',
+];
+const OFFICE_EVERY_MS = 15 * 60000;
+
+/** คำขอจากแอปเจ้าของ: ยืนยันด้วย session ของ Supabase (ไม่ใช่รหัสของขวัญ) */
+async function officeUser(env, request) {
+    const tok = (request.headers.get('authorization') || '').replace(/^Bearer /, '');
+    if (!tok) return null;
+    const res = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+        headers: { apikey: request.headers.get('x-sb-apikey') || env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${tok}` },
+    });
+    if (!res.ok) return null;
+    const u = await res.json().catch(() => null);
+    return u && u.id ? u : null;
+}
+
+async function officeKey(env) {
+    const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('mo-office:' + env.SUPABASE_SERVICE_ROLE_KEY));
+    return crypto.subtle.importKey('raw', h, 'AES-GCM', false, ['encrypt', 'decrypt']);
+}
+
+async function officeSeal(env, text) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await officeKey(env), new TextEncoder().encode(text));
+    return `${b64u.encode(iv)}.${b64u.encode(ct)}`;
+}
+
+async function officeUnseal(env, sealed) {
+    const [iv, ct] = sealed.split('.');
+    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64u.decode(iv) }, await officeKey(env), b64u.decode(ct));
+    return new TextDecoder().decode(pt);
+}
+
+async function officeVerify(env, raw) {
+    const [body, sig] = String(raw || '').split('.');
+    if (!body || !sig || sig !== await giftSign(env, body)) return null;
+    try {
+        const p = JSON.parse(new TextDecoder().decode(b64u.decode(body)));
+        return p.exp > Date.now() ? p : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+async function googleAccess(env, userId, g) {
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET,
+            refresh_token: await officeUnseal(env, g.rt), grant_type: 'refresh_token',
+        }),
+    });
+    const j = await res.json().catch(() => ({}));
+    if (!res.ok || !j.access_token) {
+        // ถูกถอนสิทธิ์/หมดอายุ → ทำเครื่องหมาย + บอกเจ้าของครั้งเดียว
+        if (j.error === 'invalid_grant' && !g.broken) {
+            await giftPut(env, userId, 'office_google', { ...g, broken: true });
+            await giftNotify(env, userId, '🏢 การเชื่อม Google Classroom หลุดแล้วนะ เข้าห้องทำงานโมแล้วกดเชื่อมใหม่ทีนึง', { tag: 'office' }).catch(() => {});
+        }
+        throw new Error(`google token ${res.status} ${j.error || ''}`);
+    }
+    return j.access_token;
+}
+
+function officeDue(w, tz) {
+    if (!w.dueDate) return '';
+    const d = w.dueDate, t = w.dueTime || {};
+    const utc = Date.UTC(d.year, d.month - 1, d.day, t.hours || 0, t.minutes || 0);
+    const local = new Date(utc - tz * 60000);
+    const date = `${local.getUTCDate()}/${local.getUTCMonth() + 1}`;
+    return w.dueTime ? `${date} ${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}` : date;
+}
+
+/** ให้ AI (Lite) อ่านงานแล้วสรุปแบบโม — ล้มเหลวก็ใช้ข้อความงานตรงๆ */
+async function officeSummarize(apiKey, it) {
+    const fallback = { summary: String(it.text || it.title).slice(0, 160), todo: '', size: '' };
+    if (!apiKey) return fallback;
+    const prompt = `คุณคือ "โม" ผู้ช่วยสาวที่สรุปงานใน Google Classroom ให้แฟน อ่านแล้วสรุปเป็นภาษาไทยกันเอง สั้น ชัด ไม่เวิ่น
+วิชา: ${it.course}
+ประเภท: ${it.kind === 'work' ? 'งานที่ต้องส่ง' : 'ประกาศ'}
+หัวข้อ: ${it.title}
+รายละเอียด: ${String(it.text || '-').slice(0, 2500)}
+${it.due ? `กำหนดส่ง: ${it.due}` : ''}${it.materials && it.materials.length ? `\nไฟล์/ลิงก์แนบ: ${it.materials.join(', ')}` : ''}
+
+ตอบ JSON เท่านั้น: {"summary":"งานนี้คืออะไร 1-2 ประโยค","todo":"ต้องทำอะไรบ้าง สั้นๆ (ไม่มีก็ว่าง)","size":"เล็ก|กลาง|ใหญ่ (ประเมินความยากเวลาที่ใช้)"}`;
+    try {
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+            body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.4, maxOutputTokens: 400 } }),
+            signal: AbortSignal.timeout(15000),
+        });
+        const j = await res.json();
+        const out = JSON.parse(j.candidates[0].content.parts.map(p => p.text || '').join(''));
+        return { summary: String(out.summary || fallback.summary).slice(0, 300), todo: String(out.todo || '').slice(0, 300), size: String(out.size || '').slice(0, 10) };
+    } catch (e) {
+        return fallback;
+    }
+}
+
+/**
+ * เช็ก Classroom: งาน/ประกาศที่ยังไม่เคยเห็น → สรุป → รายงาน
+ * seed = ครั้งแรกหลังเชื่อม (จำของเดิมไว้ ไม่รายงานย้อนหลังทั้งหมด) / manual = เจ้าของสั่งเช็กเดี๋ยวนี้
+ */
+async function officeClassroom(env, userId, { seed = false, manual = false } = {}) {
+    const g = await giftGet(env, userId, 'office_google');
+    if (!g || g.broken) return { ok: false, reason: g ? 'broken' : 'not_connected' };
+    const st = (await giftGet(env, userId, 'office_classroom')) || { seen: {}, lastCheck: 0 };
+    const now = Date.now();
+    if (!seed && !manual && now - (st.lastCheck || 0) < OFFICE_EVERY_MS) return { ok: true, skipped: true };
+    const seeding = seed || !st.lastCheck;
+    try {
+        const access = await googleAccess(env, userId, g);
+        const api = async path => {
+            const r = await fetch(`https://classroom.googleapis.com/v1/${path}`, { headers: { Authorization: `Bearer ${access}` } });
+            if (!r.ok) throw new Error(`classroom ${r.status}: ${(await r.text()).slice(0, 160)}`);
+            return r.json();
+        };
+        const courses = (await api('courses?courseStates=ACTIVE&pageSize=30')).courses || [];
+        const subs = await db(env, `mo_state?select=value&user_id=eq.${userId}&key=like.push_sub:*&limit=1`);
+        const tz = subs[0] ? Number(subs[0].value.tz) || -420 : -420;
+        const fresh = [];
+        const consider = it => {
+            if (st.seen[it.id]) return;
+            st.seen[it.id] = now;
+            if (!seeding) fresh.push(it);
+        };
+        for (const c of courses) {
+            const [cw, an] = await Promise.all([
+                api(`courses/${c.id}/courseWork?orderBy=updateTime%20desc&pageSize=10`).catch(() => ({})),
+                api(`courses/${c.id}/announcements?orderBy=updateTime%20desc&pageSize=5`).catch(() => ({})),
+            ]);
+            for (const w of cw.courseWork || []) {
+                consider({
+                    kind: 'work', id: `w${w.id}`, course: c.name, title: w.title || 'งานใหม่', text: w.description || '',
+                    due: officeDue(w, tz), link: w.alternateLink,
+                    materials: (w.materials || []).map(m => (m.driveFile && m.driveFile.driveFile && m.driveFile.driveFile.title) || (m.link && m.link.title) || (m.youtubeVideo && m.youtubeVideo.title) || (m.form && m.form.title)).filter(Boolean),
+                });
+            }
+            for (const a of an.announcements || []) {
+                consider({ kind: 'post', id: `a${a.id}`, course: c.name, title: String(a.text || 'ประกาศใหม่').split('\n')[0].slice(0, 80), text: a.text || '', link: a.alternateLink });
+            }
+        }
+        // จำแค่ 600 อันล่าสุด
+        st.seen = Object.fromEntries(Object.entries(st.seen).sort((a, b) => b[1] - a[1]).slice(0, 600));
+
+        const keys = (await giftGet(env, userId, 'mo_device_keys_v1')) || {};
+        const reports = [];
+        for (const it of fresh.slice(0, 6)) {
+            const s = await officeSummarize(keys.gemini, it);
+            reports.push({ id: it.id, app: 'classroom', kind: it.kind, course: it.course, title: it.title, due: it.due, link: it.link, ...s, at: now });
+        }
+        if (reports.length) {
+            const old = (await giftGet(env, userId, 'office_reports')) || [];
+            await giftPut(env, userId, 'office_reports', [...reports, ...old].slice(0, 60));
+            const works = reports.filter(r => r.kind === 'work');
+            const lines = reports.map(r => `${r.kind === 'work' ? '📝' : '📢'} ${r.course}: ${r.title}${r.due ? ` (ส่ง ${r.due})` : ''}\n${r.summary}${r.todo ? `\n👉 ${r.todo}` : ''}`);
+            const head = works.length ? `📚 เจ็ทๆ มีงานใหม่ใน Classroom ${works.length} งาน` : '📢 มีประกาศใหม่ใน Classroom';
+            await giftNotify(env, userId, `${head}\n\n${lines.join('\n\n')}`.slice(0, 1500), { tag: 'office', call: works.length > 0 });
+        }
+        Object.assign(st, { lastCheck: now, courses: courses.length, error: null, email: g.email });
+        await giftPut(env, userId, 'office_classroom', st);
+        return { ok: true, courses: courses.length, fresh: reports, seeded: seeding };
+    } catch (e) {
+        Object.assign(st, { lastCheck: now, error: String(e.message || e).slice(0, 200) });
+        await giftPut(env, userId, 'office_classroom', st);
+        return { ok: false, reason: 'error', error: st.error };
+    }
+}
+
+/** รอบ cron: ทุกบัญชีที่ต่อ Google ไว้ */
+async function officeRun(env) {
+    if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET) return;
+    const rows = await db(env, 'mo_state?select=user_id&key=eq.office_google');
+    for (const r of rows || []) {
+        await officeClassroom(env, r.user_id).catch(e => console.error('office failed', r.user_id, e.message));
+    }
+}
+
+async function handleOffice(request, env, url, ctx) {
+    if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) return json({ error: 'ยังไม่ได้ตั้งค่าหลังบ้าน' }, 503);
+    const route = url.pathname.slice('/api/office/'.length);
+    const ready = Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET);
+    const redirectUri = `${url.origin}/api/office/google/callback`;
+
+    // Google ส่งกลับมาหลังล็อกอิน (เบราว์เซอร์มาเอง ไม่มี header) → ยืนยันด้วย state ที่เราเซ็นไว้
+    if (route === 'google/callback') {
+        const state = await officeVerify(env, url.searchParams.get('state'));
+        const code = url.searchParams.get('code');
+        if (!state || state.p !== 'office' || !code) return Response.redirect(`${url.origin}/?office=failed`, 302);
+        const res = await fetch('https://oauth2.googleapis.com/token', {
+            method: 'POST',
+            headers: { 'content-type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({ code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET, redirect_uri: redirectUri, grant_type: 'authorization_code' }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (!res.ok || !j.refresh_token) return Response.redirect(`${url.origin}/?office=failed`, 302);
+        let email = '';
+        try { email = JSON.parse(new TextDecoder().decode(b64u.decode(j.id_token.split('.')[1]))).email || ''; } catch (e) {}
+        await giftPut(env, state.u, 'office_google', { rt: await officeSeal(env, j.refresh_token), email, at: Date.now(), scope: j.scope || '' });
+        await giftPut(env, state.u, 'office_classroom', { seen: {}, lastCheck: 0 });
+        const first = officeClassroom(env, state.u, { seed: true }).then(r => r.ok && giftNotify(env, state.u,
+            `🏢 ต่อ Google Classroom เสร็จแล้ว! เจอ ${r.courses} วิชา\nต่อไปมีงานหรือประกาศใหม่ เค้าจะอ่านแล้วสรุปมาบอก (งานใหม่จะโทรมารายงานเลย 📞)`, { tag: 'office' }));
+        ctx ? ctx.waitUntil(first) : await first;
+        return Response.redirect(`${url.origin}/?office=connected`, 302);
+    }
+
+    const user = await officeUser(env, request);
+    if (!user) return json({ error: 'ต้องล็อกอินซิงก์ก่อน' }, 401);
+
+    if (route === 'status') {
+        const [g, st, reports] = await Promise.all([
+            giftGet(env, user.id, 'office_google'), giftGet(env, user.id, 'office_classroom'), giftGet(env, user.id, 'office_reports'),
+        ]);
+        return json({
+            ready,
+            google: g ? { connected: true, email: g.email, broken: Boolean(g.broken), at: g.at } : { connected: false },
+            classroom: st ? { lastCheck: st.lastCheck, courses: st.courses || 0, error: st.error || null } : null,
+            reports: (reports || []).slice(0, 30),
+        });
+    }
+
+    if (!ready) return json({ error: 'ยังไม่ได้ตั้ง GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET ใน Cloudflare' }, 503);
+
+    if (route === 'google/start' && request.method === 'POST') {
+        const state = await giftToken(env, { u: user.id, p: 'office', exp: Date.now() + 10 * 60000 });
+        const auth = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+        Object.entries({
+            client_id: env.GOOGLE_CLIENT_ID, redirect_uri: redirectUri, response_type: 'code',
+            scope: GOOGLE_SCOPES.join(' '), access_type: 'offline', prompt: 'consent', include_granted_scopes: 'true', state,
+        }).forEach(([k, v]) => auth.searchParams.set(k, v));
+        return json({ url: auth.toString() });
+    }
+
+    if (route === 'classroom/check' && request.method === 'POST') {
+        return json(await officeClassroom(env, user.id, { manual: true }));
+    }
+
+    if (route === 'google/disconnect' && request.method === 'POST') {
+        const g = await giftGet(env, user.id, 'office_google');
+        if (g && g.rt) {
+            const rt = await officeUnseal(env, g.rt).catch(() => '');
+            if (rt) await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(rt)}`, { method: 'POST' }).catch(() => {});
+        }
+        for (const key of ['office_google', 'office_classroom']) {
+            await db(env, `mo_state?user_id=eq.${user.id}&key=eq.${key}`, { method: 'DELETE' });
+        }
+        return json({ ok: true });
     }
 
     return json({ error: 'ไม่พบ' }, 404);

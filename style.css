@@ -4695,3 +4695,255 @@ button.mind-region-chip {
     font-size: 0.82rem;
     color: var(--text-secondary);
 }
+
+/* ===== ห้องทำงานโม 🏢 ===== */
+.office-screen {
+    z-index: 212;
+}
+
+.office-door {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    border: none;
+    font: inherit;
+    text-align: left;
+    color: #fff;
+    background: linear-gradient(135deg, #4b5d8a, #7a5ea8 60%, #f04d85);
+    cursor: pointer;
+}
+
+.office-door > span {
+    font-size: 1.8rem;
+}
+
+.office-door div {
+    flex: 1;
+}
+
+.office-door strong {
+    display: block;
+}
+
+.office-door small {
+    opacity: 0.85;
+    font-size: 0.78rem;
+}
+
+.office-door b {
+    font-size: 1.4rem;
+}
+
+.office-scene {
+    position: relative;
+    height: 170px;
+    border-radius: 20px;
+    overflow: hidden;
+    background: linear-gradient(180deg, #e9eefb 0%, #f5f0ff 62%, #d9c7b0 62%, #cdb79c 100%);
+    box-shadow: var(--shadow-sm);
+    flex-shrink: 0;
+}
+
+.office-window {
+    position: absolute;
+    top: 14px;
+    left: 18px;
+    width: 64px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border: 4px solid #fff;
+    border-radius: 6px;
+    background: #bfe3ff;
+    font-size: 1.3rem;
+}
+
+.office-shelf {
+    position: absolute;
+    top: 22px;
+    right: 18px;
+    padding: 2px 8px 4px;
+    border-bottom: 5px solid #a37c55;
+    font-size: 1.1rem;
+}
+
+.office-desk {
+    position: absolute;
+    left: 50%;
+    bottom: 20px;
+    width: 210px;
+    height: 16px;
+    transform: translateX(-50%);
+    border-radius: 4px;
+    background: #8a6440;
+    box-shadow: 0 6px 0 #6d4e31;
+}
+
+.office-monitor {
+    position: absolute;
+    left: 18px;
+    bottom: 16px;
+    width: 62px;
+    height: 42px;
+    border: 4px solid #2f3446;
+    border-radius: 5px;
+    background: #2f3446;
+}
+
+.office-monitor i {
+    position: absolute;
+    inset: 3px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #9fe3ff, #c7b5ff);
+    animation: officeScreen 3s ease-in-out infinite;
+}
+
+@keyframes officeScreen {
+    0%, 100% { opacity: 0.75; }
+    50% { opacity: 1; }
+}
+
+.office-mo {
+    position: absolute;
+    right: 46px;
+    bottom: 14px;
+    width: 54px;
+    height: 54px;
+    border: 3px solid #fff;
+    border-radius: 50%;
+    object-fit: cover;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+    animation: ggBob 2.6s ease-in-out infinite;
+}
+
+.office-mug {
+    position: absolute;
+    right: 8px;
+    bottom: 14px;
+    font-size: 1.1rem;
+}
+
+.office-status {
+    position: absolute;
+    left: 50%;
+    top: 74px;
+    transform: translateX(-50%);
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    color: #fff;
+    background: rgba(47, 52, 70, 0.72);
+}
+
+.office-loading {
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.office-zones {
+    display: grid;
+    gap: 10px;
+}
+
+.office-zone {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 14px;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: var(--shadow-sm);
+}
+
+.office-zone-icon {
+    font-size: 1.6rem;
+    line-height: 1;
+}
+
+.office-zone b {
+    display: block;
+}
+
+.office-zone small {
+    display: block;
+    color: var(--text-secondary);
+    font-size: 0.76rem;
+}
+
+.office-zone-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.office-zone-body .setting-hint {
+    margin: 8px 0;
+}
+
+.office-zone.soon {
+    align-items: center;
+    opacity: 0.55;
+}
+
+.office-zone.soon div {
+    flex: 1;
+}
+
+.office-zone.soon em {
+    padding: 3px 9px;
+    border-radius: 10px;
+    font-style: normal;
+    font-size: 0.7rem;
+    color: var(--pink-600);
+    background: var(--pink-50);
+}
+
+.office-error {
+    font-size: 0.8rem;
+    color: #c2410c;
+}
+
+.office-report {
+    padding: 10px 0;
+    border-bottom: 1px dashed #f0c9d6;
+}
+
+.office-report:last-child {
+    border-bottom: none;
+}
+
+.office-report-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.office-report-head small {
+    flex-shrink: 0;
+    color: var(--pink-600);
+    font-size: 0.72rem;
+}
+
+.office-report p {
+    margin-top: 4px;
+    font-size: 0.86rem;
+    line-height: 1.5;
+}
+
+.office-todo {
+    color: #6d3b8a;
+}
+
+.office-report-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-top: 6px;
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+}
+
+.office-report-foot a {
+    color: var(--pink-600);
+}

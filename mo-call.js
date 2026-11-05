@@ -558,6 +558,7 @@ class MoCall {
         this.videoMode = false;
         this.callScreen.classList.remove('video-mode', 'speaking');
         this.urgentNote = null;
+        this.fromPush = false;
         if (this._audio) { this._audio.pause(); this._audio = null; }
         // ยกเลิกการต่อสายที่ยังค้างอยู่ (กรณีวางสายก่อนโมรับ)
         clearTimeout(this._connectTimeout);

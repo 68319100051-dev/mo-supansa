@@ -222,6 +222,17 @@ class MoChat {
         if (this.dateWaiting) this.dateWaiting = null;
 
         // เจ้าของสั่ง "ปิดแอคของขวัญ" / "เปิดแอคของขวัญ" (ตอบทันที ไม่ใช้ AI)
+        // ห้องทำงาน: "เช็คคลาสรูม" / "มีงานในคลาสรูมไหม" / "เข้าห้องทำงาน" → โมไปทำจริง ไม่ใช้ AI ตอบ
+        if (this.onOfficeCommand && (/(คลาสรูม|classroom)/i.test(text) && /(เช็ค|เช็ก|ดู|สรุป|มี|อัปเดต|อัพเดท)/.test(text) || /(เข้า|เปิด|ไป)\s*ห้องทำงาน/.test(text))) {
+            this.queueReply(async () => {
+                this.showTyping && this.showTyping();
+                const reply = await this.onOfficeCommand(text).catch(() => 'เข้าห้องทำงานไม่ได้แฮะ ลองใหม่อีกทีนะ');
+                this.hideTyping && this.hideTyping();
+                this.addMessage('received', reply);
+            });
+            return;
+        }
+
         const giftCmd = this.onGiftCommand && /(ปิด|เปิด)\s*แอค(?:เคา\S*)?\s*(?:ของ)?\s*ขวัญ/.exec(text);
         if (giftCmd) {
             this.onGiftCommand(giftCmd[1] === 'ปิด').then(reply => this.addMessage('received', reply));
