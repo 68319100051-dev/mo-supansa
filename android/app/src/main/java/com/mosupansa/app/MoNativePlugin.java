@@ -8,6 +8,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.PowerManager;
 import android.provider.Settings;
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
@@ -17,6 +18,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 import com.google.firebase.messaging.FirebaseMessaging;
+import org.json.JSONArray;
 
 /**
  * สะพานให้หน้าเว็บคุยกับ Android: window.Capacitor.Plugins.MoNative
@@ -118,6 +120,53 @@ public class MoNativePlugin extends Plugin {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    // ===== การเตือน / โทรปลุก (นาฬิกาปลุกในเครื่อง) =====
+
+    @PluginMethod
+    public void setAlarms(PluginCall call) {
+        try {
+            AlarmScheduler.replaceAll(getContext(), new JSONArray(call.getArray("alarms", new JSArray()).toString()));
+            call.resolve();
+        } catch (Exception e) {
+            call.reject(e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void alarmStatus(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("exact", AlarmScheduler.canExact(getContext()));
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void openExactAlarmSettings(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= 31) launch(new Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + getContext().getPackageName())));
+        call.resolve();
+    }
+
+    // ===== หัวแชทโม =====
+
+    @PluginMethod
+    public void chatHeadStatus(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("on", ChatHeadService.isWanted(getContext()) && ChatHeadService.canOverlay(getContext()));
+        ret.put("canOverlay", ChatHeadService.canOverlay(getContext()));
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void setChatHead(PluginCall call) {
+        ChatHeadService.setWanted(getContext(), Boolean.TRUE.equals(call.getBoolean("on", false)));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void openOverlaySettings(PluginCall call) {
+        if (Build.VERSION.SDK_INT >= 23) launch(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getContext().getPackageName())));
+        call.resolve();
     }
 
     @PluginMethod

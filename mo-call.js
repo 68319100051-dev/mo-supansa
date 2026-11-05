@@ -131,8 +131,9 @@ class MoCall {
     /**
      * Mo calls user (incoming call)
      */
-    startIncomingCall() {
+    startIncomingCall(opts = {}) {
         if (this.isInCall) return;
+        this.greetingOverride = opts.greeting || null;   // เช่น โทรปลุก → ทักแบบปลุก
         this.incomingCall.classList.remove('hidden');
         this.startRingtone();
 

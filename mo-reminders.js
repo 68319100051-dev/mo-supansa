@@ -2,6 +2,7 @@
    Mo Reminders ⏰ - การเตือน & วันสำคัญ
    - "เตือนกินยาอีก 30 นาที" / "อีก 1 ชม. เตือนโทรหาแม่" / "เตือนประชุมตอน 15:30"
    - ภาษาพูด: "ตอนเที่ยงเตือนกินข้าว" "บ่ายสองเตือนประชุม" "สองทุ่มครึ่ง" "พรุ่งนี้เช้า" "ตีห้า"
+   - "อีก 2 นาทีโทรปลุกด้วย" / "ตี 6 โทรปลุก" → โมโทรปลุก (แอป Android ดังแม้ปิดแอป/ล็อกจอ)
    - "ทุกวัน" → เตือนซ้ำทุกวัน (เก็บเป็นกิจวัตร) / ประโยคแปลกๆ → ให้ AI ช่วยอ่าน
    - วันเกิด (จากความจำ) และวันครบรอบที่รู้จักกัน
    ============================================ */
@@ -14,6 +15,7 @@ class MoReminders {
         this.reminders = this.load();
         this.onDue = null;          // (reminder) => void — ตั้งจาก app.js
         this.onSpecialDay = null;   // (message) => void
+        this.onChange = null;       // (pending) => void — แอป Android ตั้งนาฬิกาปลุกในเครื่องตาม
 
         this.thaiMonths = [
             ['มกรา', 'ม.ค'], ['กุมภา', 'ก.พ'], ['มีนา', 'มี.ค'], ['เมษา', 'เม.ย'],
@@ -34,6 +36,7 @@ class MoReminders {
         try {
             localStorage.setItem(this.storageKey, JSON.stringify(this.reminders));
         } catch (e) {}
+        if (this.onChange) this.onChange(this.getPending());
     }
 
     start() {
@@ -51,6 +54,8 @@ class MoReminders {
      * คืนค่า reminder ถ้าข้อความเป็นการขอให้เตือน, ไม่ใช่ → null
      */
     parse(message) {
+        const wake = this.parseWake(message);
+        if (wake) return wake;
         if (!/เตือน|นัด|เดท|เดต|ด้วยกัน|คอลกัน|โทรคุยกัน/.test(message)) return null;
         const units = { 'วิ': 1000, 'วินาที': 1000, 'นาที': 60000, 'ชม': 3600000, 'ชั่วโมง': 3600000 };
         const clean = s => s.replace(/^(?:เรา|ผม|ฉัน|หนู|หน่อย|ด้วย|ให้)+/, '').replace(/(?:หน่อย|ด้วย|นะ|ที|ครับ|ค่ะ|จ้า|\s)+$/, '').trim();
@@ -90,6 +95,20 @@ class MoReminders {
             const what = this.reminderText(message, t.match) || 'เรื่องที่ให้เตือน';
             return this.add(what, this.resolveTime(t, message), /ทุกวัน|ทุกเช้า|ทุกเย็น|ทุกคืน/.test(message));
         }
+        return null;
+    }
+
+    /**
+     * โทรปลุก: "อีก 2 นาทีโทรปลุกด้วย" "ตี 6 โทรปลุก" "พรุ่งนี้ 7 โมงปลุกหน่อย" "ปลุกตอน 6:30"
+     */
+    parseWake(message) {
+        if (!/ปลุก/.test(message) || /เมื่อกี้|เมื่อเช้า|ไม่ต้อง|ยกเลิก/.test(message)) return null;
+        const units = { 'วิ': 1000, 'วินาที': 1000, 'นาที': 60000, 'ชม': 3600000, 'ชั่วโมง': 3600000 };
+        const daily = /ทุกวัน|ทุกเช้า/.test(message);
+        const m = message.match(/(?:ใน)?อีก\s*(\d+)\s*(วินาที|วิ|นาที|ชั่วโมง|ชม)/);
+        if (m) return this.add('ตื่นนอน', Date.now() + Number(m[1]) * units[m[2]], false, 'wake');
+        const t = this.parseThaiTime(message);
+        if (t) return this.add('ตื่นนอน', this.resolveTime(t, message), daily, 'wake');
         return null;
     }
 
@@ -192,6 +211,17 @@ daily=true ถ้าขอให้เตือนทุกวัน / ถ้า
      * ข้อความยืนยันตอนรับเรื่องเตือน
      */
     confirmMessage(reminder) {
+        if (reminder.kind === 'wake') {
+            const diff = reminder.dueAt - Date.now();
+            const mins = Math.round(diff / 60000);
+            const when = reminder.daily ? `ทุกวันตอน ${this.formatTime(reminder.dueAt)}`
+                : diff < 60000 ? `อีก ${Math.max(1, Math.round(diff / 1000))} วิ`
+                : mins < 60 ? `อีก ${mins} นาที`
+                : `${new Date(reminder.dueAt).getDate() !== new Date().getDate() ? 'พรุ่งนี้ ' : ''}ตอน ${this.formatTime(reminder.dueAt)}`;
+            const native = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+            return this.pick([`โอเค ${when} เค้าโทรปลุกนะ ⏰📞`, `ได้เลยย ${when} เค้าโทรไปปลุกเอง ต้องรับนะ 😤📞`])
+                + (native ? '' : ' (ตอนนี้เปิดผ่านเว็บ เค้าโทรได้เฉพาะตอนเปิดแอปค้างไว้นะ ใช้แอป Android ถึงจะโทรได้แม้ปิดแอป)');
+        }
         if (reminder.kind === 'date') {
             return this.pick([
                 `ได้เลยย นัดแล้วนะ ${this.formatTime(reminder.dueAt)} ${reminder.text} ห้ามเทเค้านะ 💕`,

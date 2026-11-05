@@ -8,27 +8,43 @@ import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
     static final String EXTRA_CALL = "mo_call";   // "ring" | "answer"
+    static final String EXTRA_WHY = "mo_why";     // "wake" = โทรปลุก
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(MoNativePlugin.class);
         super.onCreate(savedInstanceState);
+        String why = getIntent().getStringExtra(EXTRA_WHY);
         String call = takeCall(getIntent());
         if (call != null) {
             // เปิดจากสายเรียกเข้า → โหลดหน้าเว็บพร้อม ?call= (app.js รู้จักอยู่แล้ว)
-            bridge.getWebView().loadUrl(bridge.getAppUrl().replaceAll("/+$", "") + "/?call=" + call);
+            bridge.getWebView().loadUrl(bridge.getAppUrl().replaceAll("/+$", "") + "/?call=" + call + (why != null ? "&why=" + why : ""));
         }
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
+        String why = intent.getStringExtra(EXTRA_WHY);
         String call = takeCall(intent);
         if (call != null && bridge != null) {
             // แอปเปิดอยู่แล้ว → บอกหน้าเว็บตรงๆ ไม่ต้องโหลดใหม่
             bridge.getWebView().evaluateJavascript(
-                "window.dispatchEvent(new CustomEvent('mo-native-call',{detail:{answer:" + "answer".equals(call) + "}}))", null);
+                "window.dispatchEvent(new CustomEvent('mo-native-call',{detail:{answer:" + "answer".equals(call)
+                    + (why != null ? ",why:'" + why + "'" : "") + "}}))", null);
         }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        ChatHeadService.appVisible(true);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        ChatHeadService.appVisible(false);
     }
 
     @Override

@@ -47,16 +47,27 @@ public final class CallNotifier {
 
     /** เปิดแอป พร้อมบอกหน้าเว็บว่า ring (ขึ้นจอสายเข้าในแอป) หรือ answer (รับสายเลย) */
     static PendingIntent openApp(Context ctx, String call, int requestCode) {
+        return openApp(ctx, call, null, requestCode);
+    }
+
+    static PendingIntent openApp(Context ctx, String call, String why, int requestCode) {
         Intent i = new Intent(ctx, MainActivity.class)
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         if (call != null) i.putExtra(MainActivity.EXTRA_CALL, call);
+        if (why != null) i.putExtra(MainActivity.EXTRA_WHY, why);
         return PendingIntent.getActivity(ctx, requestCode, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
     static void showCall(Context ctx, String title, String body) {
+        showCall(ctx, title, body, null);
+    }
+
+    /** why = "wake" → รับสายแล้วโมทักแบบปลุก */
+    static void showCall(Context ctx, String title, String body, String why) {
         ensureChannels(ctx);
-        PendingIntent ring = openApp(ctx, "ring", 1);
-        PendingIntent answer = openApp(ctx, "answer", 2);
+        ChatHeadService.bump();
+        PendingIntent ring = openApp(ctx, "ring", why, 1);
+        PendingIntent answer = openApp(ctx, "answer", why, 2);
         PendingIntent decline = PendingIntent.getBroadcast(ctx, 3,
             new Intent(ctx, CallActionReceiver.class).setAction(CallActionReceiver.ACTION_DECLINE),
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -84,6 +95,7 @@ public final class CallNotifier {
 
     static void showChat(Context ctx, String title, String body) {
         ensureChannels(ctx);
+        ChatHeadService.bump();
         Notification n = new NotificationCompat.Builder(ctx, CHANNEL_CHAT)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title != null ? title : "โม 💕")

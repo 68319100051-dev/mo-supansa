@@ -37,8 +37,17 @@
         chat.saveHistory();
     };
 
+    const WAKE_GREETING = () => ['ตื่นนน ได้เวลาแล้วว ลุกๆ 😤', 'อรุณสวัสดิ์~ ตื่นได้แล้วนะ เค้าโทรมาปลุกตามสัญญา ⏰', 'ฮัลโหลล ตื่นยังง ห้ามนอนต่อนะ!'][Math.floor(Math.random() * 3)];
     reminders.onDue = (r) => {
         if (alreadySent(`rm:${r.id}`)) return;
+        // โทรปลุก → ทักสั้นๆ แล้วโทรมาเลย (แอป Android ดังจากนาฬิกาปลุกในเครื่องด้วย)
+        if (r.kind === 'wake') {
+            const since = Date.now();
+            chat.addMessage('received', '⏰ ตื่นนน ได้เวลาแล้ว! เค้าโทรไปปลุกนะ 📞');
+            tagDue(`rm:${r.id}`, since);
+            if (!call.getCallStatus()) call.startIncomingCall({ greeting: WAKE_GREETING() });
+            return;
+        }
         // ถึงเวลานัด → โมโทรมา แล้วรอดูว่ามาตามนัดไหม
         if (r.kind === 'date') {
             chat.dateWaiting = { at: Date.now(), text: r.text };
@@ -821,6 +830,33 @@
         pushStatus.textContent = 'แอป Android: แจ้งเตือน + สายเรียกเข้าเต็มจอ เปิดให้อัตโนมัติหลังเข้าสู่ระบบซิงก์';
         sync.onStatus(registerNative);
         registerNative();
+        // การเตือน/โทรปลุก → ตั้งนาฬิกาปลุกในเครื่อง (ดังได้แม้ปิดแอป ล็อกจอ ไม่ต้องใช้เน็ต)
+        const pushAlarms = pending => moNative.setAlarms({
+            alarms: pending.map(r => ({ id: r.id, at: r.dueAt, kind: r.kind || 'remind', text: r.text, daily: Boolean(r.daily) })),
+        }).catch(e => console.warn('setAlarms failed:', e.message));
+        reminders.onChange = pushAlarms;
+        pushAlarms(reminders.getPending());
+        moNative.alarmStatus().then(st => {
+            if (!st.exact && confirm('ให้โมโทรปลุกตรงเวลาได้ ต้องเปิดสิทธิ์ "นาฬิกาปลุกและการเตือน" ก่อน ไปเปิดเลยไหม?')) moNative.openExactAlarmSettings();
+        }).catch(() => {});
+
+        // หัวแชทโม (ลอยทับแอปอื่น)
+        const headBtn = document.getElementById('btn-chathead');
+        const renderHead = () => moNative.chatHeadStatus().then(st => {
+            headBtn.textContent = st.on ? '💬 หัวแชทโม: เปิดอยู่ (กดเพื่อปิด)' : '💬 เปิดหัวแชทโม';
+        }).catch(() => {});
+        headBtn.addEventListener('click', async () => {
+            const st = await moNative.chatHeadStatus();
+            if (!st.on && !st.canOverlay) {
+                chat.showNotification('เปิดสิทธิ์ "แสดงทับแอปอื่น" ให้โมก่อน แล้วกลับมากดอีกที');
+                return moNative.openOverlaySettings();
+            }
+            await moNative.setChatHead({ on: !st.on });
+            renderHead();
+        });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) renderHead(); });
+        renderHead();
+
         // Infinix/XOS ฆ่าแอปตอนปิดจอ → ทางลัดไปตั้ง "ไม่จำกัดแบตเตอรี่" + "เริ่มอัตโนมัติ"
         document.getElementById('native-power').classList.remove('hidden');
         document.getElementById('btn-battery').addEventListener('click', () => moNative.openBatterySettings());
@@ -1004,7 +1040,7 @@
             const sameDay = d.toDateString() === new Date().toDateString();
             const when = (sameDay ? '' : d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }) + ' ') + reminders.formatTime(r.dueAt);
             return `<div class="memory-item" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                <div>⏰ ${esc(r.text)} <span style="opacity:0.6; font-size:0.8rem;">• ${when}</span></div>
+                <div>${r.kind === 'wake' ? '📞 โทรปลุก' : '⏰ ' + esc(r.text)} <span style="opacity:0.6; font-size:0.8rem;">• ${when}</span></div>
                 <button class="close-btn" data-reminder="${r.id}" title="ยกเลิก" style="width:24px; height:24px; font-size:1rem;">&times;</button>
             </div>`;
         });
@@ -1514,16 +1550,17 @@
     });
 
     // ======= โมโทรมาจากแจ้งเตือน (Push แบบสายเรียกเข้า) =======
-    const callFromPush = (answer) => {
+    const callFromPush = (answer, reason) => {
         if (call.getCallStatus()) return;
         call.fromPush = true;
-        call.startIncomingCall();
+        call.startIncomingCall(reason === 'wake' ? { greeting: WAKE_GREETING() } : {});
         if (answer) setTimeout(() => call.acceptIncomingCall(), 600);
     };
     const callParam = new URLSearchParams(location.search).get('call');
+    const callWhy = new URLSearchParams(location.search).get('why');
     if (callParam) {
         history.replaceState(null, '', location.pathname);
-        setTimeout(() => callFromPush(callParam === 'answer'), 3600);   // หลัง splash
+        setTimeout(() => callFromPush(callParam === 'answer', callWhy), 3600);   // หลัง splash
     }
     if (navigator.serviceWorker) {
         navigator.serviceWorker.addEventListener('message', (e) => {
@@ -1531,7 +1568,7 @@
         });
     }
     // แอป Android (Capacitor): แตะแจ้งเตือนสายเข้าตอนแอปเปิดอยู่
-    window.addEventListener('mo-native-call', (e) => callFromPush(e.detail && e.detail.answer));
+    window.addEventListener('mo-native-call', (e) => callFromPush(e.detail && e.detail.answer, e.detail && e.detail.why));
 
     // ======= หัวใจเต้น: ทุก ~1.5 ชม. โมคิดเองตอนไม่มีใครคุย แล้วตัดสินใจเอง =======
     async function heartbeat() {
