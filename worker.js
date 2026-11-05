@@ -673,6 +673,7 @@ async function officeClassroom(env, userId, { seed = false, manual = false } = {
             const head = works.length ? `📚 เจ็ทๆ มีงานใหม่ใน Classroom ${works.length} งาน` : '📢 มีประกาศใหม่ใน Classroom';
             await moNotify(env, userId, `${head}\n\n${lines.join('\n\n')}`.slice(0, 1500), { tag: 'office', call: works.length > 0 });
         }
+        if (reports.length) await db(env, `mo_state?user_id=eq.${userId}&key=eq.office_snapshot`, { method: 'DELETE' }).catch(() => {});
         Object.assign(st, { lastCheck: now, courses: courses.length, error: null, email: g.email });
         await statePut(env, userId, 'office_classroom', st);
         return { ok: true, courses: courses.length, fresh: reports, seeded: seeding };
@@ -747,6 +748,20 @@ async function handleOffice(request, env, url, ctx) {
         return json({ url: auth.toString() });
     }
 
+    if (route === 'classroom/ask' && request.method === 'POST') {
+        const { q } = await request.json().catch(() => ({}));
+        return json(await officeAsk(env, user.id, q || 'มีงานอะไรค้างบ้าง'));
+    }
+
+    if (route === 'classroom/courses') {
+        try {
+            const data = await classroomSnapshot(env, user.id);
+            return json({ ok: true, courses: data.map(c => ({ name: c.name, section: c.section, link: c.link, pending: c.works.filter(w => w.status.startsWith('ยังไม่ส่ง')).length })) });
+        } catch (e) {
+            return json({ ok: false, reason: e.reason || 'error', error: String(e.message || e).slice(0, 200) });
+        }
+    }
+
     if (route === 'classroom/check' && request.method === 'POST') {
         return json(await officeClassroom(env, user.id, { manual: true }));
     }
@@ -757,11 +772,119 @@ async function handleOffice(request, env, url, ctx) {
             const rt = await officeUnseal(env, g.rt).catch(() => '');
             if (rt) await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(rt)}`, { method: 'POST' }).catch(() => {});
         }
-        for (const key of ['office_google', 'office_classroom']) {
+        for (const key of ['office_google', 'office_classroom', 'office_snapshot']) {
             await db(env, `mo_state?user_id=eq.${user.id}&key=eq.${key}`, { method: 'DELETE' });
         }
         return json({ ok: true });
     }
 
     return json({ error: 'ไม่พบ' }, 404);
+}
+
+/** สถานะการส่งของเรา (studentSubmissions.state) → ภาษาคน */
+const OFFICE_SUB_STATE = {
+    NEW: 'ยังไม่ส่ง', CREATED: 'ยังไม่ส่ง', RECLAIMED_BY_STUDENT: 'ดึงกลับมาแก้ ยังไม่ส่ง',
+    TURNED_IN: 'ส่งแล้ว', RETURNED: 'ครูคืนงานแล้ว',
+};
+
+/**
+ * ดึงข้อมูล Classroom สดๆ: วิชา / งาน + สถานะการส่งของเรา / ประกาศล่าสุด
+ * เก็บแคชไว้ 3 นาที (ถามติดๆ กันไม่ต้องยิง Google ซ้ำ)
+ */
+async function classroomSnapshot(env, userId) {
+    const cached = await stateGet(env, userId, 'office_snapshot');
+    if (cached && Date.now() - cached.at < 3 * 60000) return cached.data;
+    const g = await stateGet(env, userId, 'office_google');
+    if (!g || g.broken) throw Object.assign(new Error(g ? 'broken' : 'not_connected'), { reason: g ? 'broken' : 'not_connected' });
+    const access = await googleAccess(env, userId, g);
+    const api = async path => {
+        const r = await fetch(`https://classroom.googleapis.com/v1/${path}`, { headers: { Authorization: `Bearer ${access}` } });
+        if (!r.ok) throw new Error(`classroom ${r.status}: ${(await r.text()).slice(0, 160)}`);
+        return r.json();
+    };
+    const subs = await db(env, `mo_state?select=value&user_id=eq.${userId}&key=like.push_sub:*&limit=1`);
+    const tz = subs[0] ? Number(subs[0].value.tz) || -420 : -420;
+    const courses = ((await api('courses?courseStates=ACTIVE&pageSize=30')).courses || []).slice(0, 15);
+    const data = await Promise.all(courses.map(async c => {
+        const [cw, mine, an] = await Promise.all([
+            api(`courses/${c.id}/courseWork?orderBy=updateTime%20desc&pageSize=15`).catch(() => ({})),
+            api(`courses/${c.id}/courseWork/-/studentSubmissions?userId=me&pageSize=60`).catch(() => ({})),
+            api(`courses/${c.id}/announcements?orderBy=updateTime%20desc&pageSize=4`).catch(() => ({})),
+        ]);
+        const subOf = Object.fromEntries((mine.studentSubmissions || []).map(s => [s.courseWorkId, s]));
+        return {
+            name: c.name, section: c.section || '', room: c.room || '', link: c.alternateLink,
+            works: (cw.courseWork || []).map(w => {
+                const s = subOf[w.id] || {};
+                return {
+                    title: w.title || '', type: w.workType === 'ASSIGNMENT' ? 'งาน' : w.workType === 'SHORT_ANSWER_QUESTION' ? 'คำถาม' : w.workType === 'MULTIPLE_CHOICE_QUESTION' ? 'ปรนัย' : 'งาน',
+                    due: officeDue(w, tz), points: w.maxPoints || null,
+                    status: OFFICE_SUB_STATE[s.state] || (s.state ? s.state : 'ไม่ทราบ'), late: Boolean(s.late),
+                    grade: s.assignedGrade != null ? s.assignedGrade : null,
+                    detail: String(w.description || '').slice(0, 220), link: w.alternateLink,
+                };
+            }),
+            posts: (an.announcements || []).map(a => ({ text: String(a.text || '').slice(0, 240), at: String(a.updateTime || a.creationTime || '').slice(0, 10) })),
+        };
+    }));
+    await statePut(env, userId, 'office_snapshot', { at: Date.now(), data });
+    return data;
+}
+
+/** ถามโมเรื่อง Classroom → โมดูข้อมูลจริงแล้วตอบ (ไม่แต่ง) */
+async function officeAsk(env, userId, question) {
+    let data;
+    try {
+        data = await classroomSnapshot(env, userId);
+    } catch (e) {
+        if (e.reason) return { ok: false, reason: e.reason };
+        return { ok: false, reason: 'error', error: String(e.message || e).slice(0, 200) };
+    }
+    const keys = (await stateGet(env, userId, 'mo_device_keys_v1')) || {};
+    const subs = await db(env, `mo_state?select=value&user_id=eq.${userId}&key=like.push_sub:*&limit=1`);
+    const tz = subs[0] ? Number(subs[0].value.tz) || -420 : -420;
+    const local = new Date(Date.now() - tz * 60000);
+    const today = `${local.getUTCDate()}/${local.getUTCMonth() + 1}/${local.getUTCFullYear()} ${String(local.getUTCHours()).padStart(2, '0')}:${String(local.getUTCMinutes()).padStart(2, '0')}`;
+    // ส่งให้ AI แบบย่อ: งานที่ส่งแล้ว/เก่า ตัดรายละเอียดออก ประหยัดโทเคน
+    const compact = data.map(c => ({
+        วิชา: c.name + (c.section ? ` (${c.section})` : ''),
+        งาน: c.works.map(w => ({
+            ชื่อ: w.title, ส่ง: w.due || '-', สถานะ: w.status + (w.late ? ' (เลยกำหนด)' : ''),
+            ...(w.grade != null ? { คะแนน: `${w.grade}${w.points ? `/${w.points}` : ''}` } : w.points ? { คะแนนเต็ม: w.points } : {}),
+            ...(w.status.startsWith('ยังไม่ส่ง') && w.detail ? { รายละเอียด: w.detail } : {}),
+        })),
+        ประกาศ: c.posts.slice(0, 3),
+    }));
+    const fallback = () => {
+        const pending = data.flatMap(c => c.works.filter(w => w.status.startsWith('ยังไม่ส่ง')).map(w => `• ${c.name}: ${w.title}${w.due ? ` (ส่ง ${w.due})` : ''}`));
+        return `มี ${data.length} วิชา: ${data.map(c => c.name).join(', ')}${pending.length ? `\nงานที่ยังไม่ส่ง:\n${pending.slice(0, 8).join('\n')}` : '\nไม่มีงานค้างเลย 🎉'}`;
+    };
+    if (!keys.gemini) return { ok: true, answer: fallback(), courses: data.length };
+    const prompt = `คุณคือ "โม" แฟนสาวที่ช่วยเช็ก Google Classroom ให้ "เจ็ท" ตอบคำถามจากข้อมูลจริงข้างล่างเท่านั้น
+ตอนนี้: ${today}
+คำถามของเจ็ท: "${String(question).slice(0, 300)}"
+
+ข้อมูล Classroom (สดจากระบบ):
+${JSON.stringify(compact).slice(0, 24000)}
+
+วิธีตอบ:
+- ภาษาไทยกันเองแบบโม เรียกตัวเองว่า "เค้า" เรียกอีกฝ่ายว่า "เอง" สั้น ชัด อ่านง่ายในแชท
+- ตอบให้ครบทุกส่วนที่ถาม (ถามว่ามีวิชาอะไร = บอกชื่อทุกวิชา, ถามหลายเรื่อง = ตอบทุกเรื่อง) งานที่ส่งแล้วไม่ต้องพูดถึงถ้าไม่ได้ถาม
+- ตอบตรงคำถาม ถ้าหลายรายการให้ขึ้นบรรทัดละอัน ขึ้นต้นด้วย "•" เรียงตามกำหนดส่งที่ใกล้สุดก่อน
+- บอกวันส่งเป็น "วันนี้/พรุ่งนี้/อีก N วัน" เทียบกับตอนนี้ งานเลยกำหนดที่ยังไม่ส่งให้เตือนชัดๆ
+- ห้ามแต่งข้อมูลที่ไม่มี ถ้าหาไม่เจอให้บอกตรงๆ ว่าไม่เจอในวิชาที่มี
+- ไม่เกิน 12 บรรทัด ไม่ใส่ markdown หัวข้อ/ตัวหนา`;
+    try {
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-goog-api-key': keys.gemini },
+            body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 700 } }),
+            signal: AbortSignal.timeout(20000),
+        });
+        const j = await res.json();
+        const answer = (j.candidates && j.candidates[0].content.parts.map(p => p.text || '').join('').trim()) || '';
+        return { ok: true, answer: answer.replace(/\*\*/g, '') || fallback(), courses: data.length };
+    } catch (e) {
+        return { ok: true, answer: fallback(), courses: data.length };
+    }
 }

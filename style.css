@@ -5207,3 +5207,85 @@ button.mind-region-chip {
     color: #fff;
     background: linear-gradient(135deg, #8b5cf6, #ec4899);
 }
+
+/* ถามโม + วิชา */
+.office-courses {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 12px 0 4px;
+}
+
+.office-course-chip {
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    text-decoration: none;
+    color: #4c1d95;
+    background: #f5f3ff;
+    border: 1px solid #ede9fe;
+}
+
+.office-course-chip b {
+    display: inline-block;
+    min-width: 18px;
+    margin-left: 4px;
+    padding: 0 5px;
+    border-radius: 9px;
+    font-size: 0.68rem;
+    text-align: center;
+    color: #fff;
+    background: #ec4899;
+}
+
+.office-course-chip.loading {
+    color: var(--text-secondary);
+    background: #f9fafb;
+    border-color: #f3f4f6;
+}
+
+.office-ask {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.office-ask input {
+    flex: 1;
+    min-width: 0;
+    padding: 11px 14px;
+    border: 1px solid #e9d5ff;
+    border-radius: 14px;
+    font: inherit;
+    font-size: 0.86rem;
+    background: #fdfbff;
+}
+
+.office-ask input:focus {
+    outline: none;
+    border-color: #a78bfa;
+    box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.2);
+}
+
+.office-ask button {
+    width: 46px;
+    border: none;
+    border-radius: 14px;
+    font-size: 1.1rem;
+    background: linear-gradient(135deg, #8b5cf6, #ec4899);
+    cursor: pointer;
+}
+
+.office-answer {
+    margin-top: 10px;
+    padding: 12px 14px;
+    border-radius: 14px 14px 14px 4px;
+    font-size: 0.84rem;
+    line-height: 1.6;
+    color: #374151;
+    background: linear-gradient(180deg, #fdf2f8, #faf5ff);
+}
+
+.office-answer.hidden {
+    display: none;
+}

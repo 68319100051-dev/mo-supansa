@@ -218,8 +218,14 @@ class MoOffice {
                 </div>
                 <p class="office-account">✉️ ${this.esc(g.email || 'เชื่อมแล้ว')}</p>
                 ${c && c.error ? `<p class="office-error">⚠️ ${this.esc(c.error)}</p>` : ''}
+                <div class="office-courses" id="office-courses"><span class="office-course-chip loading">กำลังดูวิชา...</span></div>
+                <form class="office-ask" id="office-ask">
+                    <input type="text" name="q" placeholder="ถามโม เช่น งานไหนใกล้ส่ง / วิชาคอมมีงานค้างไหม" autocomplete="off" maxlength="200">
+                    <button type="submit" aria-label="ถาม">💬</button>
+                </form>
+                <div class="office-answer hidden" id="office-answer"></div>
                 <div class="office-actions">
-                    <button class="office-btn primary" data-act="check"><span>🔎</span> ให้โมเช็กตอนนี้</button>
+                    <button class="office-btn primary" data-act="check"><span>🔎</span> ให้โมเช็กงานใหม่</button>
                     <button class="office-btn ghost" data-act="disconnect">ตัดการเชื่อม</button>
                 </div>`;
         }
@@ -252,6 +258,26 @@ class MoOffice {
     }
 
     bind() {
+        // รายชื่อวิชา (ดึงสด แคช 3 นาทีที่หลังบ้าน)
+        const box = this.content.querySelector('#office-courses');
+        if (box) this.api('classroom/courses').then(r => {
+            const list = (r.data && r.data.courses) || [];
+            box.innerHTML = list.length
+                ? list.map(c => `<a class="office-course-chip" href="${this.esc(c.link || '#')}" target="_blank" rel="noopener">${this.esc(c.name)}${c.pending ? ` <b>${c.pending}</b>` : ''}</a>`).join('')
+                : `<span class="office-course-chip loading">${this.esc(this.problemText(r) || 'ไม่มีวิชาที่เปิดอยู่')}</span>`;
+        });
+        const form = this.content.querySelector('#office-ask');
+        if (form) form.addEventListener('submit', async e => {
+            e.preventDefault();
+            const q = form.q.value.trim();
+            if (!q) return;
+            const out = this.content.querySelector('#office-answer');
+            out.classList.remove('hidden');
+            out.textContent = 'เค้ากำลังเปิด Classroom ดูให้... 👀';
+            form.q.value = '';
+            const answer = await this.ask(q);
+            out.innerHTML = `<b>เอง:</b> ${this.esc(q)}<br><br>${this.esc(answer).replace(/\n/g, '<br>')}`;
+        });
         this.content.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', async () => {
             const act = b.dataset.act;
             b.disabled = true;
@@ -278,13 +304,8 @@ class MoOffice {
         const r = await this.api('classroom/check', {});
         const d = r.data || {};
         this.mind && this.mind.think('frontal', 'เข้าห้องทำงาน ไปเช็ก Classroom ให้เอง');
-        if (r.status === 401) return 'ต้องล็อกอินซิงก์ก่อนนะ ห้องทำงานถึงจะเปิดได้';
-        if (r.status === 503) return 'หลังบ้านยังไม่ได้ตั้งค่า Google เลย (ดู docs/office-setup.md)';
-        if (!d.ok) {
-            if (d.reason === 'not_connected') return 'ยังไม่ได้เชื่อม Google Classroom เลยนะ เข้าห้องทำงานเค้า (บ้านโม → 🏢) แล้วกดเชื่อมก่อน';
-            if (d.reason === 'broken') return 'การเชื่อม Classroom หลุดแล้ว เข้าห้องทำงานแล้วกดเชื่อมใหม่ทีนึงนะ';
-            return `เข้า Classroom ไม่ได้แฮะ 😵 (${d.error || 'ไม่รู้สาเหตุ'})`;
-        }
+        const problem = this.problemText(r);
+        if (problem) return problem;
         if (d.fresh && d.fresh.length) {
             return `เจองานใหม่ ${d.fresh.length} อัน! เค้าส่งสรุปไว้ในแชทแล้วนะ 📚\n${d.fresh.map(x => `• ${x.course}: ${x.title}${x.due ? ` (ส่ง ${x.due})` : ''}`).join('\n')}`;
         }
@@ -292,6 +313,25 @@ class MoOffice {
         const st = await this.api('status');
         const recent = ((st.data && st.data.reports) || []).filter(x => x.kind === 'work').slice(0, 3);
         return `เช็กครบ ${d.courses} วิชาแล้ว ยังไม่มีงานใหม่นะ 😌${recent.length ? `\nงานล่าสุดที่เค้าเคยรายงาน:\n${recent.map(x => `• ${x.course}: ${x.title}${x.due ? ` (ส่ง ${x.due})` : ''}`).join('\n')}` : ''}`;
+    }
+
+    /** ข้อความเมื่อทำไม่ได้ (ยังไม่ล็อกอิน / ยังไม่ตั้งค่า / ยังไม่เชื่อม / หลุด) — null = ไม่มีปัญหา */
+    problemText(r) {
+        const d = r.data || {};
+        if (r.status === 401) return 'ต้องล็อกอินซิงก์ก่อนนะ ห้องทำงานถึงจะเปิดได้';
+        if (r.status === 503) return 'หลังบ้านยังไม่ได้ตั้งค่า Google เลย (ดู docs/office-setup.md)';
+        if (r.status === 0) return 'ต่อหลังบ้านไม่ได้ เน็ตหลุดป่าว ลองใหม่อีกทีนะ';
+        if (d.ok) return null;
+        if (d.reason === 'not_connected') return 'ยังไม่ได้เชื่อม Google Classroom เลยนะ เข้าห้องทำงานเค้า (บ้านโม → 🏢) แล้วกดเชื่อมก่อน';
+        if (d.reason === 'broken') return 'การเชื่อม Classroom หลุดแล้ว เข้าห้องทำงานแล้วกดเชื่อมใหม่ทีนึงนะ';
+        return `เข้า Classroom ไม่ได้แฮะ 😵 (${d.error || 'ไม่รู้สาเหตุ'})`;
+    }
+
+    /** ถามอะไรก็ได้เรื่อง Classroom → โมไปดูข้อมูลจริงแล้วตอบ */
+    async ask(question) {
+        this.mind && this.mind.think('frontal', `เปิด Classroom ไปหาคำตอบ: "${String(question).slice(0, 40)}"`);
+        const r = await this.api('classroom/ask', { q: question });
+        return this.problemText(r) || r.data.answer || 'หาไม่เจอแฮะ ลองถามใหม่อีกทีนะ';
     }
 
     /** โทรมาจากแจ้งเตือนรายงานงาน → ให้โมเล่าเรื่องนั้นในสาย */
