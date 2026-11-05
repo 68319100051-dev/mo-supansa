@@ -7,10 +7,10 @@
 
 const MO_OFFICE_ZONES = [
     { id: 'classroom', icon: '📚', name: 'Google Classroom', desc: 'งานใหม่ / ประกาศ → โมอ่าน สรุป โทรมาบอก', live: true },
-    { id: 'gmail', icon: '📧', name: 'Gmail', desc: 'สรุปอีเมลสำคัญ' },
-    { id: 'calendar', icon: '📅', name: 'Google Calendar', desc: 'เตือนนัด ประชุม' },
-    { id: 'drive', icon: '📁', name: 'Google Drive', desc: 'หาไฟล์ / สรุปเอกสาร' },
-    { id: 'tasks', icon: '🗣️', name: 'สั่งงานโม', desc: 'พิมพ์สั่ง แล้วโมไปทำให้' },
+    { id: 'gmail', color: '#fee2e2', icon: '📧', name: 'Gmail', desc: 'สรุปอีเมลสำคัญ' },
+    { id: 'calendar', color: '#dbeafe', icon: '📅', name: 'Google Calendar', desc: 'เตือนนัด ประชุม' },
+    { id: 'drive', color: '#fef3c7', icon: '📁', name: 'Google Drive', desc: 'หาไฟล์ / สรุปเอกสาร' },
+    { id: 'tasks', color: '#ede9fe', icon: '🗣️', name: 'สั่งงานโม', desc: 'พิมพ์สั่ง แล้วโมไปทำให้' },
 ];
 
 class MoOffice {
@@ -82,61 +82,173 @@ class MoOffice {
         this.bind();
     }
 
-    /** ฉากโมนั่งโต๊ะทำงาน */
+    /** ฉากห้องทำงาน (SVG) — ท้องฟ้านอกหน้าต่าง/ไฟโต๊ะเปลี่ยนตามเวลาจริง */
     sceneHTML(loading) {
         const s = this.status;
-        const busy = loading ? 'กำลังเปิดไฟ...' : s && s.google.connected && !s.google.broken ? 'นั่งเฝ้าแอปให้อยู่ 👀' : 'ว่างอยู่ รอเองต่อแอปให้';
-        return `<div class="office-scene">
-            <div class="office-window">🌤️</div>
-            <div class="office-shelf">📚📎🗂️</div>
-            <div class="office-desk">
-                <span class="office-monitor"><i></i></span>
-                <img src="mo_avatar.jpg" alt="โม" class="office-mo">
-                <span class="office-mug">☕</span>
-            </div>
-            <p class="office-status">💼 โม${busy}</p>
+        const now = new Date();
+        const h = now.getHours();
+        const night = h >= 19 || h < 6, dusk = h >= 17 && h < 19;
+        const working = !loading && s && s.google.connected && !s.google.broken;
+        const bubble = loading ? 'แป๊บนะ เปิดไฟก่อน 💡' : working ? 'เฝ้า Classroom ให้อยู่นะ 👀' : 'ว่างอยู่~ ต่อแอปให้เค้าทำงานหน่อย';
+        const wall = night ? ['#3a3157', '#2a2342'] : dusk ? ['#ffe2d1', '#f8d5e6'] : ['#fff1f6', '#f4ecff'];
+        const sky = night ? ['#1b2350', '#3b3570'] : dusk ? ['#ffb48a', '#f78fb3'] : ['#9fd8ff', '#d9f1ff'];
+        const hA = ((h % 12) + now.getMinutes() / 60) * 30, mA = now.getMinutes() * 6;
+        return `<div class="office-scene ${night ? 'night' : ''}">
+            <svg viewBox="0 0 360 200" class="office-svg" aria-hidden="true">
+                <defs>
+                    <linearGradient id="ofWall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${wall[0]}"/><stop offset="1" stop-color="${wall[1]}"/></linearGradient>
+                    <linearGradient id="ofSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${sky[0]}"/><stop offset="1" stop-color="${sky[1]}"/></linearGradient>
+                    <linearGradient id="ofFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${night ? '#5b4636' : '#d9b48f'}"/><stop offset="1" stop-color="${night ? '#46362a' : '#c79f78'}"/></linearGradient>
+                    <linearGradient id="ofScreen" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8fd3ff"/><stop offset="1" stop-color="#c9b6ff"/></linearGradient>
+                    <radialGradient id="ofLamp"><stop offset="0" stop-color="rgba(255,214,130,0.75)"/><stop offset="1" stop-color="rgba(255,214,130,0)"/></radialGradient>
+                    <clipPath id="ofMoClip"><circle cx="252" cy="98" r="21"/></clipPath>
+                </defs>
+                <rect width="360" height="150" fill="url(#ofWall)"/>
+                <rect y="150" width="360" height="50" fill="url(#ofFloor)"/>
+                <rect y="148" width="360" height="4" fill="${night ? '#2a2033' : '#e9cdb2'}"/>
+                <!-- หน้าต่าง -->
+                <g transform="translate(22 22)">
+                    <rect width="88" height="64" rx="6" fill="url(#ofSky)" stroke="#fff" stroke-width="4"/>
+                    <line x1="44" y1="0" x2="44" y2="64" stroke="#fff" stroke-width="3"/>
+                    ${night
+                        ? '<circle cx="66" cy="18" r="8" fill="#fff6c9"/><circle cx="62" cy="15" r="7" fill="url(#ofSky)"/><circle class="of-star" cx="18" cy="14" r="1.6" fill="#fff"/><circle class="of-star s2" cx="30" cy="34" r="1.2" fill="#fff"/><circle class="of-star s3" cx="78" cy="44" r="1.4" fill="#fff"/>'
+                        : `<circle cx="66" cy="20" r="9" fill="${dusk ? '#ffd27a' : '#ffe27a'}"/><g class="of-cloud"><ellipse cx="22" cy="40" rx="13" ry="6" fill="#fff"/><ellipse cx="31" cy="36" rx="9" ry="6" fill="#fff"/></g>`}
+                    <path d="M-6 -4 Q8 30 -2 70 L-10 70 L-10 -4 Z" fill="#f9a8c9"/>
+                    <path d="M94 -4 Q80 30 90 70 L98 70 L98 -4 Z" fill="#f9a8c9"/>
+                </g>
+                <!-- ชั้นหนังสือ + ต้นไม้ -->
+                <g transform="translate(250 30)">
+                    <rect y="26" width="92" height="5" rx="2" fill="#a37c55"/>
+                    <rect x="6" y="6" width="8" height="20" fill="#f472b6"/><rect x="15" y="9" width="7" height="17" fill="#60a5fa"/><rect x="23" y="4" width="9" height="22" fill="#fbbf24"/><rect x="33" y="10" width="7" height="16" fill="#34d399"/>
+                    <rect x="58" y="14" width="16" height="12" rx="3" fill="#e9a273"/>
+                    <path d="M66 14 C58 4 60 -2 66 4 C70 -4 76 2 70 14 Z" fill="#4ade80"/>
+                </g>
+                <!-- นาฬิกา (เวลาจริง) -->
+                <g transform="translate(176 40)">
+                    <circle r="15" fill="#fff" stroke="#f9a8c9" stroke-width="3"/>
+                    <line x1="0" y1="0" x2="0" y2="-7" stroke="#334155" stroke-width="2.4" stroke-linecap="round" transform="rotate(${hA})"/>
+                    <line x1="0" y1="0" x2="0" y2="-11" stroke="#f04d85" stroke-width="1.6" stroke-linecap="round" transform="rotate(${mA})"/>
+                    <circle r="1.8" fill="#334155"/>
+                </g>
+                <!-- รูปติดผนัง -->
+                <g transform="translate(130 28) rotate(-4)"><rect width="26" height="22" rx="2" fill="#fff" stroke="#e7c6d3" stroke-width="2"/><text x="13" y="16" font-size="11" text-anchor="middle">💕</text></g>
+                ${night ? '<circle cx="104" cy="118" r="60" fill="url(#ofLamp)"/>' : ''}
+                <!-- โม + เก้าอี้ -->
+                <rect x="232" y="104" width="40" height="34" rx="10" fill="${night ? '#6b4f8a' : '#c4b5fd'}"/>
+                <g class="of-mo">
+                    <circle cx="252" cy="98" r="24" fill="#fff"/>
+                    <image href="mo_avatar.jpg" x="231" y="77" width="42" height="42" clip-path="url(#ofMoClip)" preserveAspectRatio="xMidYMid slice"/>
+                    <path d="M230 96 Q230 72 252 72 Q274 72 274 96" fill="none" stroke="#334155" stroke-width="3" stroke-linecap="round"/>
+                    <rect x="226" y="92" width="7" height="12" rx="3" fill="#f04d85"/><rect x="271" y="92" width="7" height="12" rx="3" fill="#f04d85"/>
+                    <path d="M229 103 Q236 112 246 110" fill="none" stroke="#334155" stroke-width="2"/>
+                </g>
+                <!-- โต๊ะ -->
+                <rect x="70" y="128" width="236" height="12" rx="4" fill="#8a6440"/>
+                <rect x="78" y="140" width="8" height="34" fill="#6d4e31"/><rect x="290" y="140" width="8" height="34" fill="#6d4e31"/>
+                <!-- จอคอม -->
+                <g transform="translate(118 84)">
+                    <rect width="74" height="44" rx="5" fill="#2f3446"/>
+                    <rect x="4" y="4" width="66" height="34" rx="3" fill="url(#ofScreen)" class="of-screen"/>
+                    <rect x="9" y="9" width="30" height="3" rx="1.5" fill="rgba(255,255,255,0.85)" class="of-code c1"/>
+                    <rect x="9" y="16" width="44" height="3" rx="1.5" fill="rgba(255,255,255,0.7)" class="of-code c2"/>
+                    <rect x="9" y="23" width="22" height="3" rx="1.5" fill="rgba(255,255,255,0.8)" class="of-code c3"/>
+                    <rect x="9" y="30" width="36" height="3" rx="1.5" fill="rgba(255,255,255,0.6)" class="of-code c4"/>
+                    <rect x="32" y="44" width="10" height="6" fill="#2f3446"/>
+                </g>
+                <rect x="132" y="122" width="48" height="6" rx="2" fill="#e5e7eb"/>
+                <!-- โคมไฟ -->
+                <g transform="translate(92 92)"><path d="M0 36 L6 36 L6 8" stroke="#475569" stroke-width="3" fill="none"/><path d="M-6 10 L14 0 L18 10 Z" fill="${night ? '#fde68a' : '#f9a8c9'}"/></g>
+                <!-- แก้วกาแฟ -->
+                <g transform="translate(206 112)"><rect width="14" height="16" rx="3" fill="#fff" stroke="#e7c6d3" stroke-width="1.5"/><path d="M14 4 Q20 8 14 12" stroke="#e7c6d3" stroke-width="1.5" fill="none"/><path class="of-steam" d="M4 -2 Q1 -7 5 -11" stroke="#cbd5e1" stroke-width="1.4" fill="none"/><path class="of-steam s2" d="M10 -2 Q7 -8 11 -12" stroke="#cbd5e1" stroke-width="1.4" fill="none"/></g>
+                <!-- โพสต์อิท -->
+                <rect x="296" y="96" width="16" height="16" fill="#fde68a" transform="rotate(8 304 104)"/><rect x="314" y="100" width="14" height="14" fill="#bbf7d0" transform="rotate(-6 321 107)"/>
+            </svg>
+            <div class="office-bubble">${bubble}</div>
         </div>`;
+    }
+
+    /** วันเหลือก่อนส่ง จาก "12/11 23:00" (ปีนี้/ปีหน้า) */
+    dueInfo(due) {
+        const m = /^(\d{1,2})\/(\d{1,2})(?:\s+(\d{1,2}):(\d{2}))?/.exec(due || '');
+        if (!m) return null;
+        const now = new Date();
+        let d = new Date(now.getFullYear(), m[2] - 1, m[1], m[3] ? +m[3] : 23, m[4] ? +m[4] : 59);
+        if (d - now < -180 * 86400000) d = new Date(now.getFullYear() + 1, m[2] - 1, m[1], d.getHours(), d.getMinutes());
+        // นับเป็นวันตามปฏิทิน (ส่ง 23:00 พรุ่งนี้ = "พรุ่งนี้" ไม่ใช่ "อีก 2 วัน")
+        const day = x => new Date(x.getFullYear(), x.getMonth(), x.getDate());
+        const days = Math.round((day(d) - day(now)) / 86400000);
+        const level = d < now ? 'late' : days <= 1 ? 'hot' : days <= 4 ? 'soon' : 'ok';
+        const text = d < now ? 'เลยกำหนดแล้ว' : days <= 0 ? 'ส่งวันนี้!' : days === 1 ? 'ส่งพรุ่งนี้' : `อีก ${days} วัน`;
+        return { level, text };
     }
 
     zonesHTML() {
         const s = this.status;
-        return `<div class="office-zones">${MO_OFFICE_ZONES.map(z => z.live ? this.classroomHTML() : `
-            <div class="office-zone soon"><span class="office-zone-icon">${z.icon}</span>
-                <div><b>${z.name}</b><small>${z.desc}</small></div><em>เร็วๆ นี้</em></div>`).join('')}</div>
-            ${s.reports.length ? `<div class="house-card"><h3>🗂️ รายงานล่าสุด</h3>${s.reports.map(r => this.reportHTML(r)).join('')}</div>` : ''}`;
+        const tiles = MO_OFFICE_ZONES.filter(z => !z.live).map(z => `
+            <div class="office-tile soon" style="--tile:${z.color}">
+                <span class="office-tile-icon">${z.icon}</span>
+                <b>${z.name}</b><small>${z.desc}</small>
+                <em>เร็วๆ นี้</em>
+            </div>`).join('');
+        const works = s.reports.filter(r => r.kind === 'work');
+        return `${this.classroomHTML()}
+            <h3 class="office-section">🧩 โซนแอปอื่นๆ <small>ค่อยมาต่อเพิ่มทีหลัง</small></h3>
+            <div class="office-tiles">${tiles}</div>
+            <h3 class="office-section">🗂️ โต๊ะรายงาน <small>${s.reports.length ? `${works.length} งาน · ${s.reports.length - works.length} ประกาศ` : 'ยังไม่มี'}</small></h3>
+            ${s.reports.length
+                ? `<div class="office-reports">${s.reports.map(r => this.reportHTML(r)).join('')}</div>`
+                : '<div class="office-empty">📭 ยังไม่มีรายงาน พอมีงานใหม่เค้าจะสรุปวางไว้ตรงนี้ให้</div>'}`;
     }
 
     classroomHTML() {
         const s = this.status;
         const g = s.google, c = s.classroom;
+        const state = !s.ready ? ['setup', '⚙️ รอตั้งค่า'] : g.broken ? ['broken', '⚠️ หลุด'] : g.connected ? ['on', '🟢 ทำงานอยู่'] : ['off', '⚪ ยังไม่เชื่อม'];
         let body;
         if (!s.ready) {
-            body = `<p class="setting-hint">หลังบ้านยังไม่ได้ตั้งค่า Google (GOOGLE_CLIENT_ID / SECRET) — ดูวิธีใน docs/office-setup.md</p>`;
+            body = `<p class="office-note">หลังบ้านยังไม่ได้ใส่ GOOGLE_CLIENT_ID / SECRET — ทำตาม <b>docs/office-setup.md</b> ครั้งเดียวจบ</p>`;
         } else if (!g.connected || g.broken) {
-            body = `<p class="setting-hint">${g.broken ? '⚠️ การเชื่อมหลุดแล้ว กดเชื่อมใหม่' : 'ล็อกอินบัญชี Google ที่ใช้ Classroom แล้วโมจะคอยดูให้ (อ่านอย่างเดียว ไม่แก้ ไม่ส่งงานแทน)'}</p>
-                <button class="btn-primary" data-act="connect">🔗 เชื่อม Google Classroom</button>`;
+            body = `<p class="office-note">${g.broken ? 'การเชื่อมหลุดแล้ว กดเชื่อมใหม่ได้เลย' : 'ล็อกอินบัญชี Google ที่ใช้ Classroom แล้วเค้าจะคอยดูให้ (อ่านอย่างเดียว ไม่แก้ ไม่ส่งงานแทน)'}</p>
+                <button class="office-btn primary" data-act="connect"><span>🔗</span> เชื่อม Google Classroom</button>`;
         } else {
-            body = `<p class="setting-hint">✅ ${this.esc(g.email || 'เชื่อมแล้ว')} · ${c ? `${c.courses} วิชา · เช็กล่าสุด ${this.ago(c.lastCheck)}` : ''}</p>
+            body = `<div class="office-stats">
+                    <div><b>${c ? c.courses : 0}</b><small>วิชา</small></div>
+                    <div><b>${c ? this.ago(c.lastCheck) : '-'}</b><small>เช็กล่าสุด</small></div>
+                    <div><b>${s.reports.length}</b><small>รายงาน</small></div>
+                </div>
+                <p class="office-account">✉️ ${this.esc(g.email || 'เชื่อมแล้ว')}</p>
                 ${c && c.error ? `<p class="office-error">⚠️ ${this.esc(c.error)}</p>` : ''}
-                <div class="settings-actions">
-                    <button class="btn-primary" data-act="check">🔎 ให้โมเช็กตอนนี้</button>
-                    <button class="btn-secondary" data-act="disconnect">ตัดการเชื่อม</button>
+                <div class="office-actions">
+                    <button class="office-btn primary" data-act="check"><span>🔎</span> ให้โมเช็กตอนนี้</button>
+                    <button class="office-btn ghost" data-act="disconnect">ตัดการเชื่อม</button>
                 </div>`;
         }
-        return `<div class="office-zone live"><span class="office-zone-icon">📚</span>
-            <div class="office-zone-body"><b>Google Classroom</b><small>งานใหม่ / ประกาศ → โมอ่าน สรุป โทรมาบอก (เช็กทุก 15 นาที)</small>${body}</div></div>`;
+        return `<div class="office-main ${state[0]}">
+            <div class="office-main-head">
+                <span class="office-app-icon">📚</span>
+                <div><b>Google Classroom</b><small>งานใหม่ / ประกาศ → โมอ่าน สรุป โทรมาบอก · ทุก 15 นาที</small></div>
+                <span class="office-chip ${state[0]}">${state[1]}</span>
+            </div>
+            ${body}
+        </div>`;
     }
 
     reportHTML(r) {
-        return `<div class="office-report">
-            <div class="office-report-head"><span>${r.kind === 'work' ? '📝' : '📢'} <b>${this.esc(r.title)}</b></span><small>${this.esc(r.course)}</small></div>
+        const due = r.kind === 'work' ? this.dueInfo(r.due) : null;
+        return `<article class="office-report ${r.kind}">
+            <div class="office-report-top">
+                <span class="office-course">${r.kind === 'work' ? '📝' : '📢'} ${this.esc(r.course)}</span>
+                <time>${this.ago(r.at)}</time>
+            </div>
+            <h4>${this.esc(r.title)}</h4>
             <p>${this.esc(r.summary)}</p>
-            ${r.todo ? `<p class="office-todo">👉 ${this.esc(r.todo)}</p>` : ''}
+            ${r.todo ? `<div class="office-todo">👉 ${this.esc(r.todo)}</div>` : ''}
             <div class="office-report-foot">
-                ${r.due ? `<span>⏰ ส่ง ${this.esc(r.due)}</span>` : ''}${r.size ? `<span>งาน${this.esc(r.size)}</span>` : ''}
-                <span>${this.ago(r.at)}</span>
-                ${r.link ? `<a href="${this.esc(r.link)}" target="_blank" rel="noopener">เปิดใน Classroom ↗</a>` : ''}
-            </div></div>`;
+                ${due ? `<span class="office-due ${due.level}">⏰ ${this.esc(r.due)} · ${due.text}</span>` : ''}
+                ${r.size ? `<span class="office-size">งาน${this.esc(r.size)}</span>` : ''}
+                ${r.link ? `<a href="${this.esc(r.link)}" target="_blank" rel="noopener">เปิดงาน ↗</a>` : ''}
+            </div>
+        </article>`;
     }
 
     bind() {
