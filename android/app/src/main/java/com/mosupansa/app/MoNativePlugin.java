@@ -2,9 +2,11 @@ package com.mosupansa.app;
 
 import android.Manifest;
 import android.app.NotificationManager;
+import android.content.ComponentName;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
+import android.os.PowerManager;
 import android.provider.Settings;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -75,6 +77,47 @@ public class MoNativePlugin extends Plugin {
             getContext().startActivity(i);
         }
         call.resolve();
+    }
+
+    /** ขอ "ไม่จำกัดแบตเตอรี่" (ถ้าระบบไม่ยอมเปิดกล่องถาม → เปิดหน้าข้อมูลแอปแทน) */
+    @PluginMethod
+    public void openBatterySettings(PluginCall call) {
+        String pkg = getContext().getPackageName();
+        if (Build.VERSION.SDK_INT >= 23 && !getContext().getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(pkg)
+            && launch(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + pkg)))) {
+            call.resolve();
+            return;
+        }
+        launch(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg)));
+        call.resolve();
+    }
+
+    /** หน้า "เริ่มอัตโนมัติ" ของ Infinix/Tecno/itel (XOS Phone Master) — ไม่มีก็เปิดหน้าข้อมูลแอป */
+    @PluginMethod
+    public void openAutoStart(PluginCall call) {
+        String[][] screens = {
+            { "com.transsion.phonemaster", "com.cyin.himgr.autostart.AutoStartActivity" },
+            { "com.transsion.phonemaster", "com.cyin.himgr.widget.activity.MainSettingGpActivity" },
+            { "com.transsion.phonemaster", "com.transsion.phonemaster.MainActivity" },
+        };
+        for (String[] s : screens) {
+            if (launch(new Intent().setComponent(new ComponentName(s[0], s[1])))) {
+                call.resolve();
+                return;
+            }
+        }
+        launch(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getContext().getPackageName())));
+        call.resolve();
+    }
+
+    private boolean launch(Intent i) {
+        try {
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(i);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @PluginMethod

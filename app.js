@@ -821,6 +821,10 @@
         pushStatus.textContent = 'แอป Android: แจ้งเตือน + สายเรียกเข้าเต็มจอ เปิดให้อัตโนมัติหลังเข้าสู่ระบบซิงก์';
         sync.onStatus(registerNative);
         registerNative();
+        // Infinix/XOS ฆ่าแอปตอนปิดจอ → ทางลัดไปตั้ง "ไม่จำกัดแบตเตอรี่" + "เริ่มอัตโนมัติ"
+        document.getElementById('native-power').classList.remove('hidden');
+        document.getElementById('btn-battery').addEventListener('click', () => moNative.openBatterySettings());
+        document.getElementById('btn-autostart').addEventListener('click', () => moNative.openAutoStart());
     }
 
     const syncModal = document.getElementById('sync-modal');
