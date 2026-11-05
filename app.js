@@ -601,16 +601,31 @@
     }
 
     // ======= Bottom Navigation =======
+    // หน้าแท็บ (คลิป/ความจำ/สมอง/บ้าน) จบเหนือแถบเมนู → กดเปลี่ยนแท็บได้จากทุกหน้า
+    const navEl = document.querySelector('.bottom-nav');
+    // วัดตอนแถบโชว์จริง (ตอนหน้าโหลดยังซ่อนอยู่ สูง 0) → ResizeObserver วัดใหม่ทุกครั้งที่ขนาดเปลี่ยน
+    // ระยะจากขอบล่างจอถึงขอบบนแถบเมนู (หน้าแท็บเป็น position: fixed จบตรงนั้นพอดี)
+    const syncNavHeight = () => {
+        if (!navEl.offsetHeight) return;
+        const gap = Math.round(window.innerHeight - navEl.getBoundingClientRect().top);
+        document.documentElement.style.setProperty('--nav-h', `${Math.max(navEl.offsetHeight, gap)}px`);
+    };
+    syncNavHeight();
+    if (window.ResizeObserver) new ResizeObserver(syncNavHeight).observe(navEl);
+    window.addEventListener('resize', syncNavHeight);
+    [1500, 4500].forEach(ms => setTimeout(syncNavHeight, ms));   // หลังหน้าโหลดหาย + ฟอนต์/ไอคอนโหลดเสร็จ
     const navItems = document.querySelectorAll('.nav-item');
     
     navItems.forEach(item => {
         item.addEventListener('click', () => {
             const tab = item.dataset.tab;
+            syncNavHeight();
             
             navItems.forEach(n => n.classList.remove('active'));
             item.classList.add('active');
 
             if (tab !== 'brain' && brainPage.open) brainPage.hide();
+            if (typeof office !== 'undefined' && office) office.hide();
             switch (tab) {
                 case 'chat':
                     reels.close();
@@ -1232,6 +1247,7 @@
         houseScreen.classList.remove('hidden');
     }
 
+    let houseSeg = 'home';   // แท็บที่เลือกในหน้าบ้าน (จำไว้ตอนวาดใหม่)
     function renderHouse() {
         const s = life.state;
         const c = s.current;
@@ -1260,60 +1276,73 @@
             laptopOn: spot === '💻' && c.room !== 'out',
         };
 
+        const seg = (id, label) => `<button type="button" class="house-seg-btn ${houseSeg === id ? 'on' : ''}" data-seg="${id}">${label}</button>`;
+        const pane = (id, html) => `<section class="house-pane ${houseSeg === id ? 'on' : ''}" data-pane="${id}">${html}</section>`;
+        const info = (icon, html) => `<div class="house-info-row"><span>${icon}</span><div>${html}</div></div>`;
+        const game = life.gameSession();
+
         document.getElementById('house-content').innerHTML = `
-            <div class="house-card house-now">
-                <img src="mo_avatar.jpg" alt="โม">
-                <div class="house-now-text">
-                    <strong>${c.emoji} ${esc(c.label)}</strong>
-                    <span>ตั้งแต่ ${fmt(c.startedAt)} • ${leftText}</span>
-                    <span>มือถือ: ${phoneText}</span>
+            <div class="house-hero ${night ? 'night' : ''}">
+                <div class="house-hero-top">
+                    <div class="house-hero-avatar"><img src="mo_avatar.jpg" alt="โม"><span>${c.emoji}</span></div>
+                    <div class="house-hero-text">
+                        <strong>${esc(c.label)}</strong>
+                        <span>ตั้งแต่ ${fmt(c.startedAt)} · ${leftText}</span>
+                        <em class="house-chip ${life.canSeePhone() ? 'ok' : ''}">📱 ${phoneText}</em>
+                    </div>
+                    <span class="house-hero-sky">${sky}</span>
+                </div>
+                <p class="house-hero-note">${life.canSeePhone() ? 'โมถือมือถืออยู่ โทรปกติก็รับ' : asleep ? 'โมหลับอยู่ โทรด่วนจะปลุกโมขึ้นมา' : 'โมไม่ได้ถือมือถือ โทรปกติอาจไม่รับ'}</p>
+                <div class="house-quick">
+                    ${c.id !== 'talk' && !asleep ? '<button type="button" id="house-talk"><span>💬</span>เรียกมาคุย</button>' : ''}
+                    <button type="button" id="house-urgent" class="danger"><span>🚨</span>โทรด่วน</button>
+                    <button type="button" id="house-office" class="office"><span>🏢</span>ห้องทำงาน</button>
                 </div>
             </div>
-            ${(() => {
-                const g = life.gameSession();
-                if (!g) return '';
-                const isCheckers = /หมากฮอส/.test(g.name);
-                return `<div class="house-card house-game">
-                <h3>🎮 โมกำลังเล่น${esc(g.name)} <small>ชนะ ${g.wins} • แพ้ ${g.losses}</small></h3>
-                ${g.log.length ? `<div class="house-log">${g.log.slice().reverse().slice(0, 3).map(l => `<div class="house-log-item"><time>${fmt(l.at)}</time><span>${l.win ? '🏆' : '💥'}</span><span>${esc(l.note)}</span></div>`).join('')}</div>` : '<p class="setting-hint">เพิ่งเริ่มเล่น...</p>'}
+            ${game ? `<div class="house-card house-game">
+                <h3>🎮 โมกำลังเล่น${esc(game.name)} <small>ชนะ ${game.wins} · แพ้ ${game.losses}</small></h3>
+                ${game.log.length ? `<div class="house-log">${game.log.slice().reverse().slice(0, 3).map(l => `<div class="house-log-item"><time>${fmt(l.at)}</time><span>${l.win ? '🏆' : '💥'}</span><span>${esc(l.note)}</span></div>`).join('')}</div>` : '<p class="setting-hint">เพิ่งเริ่มเล่น...</p>'}
                 <div class="settings-actions">
-                    ${isCheckers ? '<button class="btn-secondary" id="house-watch-game">👀 ดูโมเล่น</button>' : ''}
+                    ${/หมากฮอส/.test(game.name) ? '<button class="btn-secondary" id="house-watch-game">👀 ดูโมเล่น</button>' : ''}
                     <button class="btn-primary" id="house-join-game">🙋 ชวนเล่นด้วย</button>
                 </div>
-            </div>`;
-            })()}
-            <button class="house-card office-door" id="house-office" type="button">
-                <span>🏢</span><div><strong>ห้องทำงานโม</strong><small>ต่อแอปต่างๆ ให้โมเช็กงาน สรุป แล้วโทรมารายงาน</small></div><b>›</b></button>
-            <div class="house-card house-urgent">
-                <div>
-                    <strong>มีเรื่องด่วน?</strong>
-                    <span>${life.canSeePhone() ? 'โมถือมือถืออยู่ โทรปกติก็รับ' : asleep ? 'โมหลับอยู่ โทรด่วนจะปลุกโมขึ้นมา' : 'โมไม่ได้ถือมือถือ โทรปกติอาจไม่รับ'}</span>
-                </div>
-                <div class="house-urgent-actions">
-                    ${c.id !== 'talk' && !asleep ? '<button class="btn-secondary" id="house-talk">💬 เรียกมาคุย</button>' : ''}
-                    <button class="btn-primary" id="house-urgent">🚨 โทรด่วน</button>
-                </div>
-            </div>
-            <div class="house-card">
-                <h3>แผนผังบ้าน ${night ? '🌙 กลางคืน' : '☀️ กลางวัน'}${window.MoWeather && window.MoWeather.describe() ? ` • ${esc(window.MoWeather.describe())}` : ''}</h3>
-                <p class="house-hint">แตะของที่มีวงชมพูได้: 🐈 แมว • 📅 ปฏิทิน • 🌱 ต้นไม้ • 🧲 ตู้เย็น • 📺 ทีวี • 📔 ไดอารี่</p>
+            </div>` : ''}
+            <div class="house-card house-mapcard">
+                <h3>🏠 บ้านโม <small>${night ? '🌙 กลางคืน' : '☀️ กลางวัน'}${window.MoWeather && window.MoWeather.describe() ? ` · ${esc(window.MoWeather.describe())}` : ''}</small></h3>
                 ${MoHouseView.render(life, { night, spot, phoneRoom, home: homeOpts, rain: window.MoWeather && window.MoWeather.isRaining(), gifts: MoGifts.owned(life), festival: MoFestivals.upcoming() })}
+                <p class="house-hint">แตะของที่มีวงชมพูได้: 🐈 แมว · 📅 ปฏิทิน · 🌱 ต้นไม้ · 🧲 ตู้เย็น · 📺 ทีวี · 📔 ไดอารี่</p>
+            </div>
+            <div class="house-seg" role="tablist">
+                ${seg('home', '🏡 ในบ้าน')}${seg('quest', '✅ ภารกิจ')}${seg('shop', '🎁 ร้าน & เงิน')}${seg('log', '📒 บันทึก')}
+            </div>
+            ${pane('home', `<div class="house-card">
+                <h3>🏡 ในบ้านตอนนี้</h3>
+                <div class="house-info">
+                    ${info('🐈', `<b>${esc(home.data.pet.name)}</b> ${petMood.emoji} ${petMood.label}`)}
+                    ${info(plant.emoji, `ต้นไม้ของเรา: ${plant.wilted ? 'เหี่ยวแล้ว รีบรดน้ำ!' : plant.name}<small>คุยกันมา ${plant.days} วัน${plant.next && !plant.wilted ? ` · อีก ${plant.next.days - plant.days} วัน${plant.next.name}` : ''}</small>`)}
+                    ${info('📅', nextEvent ? `${esc(nextEvent.title)}<small>${nextEvent.daysLeft === 0 ? 'วันนี้!' : `อีก ${nextEvent.daysLeft} วัน`}</small>` : 'ยังไม่มีวันสำคัญ<small>แตะปฏิทินบนผนังเพื่อเพิ่ม</small>')}
+                </div>
             </div>
             <div class="house-card">
-                <h3>✅ ภารกิจวันนี้ <small>🔥 สตรีค ${quests.data.streak} วัน • ดีสุด ${quests.data.best}</small></h3>
+                <h3>💗 สภาพโมตอนนี้</h3>
+                <div class="house-bars">${bar('อิ่ม', 100 - s.hunger)}${bar('พลังงาน', s.energy)}${bar('อารมณ์', s.mood)}</div>
+            </div>`)}
+            ${pane('quest', `<div class="house-card">
+                <h3>✅ ภารกิจวันนี้ <small>🔥 สตรีค ${quests.data.streak} วัน · ดีสุด ${quests.data.best}</small></h3>
                 <div class="quest-list">${quests.today().map(q => `<button class="quest ${q.n >= q.goal ? 'done' : ''}" data-quest="${q.id}">
                     <span class="quest-emoji">${q.n >= q.goal ? '✅' : q.emoji}</span>
                     <span class="quest-title">${esc(q.title)}${q.goal > 1 ? `<i style="width:${Math.round(q.n / q.goal * 100)}%"></i>` : ''}</span>
                     <small>${q.n}/${q.goal}</small></button>`).join('')}</div>
-                <p class="house-hint">แตะเพื่อติ๊ก หรือพิมพ์เล่าในแชทก็ได้ (เช่น "ดื่มน้ำแล้ว") • ครบทุกข้อ ต้นไม้โตเร็วขึ้น 🌱</p>
-            </div>
-            <div class="house-card">
-                <h3>🏡 ในบ้านตอนนี้</h3>
-                <div class="house-log">
-                    <div class="house-log-item"><time></time><span>🐈</span><span><b>${esc(home.data.pet.name)}</b> ${petMood.emoji} ${petMood.label}</span></div>
-                    <div class="house-log-item"><time></time><span>${plant.emoji}</span><span>ต้นไม้ของเรา: ${plant.wilted ? 'เหี่ยวแล้ว รีบรดน้ำ!' : plant.name} • คุยกันมา ${plant.days} วัน${plant.next && !plant.wilted ? ` (อีก ${plant.next.days - plant.days} วัน${plant.next.name})` : ''}</span></div>
-                    <div class="house-log-item"><time></time><span>📅</span><span>${nextEvent ? `${esc(nextEvent.title)} — ${nextEvent.daysLeft === 0 ? 'วันนี้!' : `อีก ${nextEvent.daysLeft} วัน`}` : 'ยังไม่มีวันสำคัญ แตะปฏิทินบนผนังเพื่อเพิ่ม'}</span></div>
+                <p class="house-hint">แตะเพื่อติ๊ก หรือพิมพ์เล่าในแชทก็ได้ (เช่น "ดื่มน้ำแล้ว") · ครบทุกข้อ ต้นไม้โตเร็วขึ้น 🌱</p>
+            </div>`)}
+            ${pane('shop', `<div class="house-card">
+                <h3>👛 กระเป๋าเงิน</h3>
+                <div class="house-wallet">
+                    <div><small>เงินโม</small><strong>฿${s.wallet.toLocaleString()}</strong></div>
+                    <div><small>เงินเรา</small><strong>฿${s.userWallet.toLocaleString()}</strong></div>
+                    <button class="btn-primary" id="house-transfer">💸 โอน</button>
                 </div>
+                ${s.wish ? `<p class="house-wish">✨ ตอนนี้โมอยากได้ <b>${esc(s.wish.item)}</b> (฿${s.wish.cost})</p>` : ''}
             </div>
             <div class="house-card">
                 <h3>🎁 ร้านของขวัญ <small>เงินเรา ฿${s.userWallet.toLocaleString()}</small></h3>
@@ -1322,27 +1351,17 @@
                     return `<button class="gift-item ${has ? 'owned' : ''}" data-gift="${gf.id}" ${has ? 'disabled' : ''}>
                         <span class="gift-emoji">${gf.emoji}</span><span>${esc(gf.name)}</span><small>${has ? 'โมมีแล้ว 💕' : `฿${gf.price}`}</small></button>`;
                 }).join('')}</div>
-            </div>
-            <div class="house-card">
-                <h3>สภาพโมตอนนี้</h3>
-                <div class="house-bars">
-                    ${bar('อิ่ม', 100 - s.hunger)}${bar('พลังงาน', s.energy)}${bar('อารมณ์', s.mood)}
-                </div>
-            </div>
-            <div class="house-card">
-                <h3>กระเป๋าเงิน</h3>
-                <div class="house-wallet">
-                    <div>เงินโม<br><strong>฿${s.wallet.toLocaleString()}</strong></div>
-                    <div>เงินเรา<br><strong>฿${s.userWallet.toLocaleString()}</strong></div>
-                    <button class="btn-primary" id="house-transfer">💸 โอน</button>
-                </div>
-                ${s.wish ? `<p style="margin-top:10px;font-size:0.85rem;color:var(--text-secondary)">ตอนนี้โมอยากได้: <b>${esc(s.wish.item)}</b> (฿${s.wish.cost})</p>` : ''}
-            </div>
-            <div class="house-card">
-                <h3>วันนี้โมทำอะไรไปบ้าง</h3>
+            </div>`)}
+            ${pane('log', `<div class="house-card">
+                <h3>📒 วันนี้โมทำอะไรไปบ้าง</h3>
                 <div class="house-log">${s.log.slice().reverse().slice(0, 20).map(l =>
-                    `<div class="house-log-item"><time>${fmt(l.at)}</time><span>${l.emoji}</span><span>${esc(l.text)}</span></div>`).join('')}</div>
-            </div>`;
+                    `<div class="house-log-item"><time>${fmt(l.at)}</time><span>${l.emoji}</span><span>${esc(l.text)}</span></div>`).join('') || '<p class="setting-hint">ยังไม่มีบันทึกวันนี้</p>'}</div>
+            </div>`)}`;
+        document.querySelectorAll('.house-seg-btn').forEach(b => b.addEventListener('click', () => {
+            houseSeg = b.dataset.seg;
+            document.querySelectorAll('.house-seg-btn').forEach(x => x.classList.toggle('on', x === b));
+            document.querySelectorAll('.house-pane').forEach(p => p.classList.toggle('on', p.dataset.pane === houseSeg));
+        }));
         document.getElementById('house-transfer').addEventListener('click', openTransfer);
         const officeDoor = document.getElementById('house-office');
         if (officeDoor) officeDoor.addEventListener('click', () => office.show());

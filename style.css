@@ -5289,3 +5289,425 @@ button.mind-region-chip {
 .office-answer.hidden {
     display: none;
 }
+
+/* =====================================================================
+   UI/UX รอบใหญ่: หน้าไม่ซ้อนกัน + บ้านโมจัดใหม่
+   ===================================================================== */
+
+/* หน้าเต็มจอทึบ เปิดแบบเลื่อนขึ้น (ไม่จางทับแชท) */
+@keyframes pageIn {
+    from { transform: translateY(18px); }
+    to { transform: translateY(0); }
+}
+
+:root {
+    --nav-h: 64px;
+    --page-bg: linear-gradient(180deg, #fff7fb 0%, #fbf4ff 100%);
+}
+
+.reels-screen,
+.mind-screen,
+.brain-page {
+    animation: pageIn 0.22s ease-out;
+}
+
+.reels-screen {
+    background: var(--page-bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+.mind-screen {
+    background: linear-gradient(180deg, #fff5f8 0%, #fde4ef 100%);
+}
+
+/* แถบเมนูล่างอยู่บนสุดเสมอ หน้าแท็บจบเหนือมัน → กดเปลี่ยนแท็บได้ทุกหน้า */
+.bottom-nav {
+    position: relative;
+    z-index: 260;
+    background: rgba(255, 255, 255, 0.98);
+}
+
+#reels-screen,
+#house-screen,
+#office-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: var(--nav-h);
+    width: auto;
+    height: auto;
+    max-width: 480px;
+    margin: 0 auto;
+}
+
+.mind-screen,
+.brain-page {
+    bottom: var(--nav-h);
+}
+
+.brain-page {
+    padding-bottom: 16px;
+}
+
+/* หัวหน้าเพจเหมือนกันทุกหน้า */
+.reels-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding: calc(14px + env(safe-area-inset-top)) 18px 14px;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid rgba(240, 77, 133, 0.08);
+}
+
+.reels-header h2 {
+    font-size: 1.15rem;
+}
+
+.house-content {
+    gap: 12px;
+    padding: 14px 14px 22px;
+}
+
+.house-card {
+    padding: 16px;
+    border-radius: 20px;
+    background: #fff;
+    border: 1px solid #f6e6ef;
+    box-shadow: 0 6px 18px rgba(240, 77, 133, 0.07);
+}
+
+.house-card h3 {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.house-card h3 small {
+    font-weight: 400;
+}
+
+/* ===== บ้านโม: การ์ดหลัก ===== */
+.house-hero {
+    position: relative;
+    flex-shrink: 0;
+    padding: 16px;
+    border-radius: 24px;
+    overflow: hidden;
+    color: #fff;
+    background: linear-gradient(135deg, #ff8fb8 0%, #f04d85 50%, #a463c9 100%);
+    box-shadow: 0 12px 28px rgba(240, 77, 133, 0.28);
+}
+
+.house-hero.night {
+    background: linear-gradient(135deg, #5b4b9a 0%, #7b4fa8 55%, #c2477f 100%);
+}
+
+.house-hero::after {
+    content: '';
+    position: absolute;
+    right: -40px;
+    top: -40px;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.12);
+    pointer-events: none;
+}
+
+.house-hero-top {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.house-hero-avatar {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.house-hero-avatar img {
+    width: 58px;
+    height: 58px;
+    border: 3px solid rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.house-hero-avatar span {
+    position: absolute;
+    right: -4px;
+    bottom: -2px;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    font-size: 0.85rem;
+    background: #fff;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.house-hero-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.house-hero-text strong {
+    display: block;
+    font-size: 1.05rem;
+    line-height: 1.3;
+}
+
+.house-hero-text > span {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.76rem;
+    opacity: 0.9;
+}
+
+.house-chip {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-style: normal;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.house-chip.ok {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.house-hero-sky {
+    align-self: flex-start;
+    font-size: 1.4rem;
+}
+
+.house-hero-note {
+    position: relative;
+    margin: 12px 0 0;
+    font-size: 0.78rem;
+    opacity: 0.92;
+}
+
+.house-quick {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.house-quick button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 10px 4px;
+    border: none;
+    border-radius: 16px;
+    font: inherit;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+}
+
+.house-quick button span {
+    font-size: 1.2rem;
+}
+
+.house-quick button.danger {
+    background: rgba(255, 255, 255, 0.95);
+    color: #e11d48;
+}
+
+.house-quick button:active {
+    transform: scale(0.96);
+}
+
+.house-mapcard h3 {
+    margin-bottom: 8px;
+}
+
+.house-mapcard .house-hint {
+    margin: 8px 0 0;
+}
+
+/* แท็บเลือกส่วน */
+.house-seg {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 4px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 4px 14px rgba(240, 77, 133, 0.1);
+    flex-shrink: 0;
+}
+
+.house-seg-btn {
+    padding: 9px 2px;
+    border: none;
+    border-radius: 12px;
+    font: inherit;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--text-secondary);
+    background: transparent;
+    cursor: pointer;
+}
+
+.house-seg-btn.on {
+    color: #fff;
+    background: linear-gradient(135deg, #ff7eb6, #f04d85);
+    box-shadow: 0 4px 10px rgba(240, 77, 133, 0.3);
+}
+
+.house-pane {
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.house-pane.on {
+    display: flex;
+    animation: pageIn 0.2s ease-out;
+}
+
+/* ในบ้านตอนนี้ */
+.house-info {
+    display: grid;
+    gap: 10px;
+}
+
+.house-info-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 0.86rem;
+    line-height: 1.45;
+}
+
+.house-info-row > span {
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    font-size: 1.05rem;
+    background: var(--pink-50, #fff1f6);
+}
+
+.house-info-row small {
+    display: block;
+    font-size: 0.74rem;
+    color: var(--text-secondary);
+}
+
+/* กระเป๋าเงิน */
+.house-wallet {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.house-wallet > div {
+    padding: 10px 12px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #fff7fb, #fdf2f8);
+}
+
+.house-wallet small {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+.house-wallet strong {
+    font-size: 1.1rem;
+}
+
+.house-wish {
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: 0.82rem;
+    color: #7c3aed;
+    background: #faf5ff;
+}
+
+.house-log-item {
+    align-items: start;
+    padding: 4px 0;
+}
+
+/* จอแคบ (320px) */
+@media (max-width: 360px) {
+    .house-seg-btn {
+        font-size: 0.66rem;
+    }
+
+    .house-wallet {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .house-wallet .btn-primary {
+        grid-column: 1 / -1;
+    }
+
+    .office-tiles {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* หน้าความจำ: การ์ดอารมณ์เต็มแถว + ชิปส่วนสมอง 2 คอลัมน์ อ่านง่าย */
+.mind-screen .mind-emotion {
+    width: auto;
+    margin: 0 12px;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 18px;
+    font-size: 0.9rem;
+}
+
+.mind-screen .mind-emotion strong {
+    font-size: 1rem;
+}
+
+.mind-screen .mind-emotion small {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+}
+
+.mind-screen .mind-regions {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+}
+
+.mind-screen .mind-region-chip {
+    padding: 10px 12px;
+    border-radius: 14px;
+    text-align: left;
+}
+
+.mind-screen .mind-open-brain {
+    border-radius: 18px;
+    font-size: 0.86rem;
+    line-height: 1.4;
+}
