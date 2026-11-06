@@ -5803,3 +5803,9 @@ html.mini .app { height: 100vh; height: 100dvh; }
     color: #b91c1c;
     background: #fee2e2;
 }
+
+/* ข้อความเสียงที่กำลังสร้างเสียง (ส่งมาตอนปิดแอป) */
+.voice-play.loading {
+    opacity: 0.6;
+    animation: statusPulse 1s ease-in-out infinite;
+}

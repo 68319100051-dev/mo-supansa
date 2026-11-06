@@ -1679,9 +1679,20 @@ class MoChat {
             this._voiceBtn = null;
             if (same) return;
         }
-        const blob = await window.MoMediaStore.get(msg.extra.mediaId).catch(() => null);
+        let blob = msg.extra.mediaId ? await window.MoMediaStore.get(msg.extra.mediaId).catch(() => null) : null;
+        // ข้อความเสียงที่หลังบ้านส่งมาตอนปิดแอป (มีแค่ข้อความ) → สร้างเสียงตอนนี้ แล้วเก็บไว้เล่นซ้ำ
+        if (!blob && msg.type === 'received' && msg.extra.text && this.llmService && this.llmService.isReady()) {
+            button.classList.add('loading');
+            blob = await this.llmService.speak(msg.extra.text).catch(() => null);
+            button.classList.remove('loading');
+            if (blob) {
+                msg.extra.mediaId = `voice_${msg.id}`;
+                await window.MoMediaStore.put(msg.extra.mediaId, blob).catch(() => {});
+                this.saveHistory();
+            }
+        }
         if (!blob) {
-            this.showNotification('ไฟล์เสียงนี้ไม่อยู่ในเครื่องนี้แล้ว 🥺');
+            this.showNotification(msg.extra.text ? 'สร้างเสียงไม่ได้ตอนนี้ กด "ดูข้อความ" อ่านแทนได้นะ' : 'ไฟล์เสียงนี้ไม่อยู่ในเครื่องนี้แล้ว 🥺');
             return;
         }
         const audio = new Audio(URL.createObjectURL(blob));

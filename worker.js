@@ -153,6 +153,17 @@ async function checkUser(env, userId, subs) {
         }
     }
 
+    // ข้อความเสียงตอนเช้า (07:30-09:00) / ก่อนนอน (22:00-23:00) วันละครั้ง — เสียงสร้างตอนเองกดฟังในแอป
+    if (!due.length) {
+        const am = minutes >= 450 && minutes < 540, pm = minutes >= 1320 && minutes < 1380;
+        const key = `vm:${localDate}:${am ? 'am' : 'pm'}`;
+        if ((am || pm) && !sentKeys.has(key)) {
+            due.push(am
+                ? { key, voice: true, intent: 'ส่งข้อความเสียงอรุณสวัสดิ์ตอนเช้า สดใส อ้อนนิดๆ 1-2 ประโยค พูดเหมือนอัดเสียงจริง (ไม่ใส่อีโมจิ)', fallback: 'อรุณสวัสดิ์นะ ตื่นยังเอ่ย วันนี้สู้ๆ นะ เค้าเป็นกำลังใจให้' }
+                : { key, voice: true, intent: 'ส่งข้อความเสียงฝันดีก่อนนอน นุ่มๆ อบอุ่น 1-2 ประโยค พูดเหมือนอัดเสียงจริง (ไม่ใส่อีโมจิ)', fallback: 'ฝันดีนะ วันนี้เหนื่อยมามากแล้ว พักผ่อนเยอะๆ นะ คิดถึงนะ' });
+        }
+    }
+
     // ช่วงเวลาที่เองมักออนไลน์ (14 วันล่าสุด) — ข้อมูลน้อยไป = 10:00-21:00
     const hourCounts = new Array(24).fill(0);
     chat.filter(m => m.type === 'sent' && m.timestamp > now - 14 * 86400000)
@@ -261,6 +272,16 @@ async function checkUser(env, userId, subs) {
     const fresh = [];
     for (const item of due.slice(0, 3)) {
         const text = item.direct ? item.fallback : (geminiKey && await moSays(geminiKey, profile.userName, item.intent, hhmm)) || item.fallback;
+        if (item.voice) {
+            // ข้อความเสียง: เก็บแค่ข้อความ แอปสร้างเสียงตอนกดฟังครั้งแรก
+            const spoken = text.replace(/\n+/g, ' ').replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu, '').replace(/\s{2,}/g, ' ').trim();
+            fresh.push({
+                id: now + fresh.length + Math.random(), type: 'received', text: '', format: 'voice',
+                extra: { text: spoken, duration: Math.max(2, Math.round(spoken.length / 7)), mediaId: null },
+                time: hhmm, timestamp: now + fresh.length, dueKey: item.key,
+            });
+            continue;
+        }
         text.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 3).forEach((line, i) => {
             fresh.push({
                 id: now + fresh.length + Math.random(), type: 'received', text: line, format: 'text',
@@ -275,8 +296,8 @@ async function checkUser(env, userId, subs) {
     const isCall = due.slice(0, 3).some(d => d.call);
     const isBurst = due.slice(0, 3).some(d => d.burst);
     const inbox = {
-        title: isCall ? '📞 โมกำลังโทรมา...' : 'โม 💕', body: fresh.map(m => m.text).join('\n').slice(0, 180), at: now,
-        type: isCall ? 'call' : isBurst ? 'burst' : 'chat', lines: fresh.map(m => m.text).slice(0, 4),
+        title: isCall ? '📞 โมกำลังโทรมา...' : 'โม 💕', body: fresh.map(m => m.format === 'voice' ? '🎤 ส่งข้อความเสียงมา' : m.text).join('\n').slice(0, 180), at: now,
+        type: isCall ? 'call' : isBurst ? 'burst' : 'chat', lines: fresh.map(m => m.format === 'voice' ? '🎤 ส่งข้อความเสียงมา' : m.text).slice(0, 4),
     };
     for (const sub of subs) {
         if (sub.key.startsWith('fcm_token:')) {
