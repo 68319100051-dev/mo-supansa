@@ -48,6 +48,7 @@ class MoVoiceMode {
             if (!this.on) return;
             if (document.hidden) {
                 this.halt('idle');
+                this.spoken = [];   // ไปแอปอื่นแล้ว ไม่ต้องพูดค้างตอนกลับมา
                 this.resumeOnReturn = true;
             } else if (this.resumeOnReturn) {
                 this.resumeOnReturn = false;

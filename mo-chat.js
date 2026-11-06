@@ -220,6 +220,18 @@ class MoChat {
         // นัดกันแล้ว: ส่งข้อความหลังเวลานัด = มาตามนัด
         if (this.dateWaiting) this.dateWaiting = null;
 
+        // "โมทำอะไรได้บ้าง" → บอกคำสั่งที่ใช้ได้จริง
+        if (/^(?:โม\s*)?(?:ทำอะไรได้บ้าง|สั่งอะไรได้บ้าง|มีคำสั่งอะไรบ้าง|ช่วยอะไรได้บ้าง|คำสั่ง(?:ทั้งหมด)?)\s*(?:อะ|ล่ะ|หรอ|นะ|\?)*$/.test(text.trim())) {
+            const app = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
+            this.queueReply(async () => this.addMessage('received', `เค้าทำให้ได้นะ 💗
+🎵 "เปิดเพลงรัก" · "ปิดเพลง" · "เพลงถัดไป" · "เสียงดังขึ้น/เบาลง"
+📱 "เปิดไลน์" · "เปิดเฟส" · "เปิดแอป jet music"
+⏰ "อีก 10 นาทีโทรปลุก" · "ตี 6 โทรปลุก"
+🏫 "มีวิชาอะไรบ้าง" · "มีงานค้างไหม"
+🎙️ กดปุ่มคลื่นเสียงข้างไมค์ = คุย/สั่งด้วยเสียง${app ? '' : '\n(เปิดแอป/ปุ่มเพลง ใช้ได้ในแอปโมบนมือถือ)'}`));
+            return;
+        }
+
         // สั่งเพลง: "โมเปิดเพลง X ให้หน่อย" / "ปิดเพลง" / "เพลงถัดไป" / "เสียงดังขึ้น" → โมทำจริงทันที ไม่ใช้ AI
         const music = this.musicCommand(text);
         if (music) {
@@ -248,7 +260,7 @@ class MoChat {
         const aboutClass = /(คลาสรูม|คราสรูม|classroom|การบ้าน|งานค้าง|ค้างส่ง|ส่งงาน|กำหนดส่ง|เดดไลน์|deadline|ครู.{0,8}(สั่ง|ประกาศ|ให้ทำ)|วิชา\S{0,4}(อะไร|ไหน|ทั้งหมด|ที่เรียน)|วิชา.{0,12}(มีงาน|งานอะไร|ประกาศ|คะแนน)|งาน(ไหน|อะไร).{0,8}(ส่ง|ค้าง|ต้องทำ))/i.test(text);
         // เพิ่งคุยเรื่อง Classroom ภายใน 10 นาที → ถามต่อสั้นๆ ("เช็คยัง" "ได้ยัง" "แล้ววิชาคอมล่ะ") ก็ส่งไปห้องทำงานด้วย
         const officeFollowUp = Date.now() < (this.officeUntil || 0) && text.length <= 40
-            && /(เช็ค|เช็ก|ยัง|ได้ไหม|ได้ป่ะ|ไง|ล่ะ|อะ$|บ้าง|ไหน|อีก|ต่อ|วิชา|งาน)/.test(text);
+            && /(เช็ค|เช็ก|ดูให้|ได้ยัง|วิชา|งาน|ส่ง|คะแนน|ประกาศ|ครู|คาบ|เรียน)/.test(text);
         if (this.onOfficeCommand && (aboutClass || officeFollowUp || /(เข้า|เปิด|ไป)\s*ห้องทำงาน/.test(text))) {
             this.officeUntil = Date.now() + 10 * 60000;
             this.queueReply(async () => {
@@ -1151,13 +1163,19 @@ class MoChat {
         if (!t || t.length > 90) return null;
         const has = re => re.test(t);
         if (has(/((?<!เ)ปิด|หยุด|พอ|เบรก|pause).{0,4}เพลง|เพลง.{0,6}((?<!เ)ปิด|หยุด)|^(?:โม\s*)?(?:หยุด|pause)(?:ก่อน)?$/i)) return { action: 'pause' };
-        if (has(/เล่นต่อ|เปิดต่อ|เพลงต่อ|resume/i)) return { action: 'play' };
-        if (has(/(เพลง)?ถัดไป|ข้ามเพลง|เปลี่ยนเพลง|เพลงต่อไป|next/i)) return { action: 'next' };
-        if (has(/เพลงก่อนหน้า|ย้อนเพลง|เพลงเมื่อกี้|previous/i)) return { action: 'previous' };
-        if (has(/(เสียง|เพลง).{0,4}(ดัง|เพิ่ม)|เพิ่มเสียง|เร่งเสียง|เปิดดังๆ/)) return { action: 'volup' };
-        if (has(/(เสียง|เพลง).{0,4}(เบา|ลด)|ลดเสียง|ค่อยๆ หน่อย/)) return { action: 'voldown' };
+        // ต้องเป็นคำสั่งชัดๆ — "วันถัดไป" "ข้างบ้านเสียงดัง" "next week" ไม่ใช่
+        if (has(/เพลงถัดไป|ข้ามเพลง|เปลี่ยนเพลง|เพลงต่อไป|^(?:โม\s*)?(?:ถัดไป|ข้าม|next|skip)(?:\s*(?:เลย|ที|หน่อย))?$/i)) return { action: 'next' };
+        if (has(/เพลงก่อนหน้า|ย้อนเพลง|เพลงเมื่อกี้|^(?:โม\s*)?(?:previous|back)$/i)) return { action: 'previous' };
+        if (has(/เล่นเพลงต่อ|เปิดเพลงต่อ|^(?:โม\s*)?(?:เล่นต่อ|เปิดต่อ|resume|play)(?:\s*(?:เลย|ที|หน่อย))?$/i)) return { action: 'play' };
+        if (has(/เพิ่มเสียง|เร่งเสียง|(?:เสียง|เพลง)ดังขึ้น|เปิด(?:เสียง|เพลง)?ดัง(?:ๆ|ขึ้น)|ดังอีก|^(?:โม\s*)?(?:ดังๆ|ดังขึ้น)/)) return { action: 'volup' };
+        if (has(/ลดเสียง|เบาเสียง|(?:เสียง|เพลง)เบาลง|เบาลงหน่อย|^(?:โม\s*)?(?:เบาๆ|เบาลง)/)) return { action: 'voldown' };
         const m = t.match(/(?:เปิด|เล่น|ขอ)\s*เพลง\s*(.*)$/);
         if (!m) return null;
+        // "เปิดเพลงใน jet music" → เปิดแอปเพลงของเอง
+        if (/(?:jet ?music|เจ็ท ?มิวสิ[คก])/i.test(m[1])) {
+            const q = m[1].replace(/(?:ใน|ผ่าน|ทาง|บน)?\s*(?:แอป|แอพ)?\s*(?:jet ?music|เจ็ท ?มิวสิ[คก])/ig, '').replace(/(?:ให้|หน่อย|ที|ด้วย|นะ|โม|เลย)+\s*$/g, '').trim();
+            return { action: 'app', app: { label: 'jet music', names: ['jet music', 'jetmusic', 'เจ็ทมิวสิค'] }, query: q };
+        }
         let q = m[1]
             .replace(/(?:ใน|ผ่าน|ทาง|บน)\s*(?:แอป|แอพ)?\s*(?:ยูทูป|ยูทูบ|youtube|yt)(?:\s*music)?/ig, '')
             .replace(/(?:ให้|หน่อย|ที|ด้วย|นะ|จ้า|จ่ะ|ค่ะ|ครับ|สิ|ดิ|เลย|ได้ไหม|ได้มั้ย|ได้ป่ะ|โม|เค้า|เรา|ฟัง|ทีนะ)+\s*$/g, '')
@@ -1175,6 +1193,11 @@ class MoChat {
         const pick = a => a[Math.floor(Math.random() * a.length)];
         this.mind && this.mind.act(cmd.action === 'search' ? `เปิดเพลง "${cmd.query || 'สุ่ม'}" ให้เอง` : `กดเพลง: ${cmd.action}`);
         const show = (icon, title, detail, kind = 'music') => window.dispatchEvent(new CustomEvent('mo:action', { detail: { icon, title, detail, kind } }));
+        if (cmd.action === 'app') {
+            const reply = await this.runApp(cmd.app);
+            return cmd.query && /^(?:เปิด|จัดไป)/.test(reply) ? `${reply}
+เพลง "${cmd.query}" เลือกในแอปเองนะ เค้ายังกดในนั้นให้ไม่ได้ 🥺` : reply;
+        }
         if (cmd.action === 'search') {
             const q = cmd.query || pick(['เพลงฮิต 2026', 'เพลงชิลๆ ฟังสบาย', 'เพลงไทยเพราะๆ', 'เพลงรักน่ารัก']);
             show('▶', 'Now playing', q);

@@ -110,6 +110,11 @@ public class ChatHeadService extends Service {
     static void appVisible(boolean visible) {
         appInFront = visible;
         if (running != null) running.ui.post(() -> {
+            // เปิดหัวแชทชั่วคราวตอนโมพาไปแอปอื่น (เจ้าของไม่ได้เปิดสวิตช์ไว้) → กลับมาแล้วปิดทิ้ง ไม่ค้างแจ้งเตือน
+            if (visible && running != null && !isWanted(running)) {
+                running.stopSelf();
+                return;
+            }
             if (visible) {
                 running.setUnread(0);
                 running.collapse(false);

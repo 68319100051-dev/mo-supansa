@@ -36,6 +36,7 @@ public class MoNativePlugin extends Plugin {
     private android.speech.SpeechRecognizer recognizer;
     private android.speech.tts.TextToSpeech tts;
     private boolean ttsReady;
+    private final java.util.List<Runnable> ttsQueue = new java.util.ArrayList<>();
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
 
     /** ฟัง 1 ประโยค → { text } (หรือ { text: "", error }) ; ระหว่างพูดส่ง event "voicePartial" { text } / "voiceLevel" { level } */
@@ -110,11 +111,18 @@ public class MoNativePlugin extends Plugin {
             tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, id);
         };
         if (tts != null && ttsReady) { go.run(); return; }
+        if (tts != null) { ttsQueue.add(go); return; }   // กำลังเตรียมตัวอ่านเสียงอยู่ → รอคิว ไม่สร้างซ้ำ
+        ttsQueue.add(go);
         tts = new android.speech.tts.TextToSpeech(getContext(), status -> {
             ttsReady = status == android.speech.tts.TextToSpeech.SUCCESS;
-            if (!ttsReady) { call.resolve(); return; }
-            tts.setLanguage(new java.util.Locale("th", "TH"));
-            go.run();
+            if (ttsReady) {
+                int lang = tts.setLanguage(new java.util.Locale("th", "TH"));
+                if (lang == android.speech.tts.TextToSpeech.LANG_MISSING_DATA || lang == android.speech.tts.TextToSpeech.LANG_NOT_SUPPORTED) tts.setLanguage(java.util.Locale.getDefault());
+            }
+            java.util.List<Runnable> q = new java.util.ArrayList<>(ttsQueue);
+            ttsQueue.clear();
+            if (!ttsReady) { tts = null; return; }   // JS มีเวลาหมดของตัวเอง
+            for (Runnable r : q) r.run();
         });
     }
 
