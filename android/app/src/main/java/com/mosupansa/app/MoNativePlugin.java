@@ -311,9 +311,40 @@ public class MoNativePlugin extends Plugin {
         ctx.startActivity(launch);
         ret.put("ok", true);
         ret.put("label", String.valueOf(best.loadLabel(pm)));
-        ret.put("pkg", best.activityInfo.packageName);
+        String pkg = best.activityInfo.packageName;
+        ret.put("pkg", pkg);
         ret.put("bubble", bubble);
+        // สั่งต่อ: ค้นหาในแอปนั้น (+ กดผลแรก) ด้วยระบบช่วยการเข้าถึง
+        String query = call.getString("query", "");
+        if (query == null || query.trim().isEmpty()) { call.resolve(ret); return; }
+        if (MoAccessibilityService.isFinance(pkg)) { ret.put("search", "finance"); call.resolve(ret); return; }
+        if (!MoAccessibilityService.isEnabled(ctx)) { ret.put("search", "off"); call.resolve(ret); return; }
+        MoAccessibilityService.instance.search(pkg, query.trim(), Boolean.TRUE.equals(call.getBoolean("pickFirst", true)), (ok, step) -> {
+            ret.put("search", ok ? step : "fail:" + step);
+            call.resolve(ret);
+        });
+    }
+
+    // ===== ระบบช่วยการเข้าถึง (โมกดหน้าจอแทน) =====
+
+    @PluginMethod
+    public void accessibilityStatus(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("on", MoAccessibilityService.isEnabled(getContext()));
         call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void openAccessibilitySettings(PluginCall call) {
+        launch(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+        call.resolve();
+    }
+
+    /** Android 13+: แอปที่ลงเองต้อง "อนุญาตการตั้งค่าที่ถูกจำกัด" ในหน้าข้อมูลแอปก่อน */
+    @PluginMethod
+    public void openAppInfo(PluginCall call) {
+        launch(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getContext().getPackageName())));
+        call.resolve();
     }
 
     // ===== สั่งเพลงด้วยเสียง/ข้อความ =====
@@ -339,7 +370,17 @@ public class MoNativePlugin extends Plugin {
             i.setPackage("com.google.android.youtube");
             i.putExtra("query", q);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            if (i.resolveActivity(pm) != null) { ctx.startActivity(i); ret.put("app", "youtube"); call.resolve(ret); return; }
+            if (i.resolveActivity(pm) != null) {
+                ctx.startActivity(i);
+                ret.put("app", "youtube");
+                // เปิดระบบช่วยการเข้าถึงไว้ → กดคลิปแรกให้เล่นเลย
+                if (Boolean.TRUE.equals(call.getBoolean("pickFirst", true)) && MoAccessibilityService.isEnabled(ctx)) {
+                    MoAccessibilityService.instance.pickFirst("com.google.android.youtube", (ok, step) -> { ret.put("played", ok); call.resolve(ret); });
+                    return;
+                }
+                call.resolve(ret);
+                return;
+            }
         } catch (Exception ignored) {}
         Intent web = new Intent(Intent.ACTION_VIEW, Uri.parse("https://m.youtube.com/results?search_query=" + Uri.encode(q)));
         web.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);

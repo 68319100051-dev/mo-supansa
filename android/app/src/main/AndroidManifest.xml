@@ -43,6 +43,16 @@
         </receiver>
         <!-- หัวแชทโม -->
         <service
+            android:name=".MoAccessibilityService"
+            android:exported="true"
+            android:label="โม: กดหน้าจอแทน (ค้นหา/เปิดคลิป)"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/mo_accessibility" />
+        </service>
+        <service
             android:name=".ChatHeadService"
             android:exported="false"
             android:foregroundServiceType="specialUse">

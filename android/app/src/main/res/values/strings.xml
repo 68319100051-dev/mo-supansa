@@ -4,4 +4,5 @@
     <string name="title_activity_main">โม</string>
     <string name="package_name">com.mosupansa.app</string>
     <string name="custom_url_scheme">com.mosupansa.app</string>
+    <string name="mo_accessibility_desc">ให้โมกดหน้าจอแทนตอนเองสั่ง เช่น "เปิดติ๊กต็อกแล้วค้นหา … เลือกคลิปแรก" โมจะหาช่องค้นหา พิมพ์ แล้วกดผลแรกให้ ทำเฉพาะตอนสั่งเท่านั้น ไม่พิมพ์ลงช่องรหัสผ่าน และไม่แตะแอปธนาคาร/กระเป๋าเงิน</string>
 </resources>

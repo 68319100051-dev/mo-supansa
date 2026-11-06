@@ -232,8 +232,10 @@ class MoChat {
             return;
         }
 
+        // เปิดแอป (+ ค้นหา/เลือกอันแรก) ก่อนเพลง — ไม่งั้น "เปิดติ๊กต็อกแล้วเปิดเพลง X" จะไปเปิด YouTube
+        const app = this.appCommand(text);
         // สั่งเพลง: "โมเปิดเพลง X ให้หน่อย" / "ปิดเพลง" / "เพลงถัดไป" / "เสียงดังขึ้น" → โมทำจริงทันที ไม่ใช้ AI
-        const music = this.musicCommand(text);
+        const music = !app && this.musicCommand(text);
         if (music) {
             this.queueReply(async () => {
                 this.showTyping && this.showTyping();
@@ -244,8 +246,7 @@ class MoChat {
             return;
         }
 
-        // เปิดแอป: "โมเปิดไลน์ให้หน่อย" / "เปิดแอป jet music" → เปิดจริง แล้วโมย่อเป็นหัวแชทรอ
-        const app = this.appCommand(text);
+        // เปิดแอป: "โมเปิดไลน์ให้หน่อย" / "เปิดติ๊กต็อกแล้วค้นหา X เลือกคลิปแรก" → ทำจริง แล้วโมย่อเป็นหัวแชทรอ
         if (app) {
             this.queueReply(async () => {
                 this.showTyping && this.showTyping();
@@ -1131,8 +1132,30 @@ class MoChat {
     /** "โมเปิดไลน์ให้หน่อย" → { label, names } หรือ null */
     appCommand(raw) {
         const t = String(raw || '').replace(/\s+/g, ' ').trim();
-        if (!t || t.length > 60) return null;
-        const m = t.match(/^(?:โม\s*)?(?:ช่วย\s*)?(?:เปิด|เข้า|ไปที่|ไป)\s*(แอป|แอพ|app)?\s*(.+)$/i);
+        if (!t || t.length > 140) return null;
+        const findAlias = n => MoChat.APP_ALIASES.find(([re]) => re.test(n));
+        const tidy = q => q
+            .replace(/\s*(?:แล้ว)?\s*(?:เลือก|กด|เปิด|เล่น|ดู)\s*(?:ที่)?\s*(?:คลิป|อัน|เพลง|ผล|วิดีโอ)?\s*(?:แรก|อันแรก)\s*(?:ที่ขึ้น(?:มา)?)?\s*(?:ให้)?\s*(?:หน่อย|ที|นะ|เลย|ด้วย)*\s*$/, '')
+            .replace(/(?:ให้|หน่อย|ที|ด้วย|นะ|จ้า|ค่ะ|ครับ|สิ|ดิ|เลย|ได้ไหม|ได้มั้ย|ได้ป่ะ|โม|เค้า|ทีนะ|แป๊บ)+\s*$/g, '')
+            .replace(/^(?:คำว่า|ชื่อ|เพลง|คลิป)\s*/, '').replace(/^["“'](.*)["”']$/, '$1').trim();
+        const wantsFirst = (verb, rest) => /แรก/.test(rest) || /^(?:เปิด|เล่น|ดู)/.test(verb);
+        // ก) "เปิดติ๊กต็อกแล้วค้นหา X (เลือกคลิปแรก)"
+        let m = t.match(/^(?:โม\s*)?(?:ช่วย\s*)?(?:เปิด|เข้า|ไปที่|ไป)\s*(แอป|แอพ|app)?\s*(.+?)\s*(?:แล้ว|และ|,)\s*(?:ก็\s*)?(ค้นหา|ค้น|หา|เสิร์ช|search|เปิด|เล่น|ดู)\s*(?:เพลง|คลิป|วิดีโอ)?\s*(.+)$/i);
+        if (m) {
+            const name = m[2].replace(/(?:ให้|หน่อย|ที)+$/, '').trim();
+            const alias = findAlias(name);
+            const query = tidy(m[4]);
+            if ((alias || m[1]) && query) return { label: alias ? alias[1][0] : name, names: alias ? [...alias[1], name] : [name], query, pickFirst: wantsFirst(m[3], m[4]) };
+        }
+        // ข) "ค้นหา X ในติ๊กต็อก (เลือกคลิปแรก)"
+        m = t.match(/^(?:โม\s*)?(?:ช่วย\s*)?(ค้นหา|ค้น|หา|เสิร์ช|เปิดคลิป|ดูคลิป|เปิด|ดู)\s*(.+?)\s*(?:ใน|บน|ที่|ผ่าน)\s*(?:แอป|แอพ)?\s*(\S+(?:\s*music)?)(.*)$/i);
+        if (m) {
+            const alias = findAlias(m[3].replace(/(?:ให้|หน่อย|ที|ด้วย|นะ|เลย).*$/, ''));
+            const query = tidy(m[2]);
+            if (alias && query) return { label: alias[1][0], names: [...alias[1], m[3]], query, pickFirst: wantsFirst(m[1], m[4]) || /คลิป/.test(m[1]) };
+        }
+        if (t.length > 60) return null;
+        m = t.match(/^(?:โม\s*)?(?:ช่วย\s*)?(?:เปิด|เข้า|ไปที่|ไป)\s*(แอป|แอพ|app)?\s*(.+)$/i);
         if (!m) return null;
         let name = m[2]
             .replace(/(?:ให้|หน่อย|ที|ด้วย|นะ|จ้า|ค่ะ|ครับ|สิ|ดิ|เลย|ได้ไหม|ได้มั้ย|ได้ป่ะ|โม|เค้า|เรา|ทีนะ|แป๊บ|ซิ)+\s*$/g, '')
@@ -1152,8 +1175,20 @@ class MoChat {
         window.dispatchEvent(new CustomEvent('mo:action', { detail: { icon: '🚀', title: `Launch · ${cmd.label}`, detail: `กำลังเปิด ${cmd.label}...` } }));
         if (window.MoVoiceModeInstance && window.MoVoiceModeInstance.on) await new Promise(r => setTimeout(r, 1300));
         let r;
-        try { r = await native.launchApp({ names: cmd.names, note: 'เค้าย่อรออยู่ตรงนี้นะ 💗 กดเค้าเมื่อไหร่ก็ได้' }); } catch (e) { r = { ok: false }; }
+        if (cmd.query) window.dispatchEvent(new CustomEvent('mo:action', { detail: { icon: '🔎', title: `Search · ${cmd.label}`, detail: `"${cmd.query}"${cmd.pickFirst ? ' → เลือกอันแรก' : ''}` } }));
+        try {
+            r = await native.launchApp({ names: cmd.names, query: cmd.query || '', pickFirst: Boolean(cmd.pickFirst), note: 'เค้าย่อรออยู่ตรงนี้นะ 💗 กดเค้าเมื่อไหร่ก็ได้' });
+        } catch (e) { r = { ok: false }; }
         if (!r || !r.ok) return pick([`หาแอป "${cmd.label}" ในเครื่องไม่เจอแฮะ 🥺 ลงไว้รึยัง`, `เค้าไม่เจอ ${cmd.label} อะ ชื่อในเครื่องเรียกว่าอะไรน้า`]);
+        if (cmd.query) {
+            const s = r.search || '';
+            if (s === 'played') return pick([`เปิด "${cmd.query}" ใน ${r.label} ให้แล้ว อันแรกเลย 🎬`, `จัดไป ค้น "${cmd.query}" แล้วกดอันแรกให้แล้วนะ 💗`]);
+            if (s === 'searched') return `ค้น "${cmd.query}" ใน ${r.label} ให้แล้วนะ เลือกดูได้เลย 🔎`;
+            if (s === 'off') return `เปิด ${r.label} ให้แล้ว แต่ค้นให้ยังไม่ได้ 🥺 ต้องเปิด "ให้โมกดหน้าจอแทน" ในตั้งค่าซิงก์ก่อนนะ ตอนนี้ค้น "${cmd.query}" เองไปก่อน`;
+            if (s === 'finance') return 'แอปการเงินเค้าไม่กดให้นะ กลัวพลาด 🥺 เปิดให้แล้ว ทำต่อเองนะ';
+            if (s === 'fail:result') return `ค้น "${cmd.query}" ให้แล้ว แต่กดอันแรกไม่ได้แฮะ เลือกเองนะ 🥺`;
+            if (s.startsWith('fail:')) return `เปิด ${r.label} แล้ว แต่หาช่องค้นหาไม่เจอแฮะ 🥺 ค้น "${cmd.query}" เองนะ`;
+        }
         return pick([`เปิด ${r.label} ให้แล้วนะ 💗`, `จัดไป ${r.label} 🚀`, `เปิดให้แล้ว~ ${r.label}`]) + (r.bubble ? '' : '\n(ถ้าอยากให้เค้าย่อเป็นหัวแชทลอยรอ เปิดสิทธิ์ "แสดงทับแอปอื่น" ให้เค้าก่อนนะ)');
     }
 
@@ -1194,9 +1229,7 @@ class MoChat {
         this.mind && this.mind.act(cmd.action === 'search' ? `เปิดเพลง "${cmd.query || 'สุ่ม'}" ให้เอง` : `กดเพลง: ${cmd.action}`);
         const show = (icon, title, detail, kind = 'music') => window.dispatchEvent(new CustomEvent('mo:action', { detail: { icon, title, detail, kind } }));
         if (cmd.action === 'app') {
-            const reply = await this.runApp(cmd.app);
-            return cmd.query && /^(?:เปิด|จัดไป)/.test(reply) ? `${reply}
-เพลง "${cmd.query}" เลือกในแอปเองนะ เค้ายังกดในนั้นให้ไม่ได้ 🥺` : reply;
+            return this.runApp({ ...cmd.app, query: cmd.query, pickFirst: true });
         }
         if (cmd.action === 'search') {
             const q = cmd.query || pick(['เพลงฮิต 2026', 'เพลงชิลๆ ฟังสบาย', 'เพลงไทยเพราะๆ', 'เพลงรักน่ารัก']);
@@ -1204,7 +1237,9 @@ class MoChat {
             // โหมดเสียง: ให้หน้าต่างโฮโลแกรมโชว์แป๊บนึงก่อนเด้งไปแอปเพลง
             if (window.MoVoiceModeInstance && window.MoVoiceModeInstance.on) await new Promise(r => setTimeout(r, 1600));
             if (native && native.playMusic) {
-                try { await native.playMusic({ query: q }); } catch (e) { return 'เปิดยูทูปไม่ได้แฮะ 🥺 ลองอีกทีนะ'; }
+                let r;
+                try { r = await native.playMusic({ query: q, pickFirst: true }); } catch (e) { return 'เปิดยูทูปไม่ได้แฮะ 🥺 ลองอีกทีนะ'; }
+                if (r && r.app === 'youtube' && r.played) return pick([`เปิด "${q}" ให้แล้ว คลิปแรกเลย 🎶`, `จัดไป "${q}" 🎧`]);
             } else {
                 window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, '_blank');
             }

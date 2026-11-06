@@ -880,6 +880,25 @@
         document.addEventListener('visibilitychange', () => { if (!document.hidden) renderHead(); });
         renderHead();
 
+        // โมกดหน้าจอแทน (ค้นหา/เลือกคลิปแรกในแอปอื่น) — Android 13+ ต้องอนุญาต "การตั้งค่าที่ถูกจำกัด" ก่อน
+        const a11yBtn = document.getElementById('btn-a11y');
+        const renderA11y = () => moNative.accessibilityStatus().then(st => {
+            a11yBtn.textContent = st.on ? '🤖 โมกดหน้าจอแทน: เปิดอยู่' : '🤖 ให้โมกดหน้าจอแทน';
+        }).catch(() => {});
+        a11yBtn.addEventListener('click', async () => {
+            const st = await moNative.accessibilityStatus().catch(() => ({}));
+            if (st.on) return moNative.openAccessibilitySettings();
+            const step = confirm(`ให้โมกดหน้าจอแทน (เช่น ค้นหาในติ๊กต็อกแล้วเลือกคลิปแรก)
+
+1) ถ้าเปิดไม่ได้/ขึ้นว่า "การตั้งค่าที่ถูกจำกัด" → กด OK ไปหน้าข้อมูลแอป → ⋮ มุมขวาบน → "อนุญาตการตั้งค่าที่ถูกจำกัด"
+2) แล้วไป การช่วยการเข้าถึง → แอปที่ดาวน์โหลด → โม → เปิด
+
+กด OK = ไปหน้าข้อมูลแอปก่อน / ยกเลิก = ไปหน้าการช่วยการเข้าถึงเลย`);
+            if (step) moNative.openAppInfo(); else moNative.openAccessibilitySettings();
+        });
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) renderA11y(); });
+        renderA11y();
+
         // Infinix/XOS ฆ่าแอปตอนปิดจอ → ทางลัดไปตั้ง "ไม่จำกัดแบตเตอรี่" + "เริ่มอัตโนมัติ"
         document.getElementById('native-power').classList.remove('hidden');
         document.getElementById('btn-battery').addEventListener('click', () => moNative.openBatterySettings());
