@@ -513,6 +513,7 @@ const GOOGLE_SCOPES = [
     'https://www.googleapis.com/auth/classroom.courses.readonly',
     'https://www.googleapis.com/auth/classroom.coursework.me.readonly',
     'https://www.googleapis.com/auth/classroom.announcements.readonly',
+    'https://www.googleapis.com/auth/gmail.readonly',
 ];
 const OFFICE_EVERY_MS = 15 * 60000;
 
@@ -690,6 +691,7 @@ async function officeRun(env) {
     const rows = await db(env, 'mo_state?select=user_id&key=eq.office_google');
     for (const r of rows || []) {
         await officeClassroom(env, r.user_id).catch(e => console.error('office failed', r.user_id, e.message));
+        await officeGmail(env, r.user_id).catch(e => console.error('gmail failed', r.user_id, e.message));
     }
 }
 
@@ -730,7 +732,8 @@ async function handleOffice(request, env, url, ctx) {
         ]);
         return json({
             ready,
-            google: g ? { connected: true, email: g.email, broken: Boolean(g.broken), at: g.at } : { connected: false },
+            google: g ? { connected: true, email: g.email, broken: Boolean(g.broken), at: g.at, gmail: hasGmail(g) } : { connected: false },
+            gmail: await stateGet(env, user.id, 'office_gmail').then(x => x ? { lastCheck: x.lastCheck, unread: x.unread || 0, error: x.error || null } : null),
             classroom: st ? { lastCheck: st.lastCheck, courses: st.courses || 0, error: st.error || null } : null,
             reports: (reports || []).slice(0, 30),
         });
@@ -762,6 +765,10 @@ async function handleOffice(request, env, url, ctx) {
         }
     }
 
+    if (route === 'gmail/check' && request.method === 'POST') {
+        return json(await officeGmail(env, user.id, { manual: true }));
+    }
+
     if (route === 'classroom/check' && request.method === 'POST') {
         return json(await officeClassroom(env, user.id, { manual: true }));
     }
@@ -772,7 +779,7 @@ async function handleOffice(request, env, url, ctx) {
             const rt = await officeUnseal(env, g.rt).catch(() => '');
             if (rt) await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(rt)}`, { method: 'POST' }).catch(() => {});
         }
-        for (const key of ['office_google', 'office_classroom', 'office_snapshot']) {
+        for (const key of ['office_google', 'office_classroom', 'office_snapshot', 'office_gmail']) {
             await db(env, `mo_state?user_id=eq.${user.id}&key=eq.${key}`, { method: 'DELETE' });
         }
         return json({ ok: true });
@@ -886,5 +893,99 @@ ${JSON.stringify(compact).slice(0, 24000)}
         return { ok: true, answer: answer.replace(/\*\*/g, '') || fallback(), courses: data.length };
     } catch (e) {
         return { ok: true, answer: fallback(), courses: data.length };
+    }
+}
+
+// =============================================
+//  ห้องทำงาน: Gmail — อีเมลใหม่ที่ยังไม่อ่าน (กล่องหลัก) → AI คัดเฉพาะที่สำคัญ → สรุปมาบอก
+//  ต้องมีสิทธิ์ gmail.readonly (เชื่อมใหม่ถ้าเคยเชื่อมก่อนเพิ่มสิทธิ์นี้) / เช็กทุก 60 นาที หรือเมื่อสั่ง
+// =============================================
+
+const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+const GMAIL_EVERY_MS = 60 * 60000;
+
+function hasGmail(g) {
+    return Boolean(g && !g.broken && String(g.scope || '').includes('gmail.readonly'));
+}
+
+/** ให้ AI คัดว่าเมลไหนสำคัญ + สรุปสั้นๆ (ล้มเหลว = ถือว่าทุกฉบับสำคัญ ใช้ snippet แทน) */
+async function gmailTriage(apiKey, mails) {
+    const fallback = mails.map(m => ({ id: m.id, important: true, summary: m.snippet.slice(0, 140) }));
+    if (!apiKey || !mails.length) return fallback;
+    const prompt = `คุณคือ "โม" ผู้ช่วยที่คัดอีเมลให้ "เจ็ท" (นักศึกษา) อ่านรายการอีเมลใหม่ แล้วบอกว่าฉบับไหนสำคัญ
+สำคัญ = จากครู/โรงเรียน/มหาลัย/ที่ทำงาน/ธนาคาร/การนัดหมาย/งานที่ต้องทำ/เรื่องเงิน/ความปลอดภัยบัญชี
+ไม่สำคัญ = โฆษณา โปรโมชัน จดหมายข่าว แจ้งเตือนโซเชียลทั่วไป
+
+อีเมล:
+${mails.map(m => `- id:${m.id} | จาก: ${m.from} | เรื่อง: ${m.subject} | ${m.snippet.slice(0, 200)}`).join('\n')}
+
+ตอบ JSON array เท่านั้น: [{"id":"...","important":true/false,"summary":"ภาษาไทยกันเอง 1 ประโยค ว่าเมลนี้เรื่องอะไร ต้องทำอะไรไหม"}]`;
+    try {
+        const res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+            body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], generationConfig: { responseMimeType: 'application/json', temperature: 0.2, maxOutputTokens: 1200 } }),
+            signal: AbortSignal.timeout(20000),
+        });
+        const j = await res.json();
+        const out = JSON.parse(j.candidates[0].content.parts.map(p => p.text || '').join(''));
+        return Array.isArray(out) ? out : fallback;
+    } catch (e) {
+        return fallback;
+    }
+}
+
+/**
+ * เช็ก Gmail: เมลใหม่ (ยังไม่อ่าน กล่องหลัก 2 วันล่าสุด) ที่ยังไม่เคยเห็น → คัด → รายงานเฉพาะที่สำคัญ
+ * ครั้งแรก = จำเมลที่มีอยู่แล้วไว้ ไม่รายงานย้อนหลัง
+ */
+async function officeGmail(env, userId, { manual = false } = {}) {
+    const g = await stateGet(env, userId, 'office_google');
+    if (!g || g.broken) return { ok: false, reason: g ? 'broken' : 'not_connected' };
+    if (!hasGmail(g)) return { ok: false, reason: 'need_gmail' };
+    const st = (await stateGet(env, userId, 'office_gmail')) || { seen: {}, lastCheck: 0 };
+    const now = Date.now();
+    if (!manual && now - (st.lastCheck || 0) < GMAIL_EVERY_MS) return { ok: true, skipped: true };
+    const seeding = !st.lastCheck;
+    try {
+        const access = await googleAccess(env, userId, g);
+        const api = async path => {
+            const r = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/${path}`, { headers: { Authorization: `Bearer ${access}` } });
+            if (!r.ok) throw new Error(`gmail ${r.status}: ${(await r.text()).slice(0, 160)}`);
+            return r.json();
+        };
+        const list = (await api(`messages?q=${encodeURIComponent('is:unread category:primary newer_than:2d -from:me')}&maxResults=15`)).messages || [];
+        const fresh = list.filter(m => !st.seen[m.id]);
+        fresh.forEach(m => { st.seen[m.id] = now; });
+        st.seen = Object.fromEntries(Object.entries(st.seen).sort((a, b) => b[1] - a[1]).slice(0, 400));
+        let reports = [];
+        if (!seeding && fresh.length) {
+            const mails = await Promise.all(fresh.slice(0, 10).map(async m => {
+                const d = await api(`messages/${m.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`);
+                const h = name => ((d.payload && d.payload.headers) || []).find(x => x.name.toLowerCase() === name.toLowerCase())?.value || '';
+                return { id: m.id, threadId: d.threadId, from: h('From').replace(/<[^>]+>/, '').replace(/"/g, '').trim().slice(0, 60), subject: h('Subject').slice(0, 120) || '(ไม่มีหัวเรื่อง)', snippet: String(d.snippet || '') };
+            }));
+            const keys = (await stateGet(env, userId, 'mo_device_keys_v1')) || {};
+            const triage = await gmailTriage(keys.gemini, mails);
+            reports = mails
+                .map(m => ({ m, t: triage.find(x => x.id === m.id) || { important: true, summary: m.snippet.slice(0, 140) } }))
+                .filter(x => x.t.important)
+                .map(({ m, t }) => ({
+                    id: `g${m.id}`, app: 'gmail', kind: 'mail', course: m.from, title: m.subject,
+                    summary: String(t.summary || m.snippet).slice(0, 300), todo: '', link: `https://mail.google.com/mail/u/0/#inbox/${m.threadId}`, at: now,
+                }));
+            if (reports.length) {
+                const old = (await stateGet(env, userId, 'office_reports')) || [];
+                await statePut(env, userId, 'office_reports', [...reports, ...old].slice(0, 60));
+                await moNotify(env, userId, `📧 เจ็ทๆ มีอีเมลสำคัญ ${reports.length} ฉบับ\n\n${reports.map(r => `✉️ ${r.course}: ${r.title}\n${r.summary}`).join('\n\n')}`.slice(0, 1500), { tag: 'office' });
+            }
+        }
+        Object.assign(st, { lastCheck: now, error: null, unread: list.length });
+        await statePut(env, userId, 'office_gmail', st);
+        return { ok: true, unread: list.length, fresh: reports, seeded: seeding };
+    } catch (e) {
+        Object.assign(st, { lastCheck: now, error: String(e.message || e).slice(0, 200) });
+        await statePut(env, userId, 'office_gmail', st);
+        return { ok: false, reason: 'error', error: st.error };
     }
 }

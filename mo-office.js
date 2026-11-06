@@ -7,7 +7,7 @@
 
 const MO_OFFICE_ZONES = [
     { id: 'classroom', icon: '📚', name: 'Google Classroom', desc: 'งานใหม่ / ประกาศ → โมอ่าน สรุป โทรมาบอก', live: true },
-    { id: 'gmail', color: '#fee2e2', icon: '📧', name: 'Gmail', desc: 'สรุปอีเมลสำคัญ' },
+    { id: 'gmail', color: '#fee2e2', icon: '📧', name: 'Gmail', desc: 'อีเมลสำคัญ → โมคัด สรุปมาบอก', live: true },
     { id: 'calendar', color: '#dbeafe', icon: '📅', name: 'Google Calendar', desc: 'เตือนนัด ประชุม' },
     { id: 'drive', color: '#fef3c7', icon: '📁', name: 'Google Drive', desc: 'หาไฟล์ / สรุปเอกสาร' },
     { id: 'tasks', color: '#ede9fe', icon: '🗣️', name: 'สั่งงานโม', desc: 'พิมพ์สั่ง แล้วโมไปทำให้' },
@@ -191,10 +191,12 @@ class MoOffice {
                 <em>เร็วๆ นี้</em>
             </div>`).join('');
         const works = s.reports.filter(r => r.kind === 'work');
+        const mails = s.reports.filter(r => r.kind === 'mail');
         return `${this.classroomHTML()}
+            ${this.gmailHTML()}
             <h3 class="office-section">🧩 โซนแอปอื่นๆ <small>ค่อยมาต่อเพิ่มทีหลัง</small></h3>
             <div class="office-tiles">${tiles}</div>
-            <h3 class="office-section">🗂️ โต๊ะรายงาน <small>${s.reports.length ? `${works.length} งาน · ${s.reports.length - works.length} ประกาศ` : 'ยังไม่มี'}</small></h3>
+            <h3 class="office-section">🗂️ โต๊ะรายงาน <small>${s.reports.length ? `${works.length} งาน · ${mails.length} อีเมล · ${s.reports.length - works.length - mails.length} ประกาศ` : 'ยังไม่มี'}</small></h3>
             ${s.reports.length
                 ? `<div class="office-reports">${s.reports.map(r => this.reportHTML(r)).join('')}</div>`
                 : '<div class="office-empty">📭 ยังไม่มีรายงาน พอมีงานใหม่เค้าจะสรุปวางไว้ตรงนี้ให้</div>'}`;
@@ -239,11 +241,49 @@ class MoOffice {
         </div>`;
     }
 
+    /** การ์ด Gmail: ใช้การเชื่อม Google เดียวกับ Classroom (ต้องอนุญาตสิทธิ์อ่านอีเมลเพิ่ม) */
+    gmailHTML() {
+        const s = this.status;
+        const g = s.google, m = s.gmail;
+        if (!s.ready || !g.connected || g.broken) return '';
+        const state = g.gmail ? ['on', '🟢 ทำงานอยู่'] : ['off', '⚪ ยังไม่อนุญาต'];
+        const body = g.gmail
+            ? `<div class="office-stats">
+                    <div><b>${m ? m.unread : 0}</b><small>ยังไม่อ่าน</small></div>
+                    <div><b>${m ? this.ago(m.lastCheck) : '-'}</b><small>เช็กล่าสุด</small></div>
+                    <div><b>${s.reports.filter(r => r.kind === 'mail').length}</b><small>สำคัญ</small></div>
+                </div>
+                ${m && m.error ? `<p class="office-error">⚠️ ${this.esc(m.error)}</p>` : ''}
+                <div class="office-actions"><button class="office-btn primary" data-act="gmail"><span>📧</span> ให้โมเช็กเมลตอนนี้</button></div>`
+            : `<p class="office-note">ให้โมอ่านอีเมลได้ (อ่านอย่างเดียว) โมจะคัดเฉพาะเมลสำคัญจากครู โรงเรียน ที่ทำงาน แล้วสรุปมาบอก ทิ้งโฆษณาให้</p>
+                <button class="office-btn primary" data-act="connect"><span>🔗</span> อนุญาตให้อ่าน Gmail</button>`;
+        return `<div class="office-main ${state[0]}">
+            <div class="office-main-head">
+                <span class="office-app-icon gmail">📧</span>
+                <div><b>Gmail</b><small>อีเมลใหม่ที่สำคัญ → โมคัด สรุปมาบอก · ทุก 1 ชั่วโมง</small></div>
+                <span class="office-chip ${state[0]}">${state[1]}</span>
+            </div>
+            ${body}
+        </div>`;
+    }
+
+    /** เช็ก Gmail เดี๋ยวนี้ → ข้อความรายงานแบบโม */
+    async checkGmail() {
+        this.mind && this.mind.think('frontal', 'เปิด Gmail ไปดูเมลใหม่ให้เอง');
+        const r = await this.api('gmail/check', {});
+        const problem = this.problemText(r);
+        if (problem) return problem;
+        const d = r.data;
+        if (d.seeded) return `เชื่อม Gmail แล้ว ตอนนี้มีเมลยังไม่อ่าน ${d.unread} ฉบับ ต่อไปมีเมลสำคัญเข้ามาเค้าจะสรุปมาบอกนะ 📧`;
+        if (d.fresh && d.fresh.length) return `มีเมลสำคัญ ${d.fresh.length} ฉบับ! เค้าสรุปไว้ในแชทแล้วนะ 📧\n${d.fresh.map(x => `• ${x.course}: ${x.title}`).join('\n')}`;
+        return `เช็กแล้ว ไม่มีเมลสำคัญใหม่นะ 😌 (ยังไม่อ่าน ${d.unread} ฉบับ เป็นพวกโฆษณาหรือเคยรายงานไปแล้ว)`;
+    }
+
     reportHTML(r) {
         const due = r.kind === 'work' ? this.dueInfo(r.due) : null;
         return `<article class="office-report ${r.kind}">
             <div class="office-report-top">
-                <span class="office-course">${r.kind === 'work' ? '📝' : '📢'} ${this.esc(r.course)}</span>
+                <span class="office-course">${r.kind === 'work' ? '📝' : r.kind === 'mail' ? '✉️' : '📢'} ${this.esc(r.course)}</span>
                 <time>${this.ago(r.at)}</time>
             </div>
             <h4>${this.esc(r.title)}</h4>
@@ -252,7 +292,7 @@ class MoOffice {
             <div class="office-report-foot">
                 ${due ? `<span class="office-due ${due.level}">⏰ ${this.esc(r.due)} · ${due.text}</span>` : ''}
                 ${r.size ? `<span class="office-size">งาน${this.esc(r.size)}</span>` : ''}
-                ${r.link ? `<a href="${this.esc(r.link)}" target="_blank" rel="noopener">เปิดงาน ↗</a>` : ''}
+                ${r.link ? `<a href="${this.esc(r.link)}" target="_blank" rel="noopener">${r.kind === 'mail' ? 'เปิดเมล ↗' : 'เปิดงาน ↗'}</a>` : ''}
             </div>
         </article>`;
     }
@@ -285,6 +325,11 @@ class MoOffice {
                 const r = await this.api('google/start', {});
                 if (r.data.url) { location.href = r.data.url; return; }
                 this.chat.showNotification(r.data.error || 'เปิดหน้าล็อกอินไม่ได้');
+            }
+            if (act === 'gmail') {
+                b.textContent = 'โมกำลังอ่านเมล...';
+                const text = await this.checkGmail();
+                this.chat.showNotification(text.split('\n')[0]);
             }
             if (act === 'check') {
                 b.textContent = 'โมกำลังดู...';
@@ -324,6 +369,7 @@ class MoOffice {
         if (d.ok) return null;
         if (d.reason === 'not_connected') return 'ยังไม่ได้เชื่อม Google Classroom เลยนะ เข้าห้องทำงานเค้า (บ้านโม → 🏢) แล้วกดเชื่อมก่อน';
         if (d.reason === 'broken') return 'การเชื่อม Classroom หลุดแล้ว เข้าห้องทำงานแล้วกดเชื่อมใหม่ทีนึงนะ';
+        if (d.reason === 'need_gmail') return 'ยังไม่ได้อนุญาตให้เค้าอ่าน Gmail นะ เข้าห้องทำงาน (บ้านโม → 🏢) แล้วกด "อนุญาตให้อ่าน Gmail" ทีนึง';
         return `เข้า Classroom ไม่ได้แฮะ 😵 (${d.error || 'ไม่รู้สาเหตุ'})`;
     }
 

@@ -313,6 +313,7 @@ ${reply}
         if (m.format === 'sticker') return { type: m.type, text: `[สติกเกอร์ ${m.text}${m.extra && m.extra.caption ? ` "${m.extra.caption}"` : ''}]` };
         if (m.format === 'transfer') return { type: m.type, text: `[โอนเงินให้ ฿${m.extra ? m.extra.amount : ''}]` };
         if (m.format === 'voice') return { type: m.type, text: `[ข้อความเสียง: ${m.extra ? m.extra.text : ''}]` };
+        if (m.format === 'outreach' && m.extra) return { type: m.type, text: `[โมร่างข้อความให้เองส่งหา ${m.extra.target || 'อีกคน'} ทาง ${m.extra.app === 'line' ? 'LINE' : 'IG'}: "${m.extra.text}"]` };
         if (m.format === 'song' && m.extra) return { type: m.type, text: `[ส่งเพลง: ${m.extra.artist} - ${m.extra.title}${m.extra.listened ? ' (เองกดฟังแล้ว)' : ''}]` };
         if (m.unsent) return { type: m.type, text: `[โมพิมพ์ว่า "${m.unsentText || ''}" แล้วกดยกเลิกข้อความ — เองเห็นแค่ว่ายกเลิกข้อความ ไม่เห็นว่าเขียนอะไร]` };
         if (!m.text || !m.text.trim()) return null;

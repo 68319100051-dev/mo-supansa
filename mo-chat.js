@@ -257,12 +257,16 @@ class MoChat {
             return;
         }
 
+        // ให้โมร่างข้อความถึงคนอื่น แล้วเปิดแชท IG / LINE ให้ (เราเป็นคนกดส่งเอง)
+        if (this.handleOutreach(text)) return;
+
         // ห้องทำงาน: "เช็คคลาสรูม" / "มีงานในคลาสรูมไหม" / "เข้าห้องทำงาน" → โมไปทำจริง ไม่ใช้ AI ตอบ
         const aboutClass = /(คลาสรูม|คราสรูม|classroom|การบ้าน|งานค้าง|ค้างส่ง|ส่งงาน|กำหนดส่ง|เดดไลน์|deadline|ครู.{0,8}(สั่ง|ประกาศ|ให้ทำ)|วิชา\S{0,4}(อะไร|ไหน|ทั้งหมด|ที่เรียน)|วิชา.{0,12}(มีงาน|งานอะไร|ประกาศ|คะแนน)|งาน(ไหน|อะไร).{0,8}(ส่ง|ค้าง|ต้องทำ))/i.test(text);
         // เพิ่งคุยเรื่อง Classroom ภายใน 10 นาที → ถามต่อสั้นๆ ("เช็คยัง" "ได้ยัง" "แล้ววิชาคอมล่ะ") ก็ส่งไปห้องทำงานด้วย
         const officeFollowUp = Date.now() < (this.officeUntil || 0) && text.length <= 40
             && /(เช็ค|เช็ก|ดูให้|ได้ยัง|วิชา|งาน|ส่ง|คะแนน|ประกาศ|ครู|คาบ|เรียน)/.test(text);
-        if (this.onOfficeCommand && (aboutClass || officeFollowUp || /(เข้า|เปิด|ไป)\s*ห้องทำงาน/.test(text))) {
+        const aboutMail = /(เช็ค|เช็ก|ดู|สรุป|มี|อ่าน).{0,8}(อีเมล|เมล|gmail|email)/i.test(text);
+        if (this.onOfficeCommand && (aboutClass || aboutMail || officeFollowUp || /(เข้า|เปิด|ไป)\s*ห้องทำงาน/.test(text))) {
             this.officeUntil = Date.now() + 10 * 60000;
             this.queueReply(async () => {
                 this.showTyping && this.showTyping();
@@ -433,6 +437,7 @@ class MoChat {
         if (msg.format === 'image') return '📷 รูปภาพ';
         if (msg.format === 'song') return `🎵 ${msg.extra ? msg.extra.title : 'เพลง'}`;
         if (msg.format === 'reel') return `🎬 ${msg.extra ? msg.extra.title : 'คลิป'}`;
+        if (msg.format === 'outreach') return `✉️ ร่างข้อความถึง ${msg.extra && msg.extra.target ? msg.extra.target : 'อีกคน'}: ${msg.text}`;
         return msg.text.length > 80 ? msg.text.slice(0, 80) + '…' : msg.text;
     }
 
@@ -1898,6 +1903,18 @@ ${moToday.length ? `ที่โมพูดไปแล้ววันนี้
                         <a href="${esc(msg.extra.spotify)}" target="_blank" rel="noopener" data-song="sp">Spotify</a>
                     </div>
                 </div>`;
+        } else if (msg.format === 'outreach' && msg.extra) {
+            const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            const ig = msg.extra.app !== 'line';
+            bubbleContent = `
+                <div class="message-bubble message-outreach ${ig ? 'ig' : 'line'}">
+                    <div class="outreach-head">${ig ? '📸 Instagram' : '💚 LINE'} → ${esc(msg.extra.target || 'เลือกคนในแอป')}</div>
+                    <div class="outreach-text">${esc(msg.extra.text).replace(/\n/g, '<br>')}</div>
+                    <div class="outreach-actions">
+                        <button type="button" data-outreach="go">${ig ? '📋 ก๊อป & เปิดแชท IG' : '💬 เปิด LINE พร้อมข้อความ'}</button>
+                        <button type="button" data-outreach="edit">✏️ แก้</button>
+                    </div>
+                </div>`;
         } else if (msg.unsent) {
             bubbleContent = '<div class="message-bubble message-unsent">🚫 โมยกเลิกข้อความ</div>';
         } else if (msg.format === 'image') {
@@ -1941,8 +1958,71 @@ ${moToday.length ? `ที่โมพูดไปแล้ววันนี้
             `;
         }
 
+        wrapper.querySelectorAll('[data-outreach]').forEach(b => b.addEventListener('click', e => {
+            e.stopPropagation();
+            this.outreachAction(msg.id, b.dataset.outreach);
+        }));
         this.container.appendChild(wrapper);
         this.regroup(wrapper);
+    }
+
+    /**
+     * "ทักไอจี @ชื่อ ว่าสวัสดี" / "ส่งไลน์หาแม่ว่ากินข้าวยัง" / "ทักไอจี @x ชวนไปกินหมูกระทะ"
+     * → การ์ดร่างข้อความ + ปุ่มเปิดแอป (IG: ก๊อปข้อความแล้วเปิดห้องแชท / LINE: เปิดพร้อมข้อความ)
+     * โมไม่กดส่งเอง: เราเห็นข้อความก่อนส่งทุกครั้ง
+     */
+    handleOutreach(text) {
+        const appMatch = /(ไอจี|ig\b|instagram|อินสตา|ไลน์|line\b)/i.exec(text);
+        if (!appMatch || !/(ทัก|ส่ง|dm|แชท|บอก|ถาม|ชวน|ร่าง)/i.test(text)) return false;
+        const app = /ไลน์|line/i.test(appMatch[1]) ? 'line' : 'ig';
+        const handle = (/@([A-Za-z0-9._]{1,30})/.exec(text) || [])[1] || '';
+        const said = /ว่า\s*["“]?([\s\S]+?)["”]?\s*$/.exec(text);
+        let target = handle ? `@${handle}` : ((/(?:หา|ถึง|ให้)\s*([^\s@]{1,20})/.exec(text.replace(appMatch[1], '')) || [])[1] || '');
+        target = target.replace(/(ว่า|ชวน|เรื่อง|บอก|ถาม|ขอ).*$/, '').trim();   // ไทยไม่เว้นวรรค: ตัดที่คำกริยา
+        const intent = said ? '' : text.replace(appMatch[1], '').replace(/@[\w.]+/, '').replace(/^(ช่วย)?(ทัก|ส่งข้อความ|ส่ง|dm|แชท|บอก)\s*(ไป)?(หา|ถึง)?/i, '').trim();
+        this.queueReply(async () => {
+            let draft = said ? said[1].trim() : '';
+            if (!draft && this.llmService && this.llmService.isReady()) {
+                this.showTyping();
+                try {
+                    draft = await this.llmService.generateResponse(
+                        `[ข้อความระบบ: ช่วยร่างข้อความสั้นๆ ที่เจ้าของแชท (ไม่ใช่โม) จะส่งหา ${target || 'อีกคน'} ทาง ${app === 'line' ? 'LINE' : 'Instagram'} เรื่อง: "${intent || text}" เขียนเป็นคำพูดของเจ้าของแชทเอง เป็นธรรมชาติ 1-2 ประโยค ตอบแค่ข้อความที่จะส่ง ไม่ต้องอธิบาย ไม่ใส่เครื่องหมายคำพูด]`,
+                        [], this.brain.personality, this.memory.getSummary(), null, { lite: true });
+                    draft = String(draft || '').replace(/\[[^\]]*\]/g, '').replace(/^["“]|["”]$/g, '').trim().split('\n').slice(0, 3).join('\n');
+                } catch (e) { draft = ''; }
+                this.hideTyping();
+            }
+            if (!draft) draft = intent || 'สวัสดี';
+            this.addMessage('received', draft, 'outreach', { app, handle, target, text: draft });
+            this.mind && this.mind.decide(`ร่างข้อความให้ส่งหา ${target || 'อีกคน'} ทาง ${app === 'line' ? 'LINE' : 'IG'}`);
+        });
+        return true;
+    }
+
+    /** กดปุ่มบนการ์ดร่างข้อความ */
+    outreachAction(msgId, act) {
+        const msg = this.messages.find(m => String(m.id) === String(msgId));
+        if (!msg || !msg.extra) return;
+        const x = msg.extra;
+        if (act === 'edit') {
+            const next = prompt('แก้ข้อความก่อนส่ง', x.text);
+            if (next === null || !next.trim()) return;
+            x.text = next.trim();
+            msg.text = x.text;
+            this.saveHistory();
+            this.renderAllMessages();
+            return;
+        }
+        if (x.app === 'line') {
+            window.open(`https://line.me/R/msg/text/?${encodeURIComponent(x.text)}`, '_blank');
+            this.showNotification('เปิด LINE แล้ว เลือกคนแล้วกดส่งได้เลย');
+            return;
+        }
+        const go = () => window.open(x.handle ? `https://ig.me/m/${encodeURIComponent(x.handle)}` : 'https://www.instagram.com/direct/inbox/', '_blank');
+        (navigator.clipboard ? navigator.clipboard.writeText(x.text) : Promise.reject())
+            .then(() => this.showNotification('📋 ก๊อปข้อความแล้ว เปิด IG แล้วกดค้างวาง แล้วส่งได้เลย'))
+            .catch(() => this.showNotification('เปิด IG แล้ว พิมพ์ข้อความที่โมร่างไว้ได้เลย'))
+            .finally(go);
     }
 
     /**

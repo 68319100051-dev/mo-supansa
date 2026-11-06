@@ -950,6 +950,29 @@
         const loggedIn = await sync.signUp(e, p);
         if (!loggedIn) sync.setStatus('สมัครแล้ว! เปิดอีเมลเพื่อกดยืนยัน แล้วกลับมากด "เข้าสู่ระบบ"');
     }));
+    // สำรอง / กู้คืนข้อมูลโม
+    document.getElementById('btn-backup').addEventListener('click', () => {
+        const r = MoBackup.download();
+        chat.showNotification(`💾 สำรองแล้ว ${r.count} ส่วน (${r.kb} KB)`);
+    });
+    const restoreFile = document.getElementById('restore-file');
+    document.getElementById('btn-restore').addEventListener('click', () => restoreFile.click());
+    restoreFile.addEventListener('change', async () => {
+        const file = restoreFile.files[0];
+        restoreFile.value = '';
+        if (!file) return;
+        try {
+            const b = await MoBackup.read(file);
+            const when = b.at ? new Date(b.at).toLocaleString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'ไม่ทราบวันที่';
+            if (!confirm(`กู้คืนข้อมูลโมจากไฟล์สำรองวันที่ ${when}?\nข้อมูลตอนนี้ในเครื่องจะถูกแทนที่${sync.user ? ' (และซิงก์ขึ้นคลาวด์ด้วย)' : ''}`)) return;
+            MoBackup.restore(b.keys);
+            if (sync.user) await sync.syncNow().catch(() => {});
+            location.reload();
+        } catch (e) {
+            alert(`กู้คืนไม่ได้: ${e.message}`);
+        }
+    });
+
     document.getElementById('btn-sync-now').addEventListener('click', async () => {
         await sync.syncNow();
         renderSync();
@@ -962,6 +985,7 @@
     // ห้องทำงานโม: ต่อแอป (Classroom) เช็กงาน สรุป โทรมารายงาน — งานจริงอยู่ที่หลังบ้าน
     const office = new MoOffice({ sync, chat, mind });
     chat.onOfficeCommand = async text => {
+        if (/(เมล|อีเมล|gmail|email)/i.test(text)) return office.checkGmail();
         if (/ห้องทำงาน/.test(text) && !/คลาสรูม|classroom/i.test(text)) {
             setTimeout(() => office.show(), 600);
             return 'เข้าห้องทำงานเค้ากัน 🏢 ต่อแอปไหนเพิ่มก็กดในนั้นได้เลย';

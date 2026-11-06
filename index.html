@@ -401,6 +401,14 @@
                         <button class="btn-secondary" id="btn-a11y">🤖 ให้โมกดหน้าจอแทน</button>
                     </div>
                 </div>
+                <div class="backup-box">
+                    <p class="settings-desc"><b>💾 สำรองข้อมูลโม</b><br>เก็บแชท ความจำ ชีวิต บ้าน สมอง เป็นไฟล์ไว้ในเครื่อง (ไม่รวม API key และรูป/เสียง)</p>
+                    <div class="settings-actions">
+                        <button class="btn-secondary" id="btn-backup">⬇️ ดาวน์โหลดไฟล์สำรอง</button>
+                        <button class="btn-secondary" id="btn-restore">⬆️ กู้คืนจากไฟล์</button>
+                    </div>
+                    <input type="file" id="restore-file" accept="application/json,.json" hidden>
+                </div>
             </div>
         </div>
     </div>
@@ -676,6 +684,7 @@
     <script src="mo-home.js"></script>
     <script src="mo-quests.js"></script>
     <script src="mo-office.js"></script>
+    <script src="mo-backup.js"></script>
     <script src="mo-extras.js"></script>
     <script src="mo-mind.js"></script>
     <script src="mo-mind-ui.js"></script>

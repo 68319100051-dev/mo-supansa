@@ -9,7 +9,7 @@
 
 1. เข้า <https://console.cloud.google.com/> ด้วยบัญชี Google ส่วนตัว (ไม่ต้องเป็นบัญชีโรงเรียน)
 2. สร้างโปรเจกต์ใหม่ เช่น `mo-office`
-3. **APIs & Services → Library** → ค้น **Google Classroom API** → กด **Enable**
+3. **APIs & Services → Library** → ค้น **Google Classroom API** → กด **Enable** แล้วค้น **Gmail API** → กด **Enable** ด้วย (ให้โมอ่านอีเมลสำคัญ)
 4. **APIs & Services → OAuth consent screen**
    - User type: **External**
    - ชื่อแอป: อะไรก็ได้ เช่น `Mo Office`, อีเมลติดต่อ: อีเมลตัวเอง
@@ -59,6 +59,7 @@ npx wrangler secret put GOOGLE_CLIENT_SECRET
 | `classroom.courses.readonly` | รายชื่อวิชา |
 | `classroom.coursework.me.readonly` | งานที่ต้องส่ง (ของเราเอง) |
 | `classroom.announcements.readonly` | ประกาศในวิชา |
+| `gmail.readonly` | อ่านอีเมลใหม่ที่ยังไม่อ่าน (กล่องหลัก) แล้วคัดเฉพาะที่สำคัญ — แก้/ลบ/ส่งอีเมลไม่ได้ |
 | `openid`, `email` | รู้ว่าเชื่อมบัญชีไหน |
 
 โมแก้ ส่ง หรือลบงานไม่ได้ — refresh token เก็บแบบเข้ารหัสใน Supabase ถอดได้เฉพาะหลังบ้าน
