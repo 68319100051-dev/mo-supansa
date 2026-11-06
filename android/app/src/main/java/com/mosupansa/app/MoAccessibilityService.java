@@ -75,7 +75,9 @@ public class MoAccessibilityService extends AccessibilityService {
             String step = "app";
             try {
                 if (isFinance(pkg)) { cb.done(false, "finance"); return; }
-                if (!waitFor(() -> pkg.equals(currentPkg()), 8000)) { cb.done(false, "app"); return; }
+                ChatHeadService.collapseNow();
+                target = pkg;
+                if (!waitFor(() -> appRoot() != null, 8000)) { cb.done(false, "app"); return; }
                 sleep(900);
 
                 // 1) ช่องพิมพ์ (ถ้ายังไม่มี กดปุ่มค้นหาก่อน)
@@ -137,7 +139,9 @@ public class MoAccessibilityService extends AccessibilityService {
     void pickFirst(String pkg, Done cb) {
         worker.post(() -> {
             if (isFinance(pkg)) { cb.done(false, "finance"); return; }
-            if (!waitFor(() -> pkg.equals(currentPkg()), 8000)) { cb.done(false, "app"); return; }
+            ChatHeadService.collapseNow();
+            target = pkg;
+            if (!waitFor(() -> appRoot() != null, 8000)) { cb.done(false, "app"); return; }
             sleep(2800);
             AccessibilityNodeInfo f = findField();
             Rect r = new Rect();
@@ -149,14 +153,24 @@ public class MoAccessibilityService extends AccessibilityService {
 
     // =============== หา node ===============
 
-    private String currentPkg() {
-        AccessibilityNodeInfo root = getRootInActiveWindow();
-        return root != null && root.getPackageName() != null ? root.getPackageName().toString() : "";
+    private volatile String target = "";
+
+    /** หน้าต่างของแอปเป้าหมาย (ไม่ใช่หน้าต่างลอยของโม/คีย์บอร์ด ที่อาจเป็นหน้าต่าง active อยู่) */
+    private AccessibilityNodeInfo appRoot() {
+        try {
+            for (android.view.accessibility.AccessibilityWindowInfo w : getWindows()) {
+                if (w.getType() != android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION) continue;
+                AccessibilityNodeInfo r = w.getRoot();
+                if (r != null && r.getPackageName() != null && r.getPackageName().toString().equals(target)) return r;
+            }
+        } catch (Exception ignored) {}
+        AccessibilityNodeInfo r = getRootInActiveWindow();
+        return r != null && r.getPackageName() != null && r.getPackageName().toString().equals(target) ? r : null;
     }
 
     private List<AccessibilityNodeInfo> all() {
         List<AccessibilityNodeInfo> out = new ArrayList<>();
-        AccessibilityNodeInfo root = getRootInActiveWindow();
+        AccessibilityNodeInfo root = appRoot();
         if (root == null) return out;
         List<AccessibilityNodeInfo> stack = new ArrayList<>();
         stack.add(root);
@@ -232,13 +246,28 @@ public class MoAccessibilityService extends AccessibilityService {
             Rect r = new Rect();
             n.getBoundsInScreen(r);
             if (r.top < top || r.top > h * 0.85) continue;
-            if (r.width() < w * 0.40 || r.height() < w * 0.18) continue;   // เล็กไป = ปุ่ม/แท็บ/ชิป
+            // ผล = แผ่นคลิป (กว้าง ≥ 40% สูง ≥ 18%) หรือแถวรายการเพลง (กว้าง ≥ 70% สูง ≥ 9%) — เล็กกว่านี้ = ปุ่ม/แท็บ/ชิป
+            boolean tile = r.width() >= w * 0.40 && r.height() >= w * 0.18;
+            boolean row = r.width() >= w * 0.70 && r.height() >= w * 0.09 && r.height() <= w * 0.45;
+            if (!tile && !row) continue;
             if (r.width() > w * 0.98 && r.height() > h * 0.7) continue;      // ทั้งจอ = ตัวรายการ ไม่ใช่ผล
             String d = desc(n);
             if (d.contains("ad ") || d.contains("โฆษณา") || d.contains("sponsored")) continue;
             if (best == null || r.top < bestR.top - 8 || (Math.abs(r.top - bestR.top) <= 8 && r.left < bestR.left)) { best = n; bestR = r; }
         }
-        if (best == null) return false;
+        if (best == null) {
+            // แอปเว็บบางตัวไม่บอกว่ากดได้ → หาแถวที่มีชื่อเพลง/คลิป (ข้อความ) อันบนสุด แล้วแตะตรงข้อความ
+            for (AccessibilityNodeInfo n : all()) {
+                if (!n.isVisibleToUser() || n.isEditable() || n.getText() == null || n.getText().length() < 2) continue;
+                Rect r = new Rect();
+                n.getBoundsInScreen(r);
+                if (r.top < top + w * 0.08 || r.top > h * 0.8 || r.left > w * 0.6) continue;
+                String d = n.getText().toString();
+                if (d.matches(".*(ผลการค้นหา|results|[0-9]+ *เพลง).*")) continue;
+                if (bestR == null || r.top < bestR.top) { bestR = r; }
+            }
+            return bestR != null && tap(bestR.centerX(), bestR.centerY());
+        }
         if (best.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true;
         return tap(bestR.centerX(), bestR.centerY());
     }

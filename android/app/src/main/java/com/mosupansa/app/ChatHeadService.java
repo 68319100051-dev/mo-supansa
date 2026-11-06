@@ -107,6 +107,11 @@ public class ChatHeadService extends Service {
     }
 
     /** แอปโมขึ้นจอ/ลงจอ → ซ่อน/โชว์หัวแชท (ขึ้นจอ = อ่านแล้ว) */
+    /** โมกำลังกดแอปอื่นแทน → หุบหน้าต่างแชทเล็กก่อน ไม่ให้บังจอ/แย่งโฟกัส */
+    static void collapseNow() {
+        if (running != null) running.ui.post(() -> { if (running != null) { running.collapse(false); running.hidePreview(); } });
+    }
+
     static void appVisible(boolean visible) {
         appInFront = visible;
         if (running != null) running.ui.post(() -> {
