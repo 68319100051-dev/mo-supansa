@@ -80,5 +80,11 @@
     <!-- เปิดหน้าตั้งค่า "เริ่มอัตโนมัติ" ของ Infinix/Tecno/itel (Phone Master) -->
     <queries>
         <package android:name="com.transsion.phonemaster" />
+        <!-- สั่งเพลง: YouTube Music / YouTube -->
+        <package android:name="com.google.android.apps.youtube.music" />
+        <package android:name="com.google.android.youtube" />
+        <!-- โหมดเสียง: ตัวฟังเสียงพูด + ตัวอ่านออกเสียงของเครื่อง -->
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
+        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
     </queries>
 </manifest>

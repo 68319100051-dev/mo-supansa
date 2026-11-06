@@ -257,6 +257,11 @@
     });
     document.addEventListener('click', (e) => { if (!gamesMenu.contains(e.target)) gamesMenu.classList.add('hidden'); });
 
+    // ======= โหมดเสียง (โฮโลแกรม): พูดคุย/สั่งงานด้วยเสียง =======
+    const voiceMode = new MoVoiceMode(chat);
+    window.MoVoiceModeInstance = voiceMode;
+    document.getElementById('btn-voice-mode').addEventListener('click', () => voiceMode.toggle());
+
     // ======= ข้อความเสียง: กดไมค์ = อัด, กดอีกที = ส่ง =======
     const micBtn = document.getElementById('btn-mic');
     let micTimer = null;

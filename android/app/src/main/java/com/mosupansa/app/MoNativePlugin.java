@@ -32,6 +32,98 @@ import org.json.JSONArray;
 )
 public class MoNativePlugin extends Plugin {
 
+    // ===== โหมดเสียง: ฟังพูด (SpeechRecognizer) + โมพูดออกเสียง (TextToSpeech) =====
+    private android.speech.SpeechRecognizer recognizer;
+    private android.speech.tts.TextToSpeech tts;
+    private boolean ttsReady;
+    private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
+
+    /** ฟัง 1 ประโยค → { text } (หรือ { text: "", error }) ; ระหว่างพูดส่ง event "voicePartial" { text } / "voiceLevel" { level } */
+    @PluginMethod
+    public void listen(PluginCall call) {
+        if (androidx.core.content.ContextCompat.checkSelfPermission(getContext(), Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            JSObject r = new JSObject(); r.put("text", ""); r.put("error", "permission"); call.resolve(r); return;
+        }
+        main.post(() -> {
+            try {
+                if (!android.speech.SpeechRecognizer.isRecognitionAvailable(getContext())) {
+                    JSObject r = new JSObject(); r.put("text", ""); r.put("error", "unavailable"); call.resolve(r); return;
+                }
+                if (recognizer != null) { recognizer.destroy(); recognizer = null; }
+                recognizer = android.speech.SpeechRecognizer.createSpeechRecognizer(getContext());
+                final boolean[] done = { false };
+                recognizer.setRecognitionListener(new android.speech.RecognitionListener() {
+                    public void onReadyForSpeech(android.os.Bundle b) { notifyListeners("voiceState", new JSObject().put("state", "listening")); }
+                    public void onBeginningOfSpeech() {}
+                    public void onRmsChanged(float db) { JSObject o = new JSObject(); o.put("level", db); notifyListeners("voiceLevel", o); }
+                    public void onBufferReceived(byte[] b) {}
+                    public void onEndOfSpeech() { notifyListeners("voiceState", new JSObject().put("state", "thinking")); }
+                    public void onError(int code) {
+                        if (done[0]) return; done[0] = true;
+                        JSObject r = new JSObject(); r.put("text", ""); r.put("error", String.valueOf(code)); call.resolve(r);
+                    }
+                    public void onResults(android.os.Bundle b) {
+                        if (done[0]) return; done[0] = true;
+                        java.util.ArrayList<String> list = b.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION);
+                        JSObject r = new JSObject(); r.put("text", list != null && !list.isEmpty() ? list.get(0) : ""); call.resolve(r);
+                    }
+                    public void onPartialResults(android.os.Bundle b) {
+                        java.util.ArrayList<String> list = b.getStringArrayList(android.speech.SpeechRecognizer.RESULTS_RECOGNITION);
+                        if (list != null && !list.isEmpty()) { JSObject o = new JSObject(); o.put("text", list.get(0)); notifyListeners("voicePartial", o); }
+                    }
+                    public void onEvent(int t, android.os.Bundle b) {}
+                });
+                Intent i = new Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+                i.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL, android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+                i.putExtra(android.speech.RecognizerIntent.EXTRA_LANGUAGE, "th-TH");
+                i.putExtra(android.speech.RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+                i.putExtra(android.speech.RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L);
+                recognizer.startListening(i);
+            } catch (Exception e) {
+                JSObject r = new JSObject(); r.put("text", ""); r.put("error", e.toString()); call.resolve(r);
+            }
+        });
+    }
+
+    @PluginMethod
+    public void stopListening(PluginCall call) {
+        main.post(() -> { if (recognizer != null) { recognizer.cancel(); recognizer.destroy(); recognizer = null; } });
+        if (tts != null) tts.stop();
+        call.resolve();
+    }
+
+    /** โมพูดออกเสียง → resolve เมื่อพูดจบ */
+    @PluginMethod
+    public void speak(PluginCall call) {
+        String text = call.getString("text", "");
+        if (text == null || text.trim().isEmpty()) { call.resolve(); return; }
+        Runnable go = () -> {
+            String id = "mo" + System.nanoTime();
+            tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+                public void onStart(String u) {}
+                public void onDone(String u) { if (id.equals(u)) call.resolve(); }
+                public void onError(String u) { if (id.equals(u)) call.resolve(); }
+                public void onStop(String u, boolean interrupted) { if (id.equals(u)) call.resolve(); }
+            });
+            tts.setSpeechRate(call.getFloat("rate", 1.05f));
+            tts.setPitch(call.getFloat("pitch", 1.15f));
+            tts.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, id);
+        };
+        if (tts != null && ttsReady) { go.run(); return; }
+        tts = new android.speech.tts.TextToSpeech(getContext(), status -> {
+            ttsReady = status == android.speech.tts.TextToSpeech.SUCCESS;
+            if (!ttsReady) { call.resolve(); return; }
+            tts.setLanguage(new java.util.Locale("th", "TH"));
+            go.run();
+        });
+    }
+
+    @Override
+    protected void handleOnDestroy() {
+        if (recognizer != null) recognizer.destroy();
+        if (tts != null) tts.shutdown();
+    }
+
     @PluginMethod
     public void setup(PluginCall call) {
         CallNotifier.ensureChannels(getContext());

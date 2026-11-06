@@ -241,6 +241,7 @@ class MoChat {
             this.officeUntil = Date.now() + 10 * 60000;
             this.queueReply(async () => {
                 this.showTyping && this.showTyping();
+                window.dispatchEvent(new CustomEvent('mo:action', { detail: { icon: '🏢', title: 'Office · Classroom', detail: 'กำลังเช็ก Google Classroom...' } }));
                 const reply = await this.onOfficeCommand(text).catch(() => 'เข้าห้องทำงานไม่ได้แฮะ ลองใหม่อีกทีนะ');
                 this.hideTyping && this.hideTyping();
                 this.addMessage('received', reply);
@@ -1095,8 +1096,12 @@ class MoChat {
         const native = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins && window.Capacitor.Plugins.MoNative;
         const pick = a => a[Math.floor(Math.random() * a.length)];
         this.mind && this.mind.act(cmd.action === 'search' ? `เปิดเพลง "${cmd.query || 'สุ่ม'}" ให้เอง` : `กดเพลง: ${cmd.action}`);
+        const show = (icon, title, detail, kind = 'music') => window.dispatchEvent(new CustomEvent('mo:action', { detail: { icon, title, detail, kind } }));
         if (cmd.action === 'search') {
             const q = cmd.query || pick(['เพลงฮิต 2026', 'เพลงชิลๆ ฟังสบาย', 'เพลงไทยเพราะๆ', 'เพลงรักน่ารัก']);
+            show('▶', 'Now playing', q);
+            // โหมดเสียง: ให้หน้าต่างโฮโลแกรมโชว์แป๊บนึงก่อนเด้งไปแอปเพลง
+            if (window.MoVoiceModeInstance && window.MoVoiceModeInstance.on) await new Promise(r => setTimeout(r, 1600));
             if (native && native.playMusic) {
                 try { await native.playMusic({ query: q }); } catch (e) { return 'เปิดยูทูปไม่ได้แฮะ 🥺 ลองอีกทีนะ'; }
             } else {
@@ -1108,6 +1113,8 @@ class MoChat {
         }
         if (!native || !native.mediaKey) return 'อันนี้ต้องใช้ในแอปโมบนมือถือนะ ในเว็บเค้ากดให้ไม่ได้ 🥺';
         try { await native.mediaKey({ key: cmd.action }); } catch (e) { return 'กดให้ไม่ได้แฮะ ลองอีกทีนะ'; }
+        const [ic, ti, de] = { pause: ['⏸', 'Media', 'หยุดเพลงแล้ว'], play: ['▶', 'Media', 'เล่นต่อ'], next: ['⏭', 'Media', 'เพลงถัดไป'], previous: ['⏮', 'Media', 'เพลงก่อนหน้า'], volup: ['🔊', 'Volume', 'เพิ่มเสียง +'], voldown: ['🔉', 'Volume', 'ลดเสียง −'] }[cmd.action];
+        show(ic, ti, de, cmd.action.startsWith('vol') ? '' : 'music');
         return {
             pause: pick(['ปิดให้แล้วนะ 🤫', 'หยุดเพลงให้แล้ว~', 'โอเค เงียบแล้ว']),
             play: pick(['เล่นต่อให้แล้ว 🎶', 'จัดไป เปิดต่อแล้ว']),
