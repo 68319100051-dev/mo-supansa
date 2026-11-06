@@ -163,6 +163,14 @@ public class MoNativePlugin extends Plugin {
         call.resolve();
     }
 
+    /** โมส่งข้อความตอนแอปอยู่เบื้องหลัง (สมองในหน้าเว็บคิดเอง) → แจ้งเตือน + หัวแชทเด้งพร้อมข้อความ */
+    @PluginMethod
+    public void moMessage(PluginCall call) {
+        String body = call.getString("body", "");
+        if (body != null && !body.isEmpty()) CallNotifier.showChat(getContext(), call.getString("title", "โม 💕"), body);
+        call.resolve();
+    }
+
     @PluginMethod
     public void openOverlaySettings(PluginCall call) {
         if (Build.VERSION.SDK_INT >= 23) launch(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getContext().getPackageName())));

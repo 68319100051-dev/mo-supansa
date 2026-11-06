@@ -998,6 +998,12 @@ class MoChat {
         this._lastAlert = Date.now();
         const body = message.format === 'sticker' ? `ส่งสติกเกอร์ ${message.text}` : (this.snippetOf ? this.snippetOf(message) : message.text) || 'ส่งข้อความมา';
         if (document.visibilityState === 'hidden') {
+            // แอป Android: ให้ฝั่งเครื่องแจ้งเตือน + หัวแชทเด้งพร้อมข้อความ (WebView แจ้งเตือนเองไม่ได้)
+            const native = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins && window.Capacitor.Plugins.MoNative;
+            if (native && native.moMessage) {
+                native.moMessage({ title: 'โม 💕', body: String(body).slice(0, 180) }).catch(() => {});
+                return;
+            }
             if ('Notification' in window && Notification.permission === 'granted' && navigator.serviceWorker) {
                 navigator.serviceWorker.ready.then(reg => reg.showNotification('โม 💕', {
                     body: String(body).slice(0, 140), icon: 'icons/icon-192.png', badge: 'icons/icon-192.png',

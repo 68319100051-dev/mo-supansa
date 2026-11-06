@@ -85,8 +85,13 @@ public class ChatHeadService extends Service {
         if (!canOverlay(ctx)) return;
         Intent i = new Intent(ctx, ChatHeadService.class);
         if (previewText != null) i.putExtra(EXTRA_PREVIEW, previewText);
-        if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i);
-        else ctx.startService(i);
+        // Android 12+ อาจไม่ให้เริ่มจากเบื้องหลัง → ไม่ให้แอปล่ม (แจ้งเตือนยังขึ้นตามปกติ)
+        try {
+            if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i);
+            else ctx.startService(i);
+        } catch (Exception e) {
+            android.util.Log.w("MoChatHead", "start failed: " + e);
+        }
     }
 
     /** โมส่งข้อความมา (ตอนแอปไม่ได้อยู่บนจอ) → หัวแชทเด้ง + กล่องข้อความตัวอย่าง + เลข */
