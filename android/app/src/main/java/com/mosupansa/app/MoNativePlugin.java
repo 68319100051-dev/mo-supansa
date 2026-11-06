@@ -163,6 +163,59 @@ public class MoNativePlugin extends Plugin {
         call.resolve();
     }
 
+    // ===== สั่งเพลงด้วยเสียง/ข้อความ =====
+
+    /** เปิดเพลง: YouTube Music (เล่นเลย) → ถ้าไม่มี เปิดหน้าค้นหาใน YouTube → ถ้าไม่มี เปิดเว็บ */
+    @PluginMethod
+    public void playMusic(PluginCall call) {
+        String q = call.getString("query", "");
+        android.content.Context ctx = getContext();
+        android.content.pm.PackageManager pm = ctx.getPackageManager();
+        JSObject ret = new JSObject();
+        try {
+            Intent i = new Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH);
+            i.setPackage("com.google.android.apps.youtube.music");
+            i.putExtra(android.app.SearchManager.QUERY, q);
+            i.putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*");
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (i.resolveActivity(pm) != null) { ctx.startActivity(i); ret.put("app", "ytmusic"); call.resolve(ret); return; }
+        } catch (Exception ignored) {}
+        try {
+            Intent i = new Intent(Intent.ACTION_SEARCH);
+            i.setPackage("com.google.android.youtube");
+            i.putExtra("query", q);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            if (i.resolveActivity(pm) != null) { ctx.startActivity(i); ret.put("app", "youtube"); call.resolve(ret); return; }
+        } catch (Exception ignored) {}
+        Intent web = new Intent(Intent.ACTION_VIEW, Uri.parse("https://m.youtube.com/results?search_query=" + Uri.encode(q)));
+        web.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        ctx.startActivity(web);
+        ret.put("app", "web");
+        call.resolve(ret);
+    }
+
+    /** กดปุ่มเพลงแทน: pause / play / next / previous / volup / voldown */
+    @PluginMethod
+    public void mediaKey(PluginCall call) {
+        String key = call.getString("key", "pause");
+        android.media.AudioManager am = (android.media.AudioManager) getContext().getSystemService(android.content.Context.AUDIO_SERVICE);
+        if ("volup".equals(key) || "voldown".equals(key)) {
+            int dir = "volup".equals(key) ? android.media.AudioManager.ADJUST_RAISE : android.media.AudioManager.ADJUST_LOWER;
+            for (int n = 0; n < 3; n++) am.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC, dir, n == 0 ? android.media.AudioManager.FLAG_SHOW_UI : 0);
+            call.resolve();
+            return;
+        }
+        int code = "play".equals(key) ? android.view.KeyEvent.KEYCODE_MEDIA_PLAY
+            : "next".equals(key) ? android.view.KeyEvent.KEYCODE_MEDIA_NEXT
+            : "previous".equals(key) ? android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS
+            : android.view.KeyEvent.KEYCODE_MEDIA_PAUSE;
+        am.dispatchMediaKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, code));
+        am.dispatchMediaKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, code));
+        JSObject ret = new JSObject();
+        ret.put("playing", am.isMusicActive());
+        call.resolve(ret);
+    }
+
     /** โมส่งข้อความตอนแอปอยู่เบื้องหลัง (สมองในหน้าเว็บคิดเอง) → แจ้งเตือน + หัวแชทเด้งพร้อมข้อความ */
     @PluginMethod
     public void moMessage(PluginCall call) {

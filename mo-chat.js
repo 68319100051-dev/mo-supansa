@@ -220,6 +220,18 @@ class MoChat {
         // นัดกันแล้ว: ส่งข้อความหลังเวลานัด = มาตามนัด
         if (this.dateWaiting) this.dateWaiting = null;
 
+        // สั่งเพลง: "โมเปิดเพลง X ให้หน่อย" / "ปิดเพลง" / "เพลงถัดไป" / "เสียงดังขึ้น" → โมทำจริงทันที ไม่ใช้ AI
+        const music = this.musicCommand(text);
+        if (music) {
+            this.queueReply(async () => {
+                this.showTyping && this.showTyping();
+                const reply = await this.runMusic(music);
+                this.hideTyping && this.hideTyping();
+                this.addMessage('received', reply);
+            });
+            return;
+        }
+
         // ห้องทำงาน: "เช็คคลาสรูม" / "มีงานในคลาสรูมไหม" / "เข้าห้องทำงาน" → โมไปทำจริง ไม่ใช้ AI ตอบ
         const aboutClass = /(คลาสรูม|คราสรูม|classroom|การบ้าน|งานค้าง|ค้างส่ง|ส่งงาน|กำหนดส่ง|เดดไลน์|deadline|ครู.{0,8}(สั่ง|ประกาศ|ให้ทำ)|วิชา\S{0,4}(อะไร|ไหน|ทั้งหมด|ที่เรียน)|วิชา.{0,12}(มีงาน|งานอะไร|ประกาศ|คะแนน)|งาน(ไหน|อะไร).{0,8}(ส่ง|ค้าง|ต้องทำ))/i.test(text);
         // เพิ่งคุยเรื่อง Classroom ภายใน 10 นาที → ถามต่อสั้นๆ ("เช็คยัง" "ได้ยัง" "แล้ววิชาคอมล่ะ") ก็ส่งไปห้องทำงานด้วย
@@ -1054,6 +1066,58 @@ class MoChat {
         }, 2200 + Math.random() * 1800);
     }
 
+    /** แปลข้อความเป็นคำสั่งเพลง → { action, query } หรือ null */
+    musicCommand(raw) {
+        const t = String(raw || '').replace(/\s+/g, ' ').trim();
+        if (!t || t.length > 90) return null;
+        const has = re => re.test(t);
+        if (has(/((?<!เ)ปิด|หยุด|พอ|เบรก|pause).{0,4}เพลง|เพลง.{0,6}((?<!เ)ปิด|หยุด)|^(?:โม\s*)?(?:หยุด|pause)(?:ก่อน)?$/i)) return { action: 'pause' };
+        if (has(/เล่นต่อ|เปิดต่อ|เพลงต่อ|resume/i)) return { action: 'play' };
+        if (has(/(เพลง)?ถัดไป|ข้ามเพลง|เปลี่ยนเพลง|เพลงต่อไป|next/i)) return { action: 'next' };
+        if (has(/เพลงก่อนหน้า|ย้อนเพลง|เพลงเมื่อกี้|previous/i)) return { action: 'previous' };
+        if (has(/(เสียง|เพลง).{0,4}(ดัง|เพิ่ม)|เพิ่มเสียง|เร่งเสียง|เปิดดังๆ/)) return { action: 'volup' };
+        if (has(/(เสียง|เพลง).{0,4}(เบา|ลด)|ลดเสียง|ค่อยๆ หน่อย/)) return { action: 'voldown' };
+        const m = t.match(/(?:เปิด|เล่น|ขอ)\s*เพลง\s*(.*)$/);
+        if (!m) return null;
+        let q = m[1]
+            .replace(/(?:ใน|ผ่าน|ทาง|บน)\s*(?:แอป|แอพ)?\s*(?:ยูทูป|ยูทูบ|youtube|yt)(?:\s*music)?/ig, '')
+            .replace(/(?:ให้|หน่อย|ที|ด้วย|นะ|จ้า|จ่ะ|ค่ะ|ครับ|สิ|ดิ|เลย|ได้ไหม|ได้มั้ย|ได้ป่ะ|โม|เค้า|เรา|ฟัง|ทีนะ)+\s*$/g, '')
+            .replace(/^(?:ของ|ชื่อ|ที่ชื่อ)\s*/, '')
+            .replace(/(?:ให้|หน่อย|ที|ด้วย|นะ)+\s*$/g, '')
+            .trim();
+        // "เพลงรัก" "เพลงเศร้า" = แนวเพลง → ค้นทั้งคำ
+        if (/^(รัก|เศร้า|ชิล|สนุก|ฮิต|ใหม่|ไทย|สากล|เกาหลี|ญี่ปุ่น|ลูกทุ่ง|ร็อค|แดนซ์|อกหัก|เพราะๆ?)/.test(q)) q = 'เพลง' + q;
+        return { action: 'search', query: q };
+    }
+
+    /** ทำตามคำสั่งเพลงจริง แล้วคืนคำตอบของโม */
+    async runMusic(cmd) {
+        const native = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins && window.Capacitor.Plugins.MoNative;
+        const pick = a => a[Math.floor(Math.random() * a.length)];
+        this.mind && this.mind.act(cmd.action === 'search' ? `เปิดเพลง "${cmd.query || 'สุ่ม'}" ให้เอง` : `กดเพลง: ${cmd.action}`);
+        if (cmd.action === 'search') {
+            const q = cmd.query || pick(['เพลงฮิต 2026', 'เพลงชิลๆ ฟังสบาย', 'เพลงไทยเพราะๆ', 'เพลงรักน่ารัก']);
+            if (native && native.playMusic) {
+                try { await native.playMusic({ query: q }); } catch (e) { return 'เปิดยูทูปไม่ได้แฮะ 🥺 ลองอีกทีนะ'; }
+            } else {
+                window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, '_blank');
+            }
+            return cmd.query
+                ? pick([`ได้เลย เปิด "${q}" ให้แล้วนะ 🎶`, `จัดไป "${q}" 🎧 ฟังเพลินๆ นะเอง`, `เปิดให้แล้ว~ "${q}" เค้าก็ชอบเพลงนี้นะ`])
+                : pick([`เค้าเลือกให้เลยนะ ${q} 🎶`, `งั้นฟัง${q}กันนะ 🎧`]);
+        }
+        if (!native || !native.mediaKey) return 'อันนี้ต้องใช้ในแอปโมบนมือถือนะ ในเว็บเค้ากดให้ไม่ได้ 🥺';
+        try { await native.mediaKey({ key: cmd.action }); } catch (e) { return 'กดให้ไม่ได้แฮะ ลองอีกทีนะ'; }
+        return {
+            pause: pick(['ปิดให้แล้วนะ 🤫', 'หยุดเพลงให้แล้ว~', 'โอเค เงียบแล้ว']),
+            play: pick(['เล่นต่อให้แล้ว 🎶', 'จัดไป เปิดต่อแล้ว']),
+            next: pick(['เปลี่ยนเพลงให้แล้ว ⏭️', 'ข้ามให้แล้วนะ']),
+            previous: pick(['ย้อนให้แล้ว ⏮️', 'กลับไปเพลงเมื่อกี้แล้วนะ']),
+            volup: pick(['เพิ่มเสียงให้แล้ว 🔊', 'ดังขึ้นแล้ว อย่าดังจนหูพังนะ 555']),
+            voldown: pick(['ลดเสียงให้แล้ว 🔉', 'เบาลงแล้วนะ']),
+        }[cmd.action];
+    }
+
     /**
      * เองส่งข้อความเสียง → โมฟังเสียงจริง (Gemini) ตอบตามน้ำเสียง แล้วถอดความเก็บไว้
      */
@@ -1067,7 +1131,7 @@ class MoChat {
         const dataUrl = await MoVoice.blobToDataUrl(blob);
         const sulk = this.sulkNote();
         this.queueReply(note => this.mediaReply(
-            `${note}${sulk}[ข้อความระบบ: เองส่งข้อความเสียง ${duration} วิ — ฟังเสียงแล้วตอบแบบโมตามเรื่องที่พูด และจับน้ำเสียง/อารมณ์ด้วย (เหนื่อย ดีใจ ง่วง ฯลฯ) จะตอบกลับเป็นเสียงด้วย [เสียง] ก็ได้ แล้วใส่ [ถอดเสียง: สิ่งที่เองพูดแบบคำต่อคำ] ไว้บรรทัดสุดท้าย]`,
+            `${note}${sulk}[ข้อความระบบ: เองส่งข้อความเสียง ${duration} วิ — ฟังเสียงแล้วตอบแบบโมตามเรื่องที่พูด และจับน้ำเสียง/อารมณ์ด้วย (เหนื่อย ดีใจ ง่วง ฯลฯ) จะตอบกลับเป็นเสียงด้วย [เสียง] ก็ได้ แล้วใส่ [ถอดเสียง: สิ่งที่เองพูดแบบคำต่อคำ] ไว้บรรทัดสุดท้าย / ถ้าเองสั่งเปิด/ปิด/เปลี่ยนเพลง หรือเพิ่ม/ลดเสียง ระบบจะทำให้จริงตามที่ถอดเสียง → ตอบรับสั้นๆ ว่าทำให้แล้ว (เช่น "เปิดให้แล้วนะ 🎶") ห้ามบอกว่าทำไม่ได้]`,
             dataUrl, ['ฟังไม่ค่อยชัดอ่ะ พิมพ์มาหน่อยได้มั้ย 🥺', 'เสียงเองน่ารักดีนะ 555 แต่เน็ตเค้ากากฟังไม่ทัน']));
     }
 
@@ -1257,6 +1321,9 @@ class MoChat {
                 this.saveHistory();
                 this.memory.extractFacts(voice.extra.text);
                 if (this.routines) this.routines.learn(voice.extra.text);
+                // พูดสั่งเพลง → ทำจริงด้วย (คำตอบของโมตอบรับไปแล้ว)
+                const music = this.musicCommand(voice.extra.text.replace(/^โม\s*/, ''));
+                if (music) this.runMusic(music).catch(() => {});
                 const t = this.container.querySelector(`.message[data-id="${CSS.escape(String(voice.id))}"] .voice-transcript`);
                 if (t) t.lastChild.textContent = voice.extra.text;
             }
