@@ -316,13 +316,39 @@ public class MoNativePlugin extends Plugin {
         ret.put("bubble", bubble);
         // สั่งต่อ: ค้นหาในแอปนั้น (+ กดผลแรก) ด้วยระบบช่วยการเข้าถึง
         String query = call.getString("query", "");
-        if (query == null || query.trim().isEmpty()) { call.resolve(ret); return; }
+        String goal = call.getString("goal", "");
+        boolean hasQuery = query != null && !query.trim().isEmpty();
+        boolean hasGoal = goal != null && !goal.trim().isEmpty();
+        if (!hasQuery && !hasGoal) { call.resolve(ret); return; }
         if (MoAccessibilityService.isFinance(pkg)) { ret.put("search", "finance"); call.resolve(ret); return; }
         if (!MoAccessibilityService.isEnabled(ctx)) { ret.put("search", "off"); call.resolve(ret); return; }
-        MoAccessibilityService.instance.search(pkg, query.trim(), Boolean.TRUE.equals(call.getBoolean("pickFirst", true)), (ok, step) -> {
+        boolean pickFirst = Boolean.TRUE.equals(call.getBoolean("pickFirst", true));
+        Runnable rules = () -> MoAccessibilityService.instance.search(pkg, query.trim(), pickFirst, (ok, step) -> {
             ret.put("search", ok ? step : "fail:" + step);
             call.resolve(ret);
         });
+        String key = call.getString("apiKey", "");
+        // มีคีย์ AI → ให้โมดูจอแล้วคิดเองทีละขั้น / ไม่มี (หรือ AI ล่มตั้งแต่ขั้นแรก) → วิธีเดิม (หาช่องค้นหา → พิมพ์ → กดผลแรก)
+        if (hasGoal && key != null && !key.isEmpty()) {
+            MoAccessibilityService.instance.agent(pkg, goal.trim(), key, call.getString("model", "gemini-3.5-flash-lite"),
+                (n, say) -> { JSObject o = new JSObject(); o.put("step", n); o.put("say", say); notifyListeners("agentStep", o); },
+                (ok, reason, summary) -> {
+                    if (!ok && "llm".equals(reason) && hasQuery) { rules.run(); return; }
+                    ret.put("search", ok ? "done" : "fail:" + reason);
+                    ret.put("summary", summary);
+                    ret.put("agent", true);
+                    call.resolve(ret);
+                });
+            return;
+        }
+        if (hasQuery) rules.run();
+        else { ret.put("search", "fail:nokey"); call.resolve(ret); }
+    }
+
+    @PluginMethod
+    public void cancelAgent(PluginCall call) {
+        if (MoAccessibilityService.instance != null) MoAccessibilityService.instance.cancelAgent();
+        call.resolve();
     }
 
     // ===== ระบบช่วยการเข้าถึง (โมกดหน้าจอแทน) =====

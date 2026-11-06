@@ -1152,14 +1152,21 @@ class MoChat {
             const name = m[2].replace(/(?:ให้|หน่อย|ที)+$/, '').trim();
             const alias = findAlias(name);
             const query = tidy(m[4]);
-            if ((alias || m[1]) && query) return { label: alias ? alias[1][0] : name, names: alias ? [...alias[1], name] : [name], query, pickFirst: wantsFirst(m[3], m[4]) };
+            if ((alias || m[1]) && query) return { label: alias ? alias[1][0] : name, names: alias ? [...alias[1], name] : [name], query, pickFirst: wantsFirst(m[3], m[4]), goal: t };
+        }
+        // ค) "เปิดติ๊กต็อกแล้ว<อะไรก็ได้>" เช่น "ไปที่โปรไฟล์" "กดเพลงที่ 3" → ให้ AI ดูจอแล้วทำเอง
+        m = t.match(/^(?:โม\s*)?(?:ช่วย\s*)?(?:เปิด|เข้า|ไปที่|ไป)\s*(แอป|แอพ|app)?\s*(.+?)\s*(?:แล้ว|และ|,)\s*(.{2,})$/i);
+        if (m) {
+            const name = m[2].replace(/(?:ให้|หน่อย|ที)+$/, '').trim();
+            const alias = findAlias(name);
+            if (alias || m[1]) return { label: alias ? alias[1][0] : name, names: alias ? [...alias[1], name] : [name], goal: t };
         }
         // ข) "ค้นหา X ในติ๊กต็อก (เลือกคลิปแรก)"
         m = t.match(/^(?:โม\s*)?(?:ช่วย\s*)?(ค้นหา|ค้น|หา|เสิร์ช|เปิดคลิป|ดูคลิป|เปิด|ดู)\s*(.+?)\s*(?:ใน|บน|ที่|ผ่าน)\s*(?:แอป|แอพ)?\s*(\S+(?:\s*music)?)(.*)$/i);
         if (m) {
             const alias = findAlias(m[3].replace(/(?:ให้|หน่อย|ที|ด้วย|นะ|เลย).*$/, ''));
             const query = tidy(m[2]);
-            if (alias && query) return { label: alias[1][0], names: [...alias[1], m[3]], query, pickFirst: wantsFirst(m[1], m[4]) || /คลิป/.test(m[1]) };
+            if (alias && query) return { label: alias[1][0], names: [...alias[1], m[3]], query, pickFirst: wantsFirst(m[1], m[4]) || /คลิป/.test(m[1]), goal: t };
         }
         if (t.length > 60) return null;
         m = t.match(/^(?:โม\s*)?(?:ช่วย\s*)?(?:เปิด|เข้า|ไปที่|ไป)\s*(แอป|แอพ|app)?\s*(.+)$/i);
@@ -1183,10 +1190,35 @@ class MoChat {
         if (window.MoVoiceModeInstance && window.MoVoiceModeInstance.on) await new Promise(r => setTimeout(r, 1300));
         let r;
         if (cmd.query) window.dispatchEvent(new CustomEvent('mo:action', { detail: { icon: '🔎', title: `Search · ${cmd.label}`, detail: `"${cmd.query}"${cmd.pickFirst ? ' → เลือกอันแรก' : ''}` } }));
+        // AI ดูจอทีละขั้น → หน้าต่างโฮโลแกรมบอกว่าทำอะไรอยู่
+        if (!this._agentListen && native.addListener) {
+            this._agentListen = true;
+            native.addListener('agentStep', d => window.dispatchEvent(new CustomEvent('mo:action', { detail: { icon: '🤖', title: `Step ${d.step}`, detail: d.say } })));
+        }
+        const llm = this.llmService;
+        const apiKey = cmd.goal && llm && llm.config && llm.config.apiKey ? llm.config.apiKey.trim() : '';
         try {
-            r = await native.launchApp({ names: cmd.names, query: cmd.query || '', pickFirst: Boolean(cmd.pickFirst), note: 'เค้าย่อรออยู่ตรงนี้นะ 💗 กดเค้าเมื่อไหร่ก็ได้' });
+            r = await native.launchApp({
+                names: cmd.names, query: cmd.query || '', pickFirst: Boolean(cmd.pickFirst),
+                goal: cmd.goal || '', apiKey, model: (llm && llm.liteModel) || 'gemini-3.5-flash-lite',
+                note: 'เค้าย่อรออยู่ตรงนี้นะ 💗 กดเค้าเมื่อไหร่ก็ได้',
+            });
         } catch (e) { r = { ok: false }; }
         if (!r || !r.ok) return pick([`หาแอป "${cmd.label}" ในเครื่องไม่เจอแฮะ 🥺 ลงไว้รึยัง`, `เค้าไม่เจอ ${cmd.label} อะ ชื่อในเครื่องเรียกว่าอะไรน้า`]);
+        if (r.agent) {
+            this.llmService && this.llmService.track && this.llmService.track('Gemini กดหน้าจอแทน');
+            const s = r.search || '';
+            const said = r.summary ? ` (${r.summary})` : '';
+            if (s === 'done') return pick([`เรียบร้อย ✅${said}`, `ทำให้แล้วนะ 💗${said}`]);
+            if (s.startsWith('fail:ai:')) return `ทำต่อไม่ได้แฮะ 🥺 ${s.slice(8)}`;
+            if (s === 'fail:finance') return 'แอปการเงินเค้าไม่กดให้นะ กลัวพลาด 🥺';
+            if (s === 'fail:steps') return `ลองไปหลายขั้นแล้วยังไม่สำเร็จ 🥺${said} ทำต่อเองนะ`;
+            if (s === 'fail:llm-mid') return `สมองเค้าสะดุดกลางทาง (เน็ต/โควต้า AI) 🥺${said} ทำต่อเองนะ`;
+            if (s === 'fail:cancel') return 'หยุดให้แล้วนะ';
+            return `เปิด ${r.label} แล้ว แต่ทำต่อไม่ได้แฮะ 🥺`;
+        }
+        if (!cmd.query && cmd.goal && r.search === 'off') return `เปิด ${r.label} ให้แล้ว แต่ทำต่อให้ไม่ได้ 🥺 ต้องเปิด "ให้โมกดหน้าจอแทน" ในตั้งค่าซิงก์ก่อนนะ`;
+        if (!cmd.query && r.search === 'fail:nokey') return `เปิด ${r.label} ให้แล้ว แต่ยังไม่ได้ใส่ API key ของ AI เลยทำต่อให้ไม่ได้ 🥺`;
         if (cmd.query) {
             const s = r.search || '';
             if (s === 'played') return pick([`เปิด "${cmd.query}" ใน ${r.label} ให้แล้ว อันแรกเลย 🎬`, `จัดไป ค้น "${cmd.query}" แล้วกดอันแรกให้แล้วนะ 💗`]);
@@ -1236,7 +1268,7 @@ class MoChat {
         this.mind && this.mind.act(cmd.action === 'search' ? `เปิดเพลง "${cmd.query || 'สุ่ม'}" ให้เอง` : `กดเพลง: ${cmd.action}`);
         const show = (icon, title, detail, kind = 'music') => window.dispatchEvent(new CustomEvent('mo:action', { detail: { icon, title, detail, kind } }));
         if (cmd.action === 'app') {
-            return this.runApp({ ...cmd.app, query: cmd.query, pickFirst: true });
+            return this.runApp({ ...cmd.app, query: cmd.query, pickFirst: true, goal: cmd.query ? `เปิด ${cmd.app.label} แล้วเปิดเพลง ${cmd.query}` : '' });
         }
         if (cmd.action === 'search') {
             const q = cmd.query || pick(['เพลงฮิต 2026', 'เพลงชิลๆ ฟังสบาย', 'เพลงไทยเพราะๆ', 'เพลงรักน่ารัก']);
