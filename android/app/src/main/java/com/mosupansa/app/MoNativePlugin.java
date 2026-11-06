@@ -255,6 +255,59 @@ public class MoNativePlugin extends Plugin {
         call.resolve();
     }
 
+    // ===== เปิดแอปในเครื่องตามชื่อ =====
+
+    private static String norm(String s) {
+        return s == null ? "" : s.toLowerCase(java.util.Locale.ROOT).replaceAll("[\\s._\\-]+", "");
+    }
+
+    /**
+     * หาแอปที่มีไอคอนบนหน้าจอจากชื่อ (ลองทีละชื่อใน names) → เปิด แล้วโมย่อเป็นหัวแชทรออยู่ (ไม่ดับ)
+     * คืน { ok, label, pkg }
+     */
+    @PluginMethod
+    public void launchApp(PluginCall call) {
+        android.content.Context ctx = getContext();
+        android.content.pm.PackageManager pm = ctx.getPackageManager();
+        java.util.List<String> names = new java.util.ArrayList<>();
+        try {
+            JSArray arr = call.getArray("names", new JSArray());
+            for (int i = 0; i < arr.length(); i++) names.add(arr.getString(i));
+        } catch (Exception ignored) {}
+        Intent q = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+        java.util.List<android.content.pm.ResolveInfo> apps = pm.queryIntentActivities(q, 0);
+        android.content.pm.ResolveInfo best = null;
+        int bestScore = 0;
+        for (String raw : names) {
+            String n = norm(raw);
+            if (n.isEmpty()) continue;
+            for (android.content.pm.ResolveInfo ri : apps) {
+                if (ri.activityInfo.packageName.equals(ctx.getPackageName())) continue;
+                String label = norm(String.valueOf(ri.loadLabel(pm)));
+                String pkg = ri.activityInfo.packageName.toLowerCase(java.util.Locale.ROOT);
+                int score = label.equals(n) ? 100 : pkg.equals(n) ? 95
+                    : label.startsWith(n) ? 80 : label.contains(n) ? 60
+                    : n.length() >= 4 && pkg.contains(n) ? 50 : 0;
+                if (score > bestScore) { bestScore = score; best = ri; }
+            }
+            if (bestScore >= 80) break;
+        }
+        JSObject ret = new JSObject();
+        if (best == null) { ret.put("ok", false); call.resolve(ret); return; }
+        Intent launch = pm.getLaunchIntentForPackage(best.activityInfo.packageName);
+        if (launch == null) { ret.put("ok", false); call.resolve(ret); return; }
+        // ย่อเป็นหัวแชทก่อนออกไป (ตอนแอปยังอยู่บนจอ Android ยอมให้เริ่ม) → โมไม่ดับ กดหัวกลับมาได้
+        boolean bubble = Boolean.TRUE.equals(call.getBoolean("bubble", true)) && ChatHeadService.canOverlay(ctx);
+        if (bubble) ChatHeadService.start(ctx, call.getString("note", null));
+        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        ctx.startActivity(launch);
+        ret.put("ok", true);
+        ret.put("label", String.valueOf(best.loadLabel(pm)));
+        ret.put("pkg", best.activityInfo.packageName);
+        ret.put("bubble", bubble);
+        call.resolve(ret);
+    }
+
     // ===== สั่งเพลงด้วยเสียง/ข้อความ =====
 
     /** เปิดเพลง: YouTube Music (เล่นเลย) → ถ้าไม่มี เปิดหน้าค้นหาใน YouTube → ถ้าไม่มี เปิดเว็บ */
@@ -264,6 +317,7 @@ public class MoNativePlugin extends Plugin {
         android.content.Context ctx = getContext();
         android.content.pm.PackageManager pm = ctx.getPackageManager();
         JSObject ret = new JSObject();
+        if (ChatHeadService.canOverlay(ctx)) ChatHeadService.start(ctx, null);   // ย่อรอ ไม่ดับ
         try {
             Intent i = new Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH);
             i.setPackage("com.google.android.apps.youtube.music");

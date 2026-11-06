@@ -232,6 +232,18 @@ class MoChat {
             return;
         }
 
+        // เปิดแอป: "โมเปิดไลน์ให้หน่อย" / "เปิดแอป jet music" → เปิดจริง แล้วโมย่อเป็นหัวแชทรอ
+        const app = this.appCommand(text);
+        if (app) {
+            this.queueReply(async () => {
+                this.showTyping && this.showTyping();
+                const reply = await this.runApp(app);
+                this.hideTyping && this.hideTyping();
+                this.addMessage('received', reply);
+            });
+            return;
+        }
+
         // ห้องทำงาน: "เช็คคลาสรูม" / "มีงานในคลาสรูมไหม" / "เข้าห้องทำงาน" → โมไปทำจริง ไม่ใช้ AI ตอบ
         const aboutClass = /(คลาสรูม|คราสรูม|classroom|การบ้าน|งานค้าง|ค้างส่ง|ส่งงาน|กำหนดส่ง|เดดไลน์|deadline|ครู.{0,8}(สั่ง|ประกาศ|ให้ทำ)|วิชา\S{0,4}(อะไร|ไหน|ทั้งหมด|ที่เรียน)|วิชา.{0,12}(มีงาน|งานอะไร|ประกาศ|คะแนน)|งาน(ไหน|อะไร).{0,8}(ส่ง|ค้าง|ต้องทำ))/i.test(text);
         // เพิ่งคุยเรื่อง Classroom ภายใน 10 นาที → ถามต่อสั้นๆ ("เช็คยัง" "ได้ยัง" "แล้ววิชาคอมล่ะ") ก็ส่งไปห้องทำงานด้วย
@@ -1067,6 +1079,72 @@ class MoChat {
         }, 2200 + Math.random() * 1800);
     }
 
+    /** ชื่อเรียกแอปภาษาไทย → ชื่อที่ใช้ค้นในเครื่อง (ลองตามลำดับ) */
+    static get APP_ALIASES() {
+        return [
+            [/^(ไลน์|ไลน|line)$/i, ['LINE']],
+            [/^(เฟส|เฟซ|เฟสบุ๊ค|เฟซบุ๊ก|เฟสบุ้ค|facebook|fb)$/i, ['Facebook']],
+            [/^(เมสเซนเจอร์|แมสเซนเจอร์|เมส|messenger)$/i, ['Messenger']],
+            [/^(ยูทูป|ยูทูบ|ยูทู้ป|youtube|yt)$/i, ['YouTube']],
+            [/^(ยูทูปมิวสิค|ยูทูบมิวสิก|youtube ?music)$/i, ['YouTube Music', 'YT Music']],
+            [/^(ติ๊กต็อก|ติ๊กต๊อก|ติ๊กตอก|ติ้กต็อก|tiktok)$/i, ['TikTok']],
+            [/^(ไอจี|อินสตาแกรม|อินสตา|ig|instagram)$/i, ['Instagram']],
+            [/^(เอ็กซ์|ทวิตเตอร์|ทวิต|twitter|x)$/i, ['X', 'Twitter']],
+            [/^(กล้อง|camera)$/i, ['กล้อง', 'Camera']],
+            [/^(รูป|แกลเลอรี่|แกลเลอรี|อัลบั้ม|รูปภาพ|gallery|photos)$/i, ['แกลเลอรี', 'Gallery', 'รูปภาพ', 'Photos']],
+            [/^(แผนที่|กูเกิลแมพ|แมพ|maps?)$/i, ['Maps', 'แผนที่']],
+            [/^(ช้อปปี้|ช็อปปี้|shopee)$/i, ['Shopee']],
+            [/^(ลาซาด้า|lazada)$/i, ['Lazada']],
+            [/^(แกร็บ|แกรป|grab)$/i, ['Grab']],
+            [/^(ไลน์แมน|lineman)$/i, ['LINE MAN']],
+            [/^(เน็ตฟลิกซ์|เน็ตฟลิก|netflix)$/i, ['Netflix']],
+            [/^(สปอติฟาย|สปอทิฟาย|spotify)$/i, ['Spotify']],
+            [/^(เจ็ทมิวสิค|เจ็ทมิวสิก|เจ็ท มิวสิค|jet ?music)$/i, ['jet music', 'jetmusic']],
+            [/^(ตั้งค่า|การตั้งค่า|settings?)$/i, ['การตั้งค่า', 'ตั้งค่า', 'Settings']],
+            [/^(เครื่องคิดเลข|คิดเลข|calculator)$/i, ['เครื่องคิดเลข', 'Calculator']],
+            [/^(นาฬิกา|clock)$/i, ['นาฬิกา', 'Clock']],
+            [/^(ปฏิทิน|calendar)$/i, ['ปฏิทิน', 'Calendar']],
+            [/^(โทรศัพท์|โทร|phone)$/i, ['โทรศัพท์', 'Phone']],
+            [/^(ข้อความ|sms|messages)$/i, ['ข้อความ', 'Messages']],
+            [/^(จีเมล|เมล|อีเมล|gmail)$/i, ['Gmail']],
+            [/^(โครม|chrome)$/i, ['Chrome']],
+            [/^(ดิสคอร์ด|discord)$/i, ['Discord']],
+            [/^(เพลย์สโตร์|play ?store)$/i, ['Play Store', 'Google Play']],
+            [/^(ไดรฟ์|google ?drive)$/i, ['Drive']],
+            [/^(ทรูไอดี|ทรู ?ไอดี|trueid)$/i, ['TrueID']],
+            [/^(วีทีวี|wetv)$/i, ['WeTV']],
+        ];
+    }
+
+    /** "โมเปิดไลน์ให้หน่อย" → { label, names } หรือ null */
+    appCommand(raw) {
+        const t = String(raw || '').replace(/\s+/g, ' ').trim();
+        if (!t || t.length > 60) return null;
+        const m = t.match(/^(?:โม\s*)?(?:ช่วย\s*)?(?:เปิด|เข้า|ไปที่|ไป)\s*(แอป|แอพ|app)?\s*(.+)$/i);
+        if (!m) return null;
+        let name = m[2]
+            .replace(/(?:ให้|หน่อย|ที|ด้วย|นะ|จ้า|ค่ะ|ครับ|สิ|ดิ|เลย|ได้ไหม|ได้มั้ย|ได้ป่ะ|โม|เค้า|เรา|ทีนะ|แป๊บ|ซิ)+\s*$/g, '')
+            .replace(/^(?:แอป|แอพ)\s*/, '')
+            .trim();
+        if (!name || /^(เพลง|ห้องทำงาน|คลาสรูม|คราสรูม|ใจ|เทอม|ประตู|หน้าต่าง|ไฟ|แอร์|พัดลม|ทีวี|คอม|ร้าน)/.test(name)) return null;
+        const alias = MoChat.APP_ALIASES.find(([re]) => re.test(name));
+        if (alias) return { label: alias[1][0], names: [...alias[1], name] };
+        return m[1] ? { label: name, names: [name] } : null;   // ชื่อที่ไม่รู้จัก ต้องมีคำว่า "แอป"
+    }
+
+    async runApp(cmd) {
+        const native = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins && window.Capacitor.Plugins.MoNative;
+        const pick = a => a[Math.floor(Math.random() * a.length)];
+        if (!native || !native.launchApp) return `อันนี้ต้องใช้ในแอปโมบนมือถือนะ ในเว็บเค้าเปิด ${cmd.label} ให้ไม่ได้ 🥺`;
+        this.mind && this.mind.act(`เปิดแอป ${cmd.label} ให้เอง`);
+        window.dispatchEvent(new CustomEvent('mo:action', { detail: { icon: '🚀', title: `Launch · ${cmd.label}`, detail: `กำลังเปิด ${cmd.label}...` } }));
+        if (window.MoVoiceModeInstance && window.MoVoiceModeInstance.on) await new Promise(r => setTimeout(r, 1300));
+        let r;
+        try { r = await native.launchApp({ names: cmd.names, note: 'เค้าย่อรออยู่ตรงนี้นะ 💗 กดเค้าเมื่อไหร่ก็ได้' }); } catch (e) { r = { ok: false }; }
+        if (!r || !r.ok) return pick([`หาแอป "${cmd.label}" ในเครื่องไม่เจอแฮะ 🥺 ลงไว้รึยัง`, `เค้าไม่เจอ ${cmd.label} อะ ชื่อในเครื่องเรียกว่าอะไรน้า`]);
+        return pick([`เปิด ${r.label} ให้แล้วนะ 💗`, `จัดไป ${r.label} 🚀`, `เปิดให้แล้ว~ ${r.label}`]) + (r.bubble ? '' : '\n(ถ้าอยากให้เค้าย่อเป็นหัวแชทลอยรอ เปิดสิทธิ์ "แสดงทับแอปอื่น" ให้เค้าก่อนนะ)');
+    }
+
     /** แปลข้อความเป็นคำสั่งเพลง → { action, query } หรือ null */
     musicCommand(raw) {
         const t = String(raw || '').replace(/\s+/g, ' ').trim();
@@ -1331,6 +1409,8 @@ class MoChat {
                 // พูดสั่งเพลง → ทำจริงด้วย (คำตอบของโมตอบรับไปแล้ว)
                 const music = this.musicCommand(voice.extra.text.replace(/^โม\s*/, ''));
                 if (music) this.runMusic(music).catch(() => {});
+                const app = !music && this.appCommand(voice.extra.text);
+                if (app) this.runApp(app).catch(() => {});
                 const t = this.container.querySelector(`.message[data-id="${CSS.escape(String(voice.id))}"] .voice-transcript`);
                 if (t) t.lastChild.textContent = voice.extra.text;
             }

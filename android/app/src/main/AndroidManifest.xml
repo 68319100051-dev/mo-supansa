@@ -86,5 +86,7 @@
         <!-- โหมดเสียง: ตัวฟังเสียงพูด + ตัวอ่านออกเสียงของเครื่อง -->
         <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+        <!-- สั่งเปิดแอป: เห็นเฉพาะแอปที่มีไอคอนบนหน้าจอ -->
+        <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
     </queries>
 </manifest>
