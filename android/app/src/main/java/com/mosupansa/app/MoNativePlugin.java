@@ -411,6 +411,13 @@ public class MoNativePlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /** ข้อความล่าสุดจากโม → วิดเจ็ตหน้าจอโฮม */
+    @PluginMethod
+    public void setWidget(PluginCall call) {
+        MoWidget.setLatest(getContext(), call.getString("body", ""));
+        call.resolve();
+    }
+
     /** โมส่งข้อความตอนแอปอยู่เบื้องหลัง (สมองในหน้าเว็บคิดเอง) → แจ้งเตือน + หัวแชทเด้งพร้อมข้อความ */
     @PluginMethod
     public void moMessage(PluginCall call) {

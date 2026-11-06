@@ -1798,6 +1798,14 @@ ${moToday.length ? `ที่โมพูดไปแล้ววันนี้
         };
 
         this.messages.push(message);
+        // แอป Android: ข้อความล่าสุดจากโมขึ้นวิดเจ็ตหน้าจอโฮม (ข้อความเสียง → "🎤 ส่งข้อความเสียงมา")
+        if (type === 'received') {
+            const native = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() && window.Capacitor.Plugins && window.Capacitor.Plugins.MoNative;
+            if (native && native.setWidget) {
+                const body = format === 'voice' ? '🎤 ส่งข้อความเสียงมา' : format === 'sticker' ? `ส่งสติกเกอร์ ${text}` : this.snippetOf(message);
+                native.setWidget({ body: String(body || 'ส่งข้อความมา').slice(0, 180) }).catch(() => {});
+            }
+        }
         this.renderMessage(message);
         this.scrollToBottom();
         this.saveHistory();

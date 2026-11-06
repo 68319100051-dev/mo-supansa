@@ -96,6 +96,7 @@ public final class CallNotifier {
     static void showChat(Context ctx, String title, String body) {
         ensureChannels(ctx);
         ChatHeadService.incoming(ctx, body);
+        MoWidget.setLatest(ctx, body);
         Notification n = new NotificationCompat.Builder(ctx, CHANNEL_CHAT)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title != null ? title : "โม 💕")

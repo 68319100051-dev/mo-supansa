@@ -41,6 +41,13 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+        <!-- วิดเจ็ตหน้าจอโฮม: ข้อความล่าสุดจากโม -->
+        <receiver android:name=".MoWidget" android:exported="false" android:label="โม">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/mo_widget_info" />
+        </receiver>
         <!-- หัวแชทโม -->
         <service
             android:name=".MoAccessibilityService"
